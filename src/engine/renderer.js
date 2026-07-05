@@ -334,13 +334,33 @@ export class Renderer {
 
   drawObject(obj) {
     switch (obj.type) {
-      case 'wall': this.drawWall(obj.x, obj.y); break;
+      case 'wall':
+        this.drawWall(obj.x, obj.y);
+        if (obj.graffiti) this.drawGraffiti(obj);
+        break;
       case 'tree': this.drawTree(obj); break;
       case 'rock': this.drawRock(obj.x, obj.y); break;
       case 'rubble': this.drawRubble(obj.x, obj.y); break;
       case 'obelisk': this.drawObelisk(obj.x, obj.y); break;
       case 'box': this.drawBox(obj); break;
+      case 'car': this.drawCar(obj); break;
     }
+  }
+
+  // Sprayed lore fragment on a wall face: irregular baseline and a slight
+  // tilt so it reads as graffiti rather than a label.
+  drawGraffiti(obj) {
+    const ctx = this.ctx;
+    const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
+    ctx.save();
+    ctx.translate(c.x + 5, c.y - WALL_H * 0.55);
+    ctx.rotate((tileHash(obj.x, obj.y) - 0.5) * 0.16);
+    ctx.font = 'italic bold 8px monospace';
+    ctx.fillStyle = 'rgba(190,40,36,0.72)';
+    ctx.textAlign = 'center';
+    ctx.fillText(obj.graffiti, 0, 0);
+    ctx.restore();
+    ctx.textAlign = 'left';
   }
 
   // A wall is an extruded diamond prism: two visible faces plus a top.
@@ -501,6 +521,43 @@ export class Renderer {
       ctx.ellipse(c.x + ox, c.y + oy - 3, rx, ry, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+
+  // An abandoned car: a low, faded box with a cabin hump, sitting dead on
+  // the road. Litter, not a landmark — a hint that people left in a hurry.
+  drawCar(obj) {
+    const ctx = this.ctx;
+    const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
+    const hue = obj.hue ?? 0.5;
+    const body = `hsl(${Math.floor(hue * 360)}, 26%, ${38 + hue * 10}%)`;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 2, 20, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Hull
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(c.x - 19, c.y - 2);
+    ctx.lineTo(c.x - 12, c.y - 10);
+    ctx.lineTo(c.x + 12, c.y - 10);
+    ctx.lineTo(c.x + 19, c.y - 2);
+    ctx.lineTo(c.x + 15, c.y + 6);
+    ctx.lineTo(c.x - 15, c.y + 6);
+    ctx.closePath();
+    ctx.fill();
+    // Cabin
+    ctx.fillStyle = 'rgba(20,22,20,0.55)';
+    ctx.beginPath();
+    ctx.moveTo(c.x - 8, c.y - 10);
+    ctx.lineTo(c.x - 5, c.y - 19);
+    ctx.lineTo(c.x + 5, c.y - 19);
+    ctx.lineTo(c.x + 8, c.y - 10);
+    ctx.closePath();
+    ctx.fill();
+    // Rust streaks
+    ctx.fillStyle = 'rgba(120,60,30,0.35)';
+    ctx.fillRect(c.x - 16, c.y - 3, 4, 8);
+    ctx.fillRect(c.x + 9, c.y - 5, 3, 9);
   }
 
   // Fog of war over the minimap: an offscreen 1px-per-tile mask, darkened

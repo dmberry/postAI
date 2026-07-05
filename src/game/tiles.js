@@ -21,4 +21,5 @@ export const OBJECTS = {
   rock:    { solid: true },
   obelisk: { solid: true }, // AI signal tower; destructible in a later phase
   box:     { solid: true }, // resistance weapons cache, searchable
+  car:     { solid: true }, // abandoned wreck littering the roads; scenery only
 };

@@ -4,7 +4,7 @@ This file is the shared planning board for the game. **Henrik: add your ideas an
 
 Versioning: 0.01 increments (v0.32, v0.33, ...). The game is pushed after every sizeable change so the latest build is always on `main`.
 
-## Where we are (v0.37)
+## Where we are (v0.38)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -23,10 +23,11 @@ Versioning: 0.01 increments (v0.32, v0.33, ...). The game is pushed after every 
 - **Backpack**: a rare find in the ruins. Once found, it's automatic — 16 more slots and one spare-weapon slot (select with 5, swap with G), filled from overflow; eating and gunfire draw from it once the pockets are empty. I views it (read-only — nothing to drag, the split is automatic). Dropped, with everything in it, on death.
 - Synthesized sound: footsteps by surface, action and creature sounds, wind, night crickets, and now a sparse, haunting solo-piano ambience that only plays in calm moments — it fades out while fighting or being hunted and back in once safe. P toggles it.
 - Grass tiles carry a little blade texture instead of a flat colour fill.
+- First lore pass: sparse sprayed slogans on walls (generic anti-machine — no faction identity yet), and abandoned cars littering the roads here and there. Environmental only, no readable/interactive layer yet (that's still the planned "hidden story" phase below).
 
 ## Planned / backlog
 
-**v0.38 (in progress — David's requests, 5 July)**
+**v0.39 (in progress — David's requests, 5 July)**
 - Item icons that look like the thing they are (weapons, guns, food, books, ammo), in the dashboard slots and on the ground.
 - Show the held weapon in the player sprite's hands.
 - Experience points: melee practice improves fighting, gun practice sharpens aim and effect, books give knowledge points.

@@ -48,6 +48,8 @@ export function buildWorld(seed) {
   plantForests(map, rng, keepClear);
   layMeadows(map, rng, keepClear);
   scatterLoners(map, rng, keepClear);
+  scatterWrecks(map, rng);
+  paintGraffiti(map, rng);
 
   const spawn = { x: 112.5, y: MAIN_ROAD_Y + 0.5 };
   return { map, spawn };
@@ -523,5 +525,38 @@ function scatterLoners(map, rng, keepClear) {
     if (inKeepClear(x, y, keepClear)) continue;
     if (rng() < 0.75) map.addObject('tree', x, y);
     else map.addObject('rock', x, y);
+  }
+}
+
+// Abandoned cars, left where they stalled or crashed when the grid died.
+// Sparse and spread out (minimum spacing) so they read as scenery, not a
+// hazard course; one lane of a two-lane road stays clear at every wreck.
+function scatterWrecks(map, rng) {
+  const placed = [];
+  const minGap = 14;
+  let guard = 0;
+  while (placed.length < 9 && guard++ < 4000) {
+    const x = Math.floor(rng() * map.w);
+    const y = Math.floor(rng() * map.h);
+    if (map.floorAt(x, y) !== 'road' || map.objectAt(x, y)) continue;
+    if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < minGap)) continue;
+    map.addObject('car', x, y, { hue: rng() });
+    placed.push({ x, y });
+  }
+}
+
+// Lore fragments as environmental set dressing rather than readable text
+// (that's a later phase): sprayed slogans on a sparse subset of walls,
+// hinting at the resistance and the fall without ever explaining it.
+const GRAFFITI_GENERIC = [
+  'THEY SEE', 'KILL THE SIGNAL', 'NO MORE MASTERS', 'BURN THE TOWERS',
+  'IT IS NOT ALIVE', "DON'T TRUST THE LIGHT", 'HUMANS FIRST', 'THE WIRES LIE',
+];
+
+function paintGraffiti(map, rng, pool = GRAFFITI_GENERIC) {
+  for (const obj of map.objects) {
+    if (obj.type !== 'wall') continue;
+    if (rng() < 0.94) continue; // sparse: a mark here and there, not every wall
+    obj.graffiti = pool[Math.floor(rng() * pool.length)];
   }
 }

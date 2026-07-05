@@ -1,6 +1,6 @@
 # postAI
 
-**Version:** 0.37 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 0.38 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 *(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
@@ -19,6 +19,8 @@ Inspired by Project Zomboid: knowledge is the real progression, scarcity drives 
 **Housekeeping (v0.36):** press **F** to drop the selected pocket's contents, or the tool in hand if no pocket is selected. A gun no longer blocks your other hand — a resistance cache in front of you is always searchable, whatever you're holding. Dying always leaves you with a penknife in hand, never empty-handed. Guns now show their remaining ammo count on the hands slot. The minimap's fog of unexplored ground is grey rather than black, and the version number now sits under the postAI logo, top-left.
 
 **Backpack and mood (v0.37):** find a **backpack** somewhere in the ruins and it carries itself from then on — 16 more slots plus one spare-weapon slot, filled automatically once your pockets are full. Eating and firing a gun draw from it too, once the pockets run dry. Press **5** then **G** to swap the spare weapon, **I** to see what's inside. Die and you drop the backpack, and everything in it, where you fell. A haunting, sparse solo-piano ambience now plays softly in calm moments — it fades out while you're fighting or being hunted, and fades back in once it's safe; **P** turns it off or on. Grass tiles now carry a little blade texture instead of a flat fill.
+
+**First lore (v0.38):** the ruins now carry a little history. Sprayed slogans turn up on a sparse scattering of walls — fragments, never an explanation, of who fought the machines and how. Abandoned cars sit dead on the roads here and there, left where the grid failed.
 
 Created by David and Henrik.
 
