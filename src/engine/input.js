@@ -6,9 +6,12 @@ const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight',
-  'KeyE', 'Space', 'KeyQ', 'KeyH', 'KeyR',
+  'KeyE', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG',
+  'Digit1', 'Digit2', 'Digit3', 'Digit4',
   'ControlLeft', 'ControlRight', 'MetaLeft', 'MetaRight',
 ]);
+
+const POCKET_KEYS = ['Digit1', 'Digit2', 'Digit3', 'Digit4'];
 
 export class Input {
   constructor(target = window) {
@@ -73,5 +76,17 @@ export class Input {
 
   readPressed() {
     return this.consumePress('KeyR');
+  }
+
+  // Which pocket slot (0-3) was just picked, or -1 if none this frame.
+  pocketSelectPressed() {
+    for (let i = 0; i < POCKET_KEYS.length; i++) {
+      if (this.consumePress(POCKET_KEYS[i])) return i;
+    }
+    return -1;
+  }
+
+  swapPressed() {
+    return this.consumePress('KeyG');
   }
 }

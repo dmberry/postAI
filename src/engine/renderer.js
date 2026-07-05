@@ -590,7 +590,8 @@ export class Renderer {
     this.drawLabel('POCKETS', pocketsX, top + 14);
     for (let i = 0; i < player.pockets.length; i++) {
       const slot = player.pockets[i];
-      this.drawSlot(pocketsX + i * 42, top + 20, 36, slot ? ITEMS[slot.item] : null, slot ? slot.qty : 0);
+      this.drawSlot(pocketsX + i * 42, top + 20, 36, slot ? ITEMS[slot.item] : null, slot ? slot.qty : 0,
+        player.selectedPocket === i);
     }
 
     // Stats block, right-aligned
@@ -640,12 +641,14 @@ export class Renderer {
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   }
 
-  drawSlot(x, y, size, itemDef, qty) {
+  drawSlot(x, y, size, itemDef, qty, selected = false) {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(255,255,255,0.08)';
     ctx.fillRect(x, y, size, size);
-    ctx.strokeStyle = 'rgba(207,216,195,0.35)';
+    ctx.strokeStyle = selected ? '#e0c04f' : 'rgba(207,216,195,0.35)';
+    ctx.lineWidth = selected ? 2 : 1;
     ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    ctx.lineWidth = 1;
     if (!itemDef) return;
 
     if (itemDef.name === 'Penknife') {

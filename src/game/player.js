@@ -53,6 +53,7 @@ export class Player {
 
     this.hands = 'penknife';                 // starting tool
     this.pockets = [null, null, null, null]; // {item, qty} or null
+    this.selectedPocket = null;              // index chosen with 1-4, for G to swap
     this.swingTimer = 0;
     this.hurtTimer = 0;   // brief red flash after taking damage
     this.message = null;  // {text, ttl} transient HUD line
@@ -150,7 +151,36 @@ export class Player {
     if (input.usePressed()) this.useHands(map, animals, robots);
     if (input.eatPressed()) this.eat();
     if (input.readPressed()) this.read(robots);
+    const picked = input.pocketSelectPressed();
+    if (picked >= 0) this.selectPocket(picked);
+    if (input.swapPressed()) this.swapHands();
     this.pickupNearby(map);
+  }
+
+  // Press 1-4 to select a pocket slot (toggle off by pressing it again).
+  selectPocket(i) {
+    this.selectedPocket = this.selectedPocket === i ? null : i;
+  }
+
+  // G swaps the held tool with whatever is in the selected pocket slot, so
+  // a weapon can be put away and swapped for another without dropping it.
+  // Only tools/guns move into the hands slot; a pocket full of resources
+  // (wood, ammo, food, ...) has nothing sensible to hold there.
+  swapHands() {
+    if (this.selectedPocket == null) {
+      this.say('Select a pocket (1-4) first.');
+      return;
+    }
+    const i = this.selectedPocket;
+    const slot = this.pockets[i];
+    if (slot && ITEMS[slot.item].kind !== 'tool' && ITEMS[slot.item].kind !== 'gun') {
+      this.say(`Can't hold ${ITEMS[slot.item].name.toLowerCase()} in hand.`);
+      return;
+    }
+    const heldItem = this.hands;
+    this.hands = slot ? slot.item : null;
+    this.pockets[i] = heldItem ? { item: heldItem, qty: 1 } : null;
+    this.say(this.hands ? `You ready the ${ITEMS[this.hands].name.toLowerCase()}.` : 'You put your weapon away.');
   }
 
   // R interfaces with things: a drained robot nearby gets reprogrammed

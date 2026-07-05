@@ -9,6 +9,7 @@ import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
 import { spawnBirds, updateBirds } from './game/birds.js';
 import { spawnRobots, updateRobots } from './game/robots.js';
+import { resolveBodyOverlaps } from './game/collision.js';
 import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
@@ -204,6 +205,7 @@ function update(dt) {
   updateAnimals(dt, animals, player, map);
   updateBirds(dt, birds, animals, player, map);
   updateRobots(dt, robots, player, map);
+  resolveBodyOverlaps(player, animals, robots);
   map.updateShakes(dt);
   dayNight.update(dt);
   camera.follow(player.x, player.y, dt);
