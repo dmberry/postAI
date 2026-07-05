@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.46)
+## Where we are (v0.47)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -69,6 +69,17 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Certificate of Death**: on death a modal shows name, cause, score, skills, deaths, and an amusing rank (COMPOST → NOOB → SCRAPPER → SURVIVOR → VETERAN → L33T). Freezes the world until clicked. `player.deathCert` snapshot; `deathRank()` in renderer.
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
+
+### v0.47 — bombs, wave gun, water droids, SKYLINK
+
+- **Timed bombs** (new `bomb` item kind, holdable, stack:1): small / medium / large, plus a rare **insane** bomb. Hold one and use (**/** or click) to set it ticking a step ahead; it detonates after its fuse in a fire cloud that damages every animal, robot, water droid — and the player — inside its radius. Blink-rate on the canister quickens as the fuse runs down. The **insane bomb also brings down any obelisk** caught in the blast (drops the same numbered-circuit + battery + scrap heap as an OB-gun kill). Detonation lives in `player.detonateBomb()`; `main` ticks fuses and spawns the `map.explosions` cloud; renderer draws ticking bombs + expanding flame rings. Bombs seeded in caches (small/medium common, large uncommon, insane a rare find).
+- **Wave gun** (crafted, prompted with C): destroyed obelisks now drop **numbered** circuit boards (1-8). Collect all eight distinct numbers and a craft prompt appears — build the wave gun, which fires a **fanned cone of laser beams** (`coneShot`, 36° half-angle) that scythes through a whole crowd of W1s/robots at once. `player.circuitNums` (a Set) is persisted.
+- **W2 water droids** (`src/game/waterdroids.js`, new self-contained module): aerial droids that hover just above the river, drifting idly in squads. If you come to the bank near them they **aggro as a whole squad** and fire on you in waves; a wounded droid snaps its squad to alert instantly. They de-aggro once you're well inland. Water-only movement; drop scrap on death. Weapons (guns, cone, bombs) hit them via a combined foe list passed to the player each frame.
+- **Death certificate rank tied to score** — 15 bands: LAME (0) → NOOB → BEGINNER → INTERN → NORMIE → POST-NORMIE → SEASONED → SERIOUS → TRAINED → SNIPER → AI STALKER → L33T → L33T PRO → ULTRA-L33T → MEGA L33T (10000+), each with its own blurb and colour. (LEET rendered leetspeak as L33T.)
+- **Penknife can't fell trees**: swinging it at a tree now just burns stamina and nicks your health slightly (too much effort for too little blade) and says so, instead of chopping.
+- **SKYLINK seeded as urgent**: six new lore fragments (`sky-01`..`sky-06`, across science/secret/ron/code/handwritten) frame SKYLINK as the towers' coordinating doomsday mind, nearly online, hours not days — telling you to burn the array *now*.
+- **Lore Archive is scrollable** (J): the fragment list now scrolls with the mouse wheel / up-down keys inside a clipped viewport with a slim scrollbar, so a full Archive no longer runs off the panel.
+- **Still deferred:** W1 robots + AI factory (+ scary approach drone); walking on top of walls/blocks (multi-level rendering); mobile phone + RON texts.
 
 ### v0.46 — stakes, armoury, forest
 - **48-hour deadline** (`DEADLINE_DAYS = 2`); countdown shown as raw `HH:MM to SKYLINK`.

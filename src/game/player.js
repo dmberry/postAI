@@ -39,7 +39,7 @@ const SWIM_HEALTH_DRAIN = 1.2; // health/sec: swimming a river is exhausting
 const SCORE = { tree: 1, animal: 3, robot: 10, wreck: 2, cache: 2, book: 5, fragment: 5 };
 
 // Item kinds that can occupy the hands slot.
-const HOLDABLE = new Set(['tool', 'gun', 'gadget']);
+const HOLDABLE = new Set(['tool', 'gun', 'gadget', 'bomb']);
 
 // Soft ground a shovel can sink into; hard surfaces (road, boards, water)
 // resist digging.
@@ -81,6 +81,7 @@ export class Player {
     this.skillLog = [];   // books read, in order (for the skills screen)
     this.weaponsFound = new Set(['penknife']); // for the weapon chart; survives death
     this.killLog = [];    // obelisks destroyed, by hex code name
+    this.circuitNums = new Set(); // numbered circuit boards collected (1-8) for the wave gun
 
     this.wifiPower = 0;   // Wi-Fi block charge (seconds) while one is held
     this.wifiMax = WIFI_MAX;
@@ -155,6 +156,24 @@ export class Player {
   // Can the OB-gun be crafted right now? (Stun-gun + electro-gun + Wi-Fi block.)
   canCraftObGun() {
     return this.hasItem('stungun') && this.hasItem('electrogun') && this.hasItem('wifiblock');
+  }
+
+  // Eight distinct numbered circuit boards (from destroyed obelisks) build a
+  // wave gun.
+  canCraftWaveGun() {
+    return this.circuitNums.size >= 8 && this.hasItem('circuit') && !this.weaponsFound.has('wavegun');
+  }
+
+  craftWaveGun(map) {
+    if (!this.canCraftWaveGun()) { this.say('You need all eight numbered circuit boards.'); return false; }
+    for (let n = 0; n < 8; n++) this.removeItem('circuit');
+    this.circuitNums.clear();
+    if (this.hands && this.hands !== 'wavegun') this.stow(this.hands, 1);
+    this.hands = 'wavegun';
+    this.discoverWeapon('wavegun');
+    sfx.play('zap');
+    this.say('The eight boards click together into a wave gun. It fans laser-fire across a whole crowd.');
+    return true;
   }
 
   // Combine the three into the OB-gun and take it in hand. The Wi-Fi block is
@@ -562,10 +581,11 @@ export class Player {
     const obj = map.objectAt(tx, ty);
     const facingBox = obj && obj.type === 'box';
 
-    if (!tool || tool.kind === 'gun' || tool.kind === 'gadget') {
+    if (!tool || tool.kind === 'gun' || tool.kind === 'gadget' || tool.kind === 'bomb') {
       if (facingBox) { this.openBox(obj, map); return; }
       if (tool && tool.kind === 'gun') this.fire(tool, map, animals, robots);
       else if (tool && tool.kind === 'gadget') this.useGadget(tool);
+      else if (tool && tool.kind === 'bomb') this.dropBomb(tool, map);
       else if (!tool) this.say('Your hands are empty.');
       return;
     }
@@ -645,6 +665,17 @@ export class Player {
       return;
     }
 
+    // A penknife is far too small to fell a tree — hacking away with one just
+    // burns energy and wears you down.
+    if (this.hands === 'penknife') {
+      this.swingTimer = tool.swingCooldown;
+      this.stamina = Math.max(0, this.stamina - 8);
+      this.health = Math.max(1, this.health - 0.6);
+      sfx.play('swing');
+      this.say('The penknife is useless against a tree — you only tire yourself out.');
+      return;
+    }
+
     this.swingTimer = tool.swingCooldown;
     this.stamina -= tool.staminaCost;
     sfx.play('chop');
@@ -667,6 +698,26 @@ export class Player {
     } else {
       this.say(`You hack at the tree with the ${ITEMS[this.hands].name.toLowerCase()}.`);
     }
+  }
+
+  // Drop a ticking bomb a step ahead. It's consumed from your kit and lives
+  // in map.bombs; main ticks its fuse and detonates it.
+  dropBomb(tool, map) {
+    this.swingTimer = 0.4;
+    map.bombs = map.bombs || [];
+    const bx = this.x + this.facing.x * 0.8, by = this.y + this.facing.y * 0.8;
+    map.bombs.push({ x: bx, y: by, fuse: tool.fuse, radius: tool.radius, damage: tool.damage, obelisk: !!tool.obelisk, key: tool.key });
+    // Remove one bomb of this kind from the kit.
+    if (this.hands === tool.key) {
+      this.hands = null;
+      // pull another of the same from a pocket into hand if you have more
+      const j = this.pockets.findIndex((s) => s && s.item === tool.key);
+      if (j >= 0) { this.hands = tool.key; this.pockets[j].qty -= 1; if (this.pockets[j].qty <= 0) this.pockets[j] = null; }
+    } else {
+      this.removeItem(tool.key);
+    }
+    sfx.play('pickup');
+    this.say(`You set a ${tool.name.toLowerCase()} ticking. Get clear.`);
   }
 
   // Use the Wi-Fi block: spend a battery (pockets, then backpack) to top
@@ -841,8 +892,12 @@ export class Player {
       // The heap is walkable now, so the salvage on it can be collected.
       map.objectGrid[ob.y * map.w + ob.x] = null;
       this.addScore(20);
-      // A heap of salvage where the tower stood.
-      for (let k = 0; k < 3; k++) map.groundItems.push({ item: 'circuit', qty: 1 + Math.floor(Math.random() * 2), x: ob.x + 0.5 + (Math.random() - 0.5), y: ob.y + 0.5 + (Math.random() - 0.5) });
+      // A heap of salvage where the tower stood, including numbered circuit
+      // boards — collect all eight (1-8) to build a wave gun.
+      for (let k = 0; k < 3; k++) {
+        const num = 1 + Math.floor(Math.random() * 8);
+        map.groundItems.push({ item: 'circuit', qty: 1, num, x: ob.x + 0.5 + (Math.random() - 0.5), y: ob.y + 0.5 + (Math.random() - 0.5) });
+      }
       map.groundItems.push({ item: 'battery', qty: 2, x: ob.x + 0.5, y: ob.y + 0.5 });
       map.groundItems.push({ item: 'scrap', qty: 3, x: ob.x + 0.5, y: ob.y + 0.5 });
       if (ob.code) this.killLog.push(ob.code);
@@ -850,6 +905,43 @@ export class Player {
       this.say(`Obelisk ${ob.code || ''} buckles and comes down in a shower of sparks and circuitry.`);
     } else {
       this.say(`The obelisk catches fire. ${5 - ob.obDamage} more should finish it.`);
+    }
+  }
+
+  // A bomb's fuse has run out: a cloud of fire that hurts every living thing
+  // in its radius (you included), and — for the insane bomb — brings down any
+  // obelisk caught in the blast. Called from main when b.fuse <= 0.
+  detonateBomb(b, map, animals, robots, droids, obeliskObjs) {
+    const hitList = (arr, robot) => {
+      for (const e of arr) {
+        if (e.dead || e.fused) continue;
+        if (Math.hypot(e.x - b.x, e.y - b.y) > b.radius) continue;
+        e.hp -= b.damage; e.hurt = true; e.justHurt = true;
+        if (robot) e.scrapPenalty = true;
+        if (e.hp <= 0 && !robot) { e.dead = true; map.groundItems.push({ item: 'meat', qty: 1, x: e.x, y: e.y }); this.addScore(SCORE.animal); }
+        else if (e.hp <= 0 && robot) this.addScore(SCORE.robot);
+      }
+    };
+    hitList(animals, false);
+    hitList(robots, true);
+    if (droids) hitList(droids, true);
+    if (Math.hypot(this.x - b.x, this.y - b.y) <= b.radius) this.takeDamage(b.damage * 0.6, 'the blast');
+    if (b.obelisk && obeliskObjs) {
+      for (const ob of obeliskObjs) {
+        if (ob.destroyed) continue;
+        if (Math.hypot(ob.x + 0.5 - b.x, ob.y + 0.5 - b.y) > b.radius) continue;
+        ob.destroyed = true;
+        map.objectGrid[ob.y * map.w + ob.x] = null;
+        this.addScore(20);
+        for (let k = 0; k < 3; k++) {
+          const num = 1 + Math.floor(Math.random() * 8);
+          map.groundItems.push({ item: 'circuit', qty: 1, num, x: ob.x + 0.5 + (Math.random() - 0.5), y: ob.y + 0.5 + (Math.random() - 0.5) });
+        }
+        map.groundItems.push({ item: 'battery', qty: 2, x: ob.x + 0.5, y: ob.y + 0.5 });
+        map.groundItems.push({ item: 'scrap', qty: 3, x: ob.x + 0.5, y: ob.y + 0.5 });
+        if (ob.code) this.killLog.push(ob.code);
+        if (this.onObeliskDestroyed) this.onObeliskDestroyed(ob);
+      }
     }
   }
 
@@ -887,6 +979,45 @@ export class Player {
     this.say('The beam cuts a line clean through them.');
   }
 
+  // The wave gun: a fan of laser shots that hits every enemy inside a wide
+  // cone ahead, up to range — built to scythe a whole wave at once.
+  coneShot(tool, map, animals, robots) {
+    let ai = this.pockets.findIndex((s) => s && s.item === tool.ammoType);
+    let slots = this.pockets;
+    if (ai < 0 && this.backpack) { ai = this.backpack.slots.findIndex((s) => s && s.item === tool.ammoType); slots = this.backpack.slots; }
+    if (ai < 0) { this.say(`The ${tool.name.toLowerCase()} needs ${ITEMS[tool.ammoType].name.toLowerCase()}.`); return; }
+    slots[ai].qty -= 1; if (slots[ai].qty <= 0) slots[ai] = null;
+    this.swingTimer = tool.swingCooldown;
+    sfx.play('zap');
+    const rng = tool.range + this.xpLevel('guns') * 0.3;
+    const HALF = Math.cos(Math.PI / 5); // ~36° half-angle cone
+    let hitCount = 0;
+    const hit = (e, robot) => {
+      if (e.dead || e.fused || e.drained || e.friendly) return;
+      const dx = e.x - this.x, dy = e.y - this.y;
+      const d = Math.hypot(dx, dy);
+      if (d > rng || d === 0) return;
+      if ((dx * this.facing.x + dy * this.facing.y) / d < HALF) return; // outside the cone
+      e.hp -= robot ? tool.robotDamage : tool.animalDamage;
+      e.hurt = true;
+      if (robot) e.scrapPenalty = true;
+      hitCount++;
+      if (e.hp <= 0 && !robot) { e.dead = true; map.groundItems.push({ item: 'meat', qty: 1, x: e.x, y: e.y }); this.addScore(SCORE.animal); }
+      else if (e.hp <= 0 && robot) this.addScore(SCORE.robot);
+    };
+    for (const a of animals) hit(a, false);
+    for (const r of robots) hit(r, true);
+    this.gainXp('guns', 2 + hitCount);
+    // Three visible fan beams.
+    map.projectiles = map.projectiles || [];
+    for (const ang of [-0.5, 0, 0.5]) {
+      const fx = this.facing.x * Math.cos(ang) - this.facing.y * Math.sin(ang);
+      const fy = this.facing.x * Math.sin(ang) + this.facing.y * Math.cos(ang);
+      map.projectiles.push({ x0: this.x + fx * 0.4, y0: this.y + fy * 0.4, x1: this.x + fx * rng, y1: this.y + fy * rng, prog: 0, kind: 'stun' });
+    }
+    this.say(hitCount ? `The wave gun scythes through ${hitCount}.` : 'The wave fans out into empty air.');
+  }
+
   // Fire the held gun at the nearest target in range and roughly in front.
   // Guns consume ammunition (ammoType) from the pockets per shot. Stun and
   // fuse effects work on machines only; pistol and shotgun hit flesh too.
@@ -902,6 +1033,7 @@ export class Player {
       this.pierceShot(tool, map, animals, robots, range); return;
     }
     if (tool.pierce) { this.pierceShot(tool, map, animals, robots, range); return; }
+    if (tool.cone) { this.coneShot(tool, map, animals, robots, range); return; }
     let target = null, best = Infinity, isRobot = false;
     const consider = (e, robot) => {
       if (e.dead || e.fused || e.drained || e.friendly) return;
@@ -1026,6 +1158,8 @@ export class Player {
       if (stored <= 0) continue;
       gi.qty -= stored;
       this.discoverWeapon(gi.item);
+      // Numbered circuit boards go toward the wave gun.
+      if (gi.item === 'circuit' && gi.num != null) this.circuitNums.add(gi.num);
       // A found Wi-Fi block comes with a charge — a genuine reward, and
       // usable at once (hold it, and top it up with batteries later).
       if (gi.item === 'wifiblock') this.wifiPower = (gi.power != null) ? gi.power : this.wifiMax;

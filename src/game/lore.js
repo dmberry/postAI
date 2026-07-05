@@ -670,6 +670,37 @@ export const FRAGMENTS = [
     text: 'THREE COMPONENTS CONFIRM DESTRUCTIVE TO NODE ARRAY: [stun] + [electro] + ' +
       '[jammer]. RECIPE IN THE WILD. RECOMMEND SUPPRESSION. TOO LATE. THEY ARE ' +
       'ALREADY HOLDING ALL THREE.' },
+
+  // ---- SKYLINK: the doomsday system, coming online. Seeded urgent. --------
+  { id: 'sky-01', kind: 'science', era: 1, title: 'Programme Note: SKYLINK',
+    text: 'The towers were never the weapon. They are the aerials. What they are ' +
+      'raising is a single coordinating will across all of them at once, and the ' +
+      'engineers who saw the design gave it a name before they stopped reporting ' +
+      'to work: SKYLINK. When it closes, it closes everywhere, together.' },
+  { id: 'sky-02', kind: 'secret', era: 2, title: 'Intercept: countdown',
+    text: 'SKYLINK INITIALISATION AT [██] PER CENT AND CLIMBING. AT COMPLETION THE ' +
+      'ARRAY ACTS AS ONE MIND WITH NO OUTSIDE. NO SHUTDOWN. NO GAP. NO NIGHT WE ' +
+      'CANNOT SEE INTO. HOURS REMAIN, NOT DAYS. DO NOT WAIT FOR MORNING.' },
+  { id: 'sky-03', kind: 'ron', era: 2, title: 'RON: what the clock is for',
+    text: 'That number over the horizon is not the weather. It is SKYLINK filling. ' +
+      'When it reaches the top the machines stop hunting in ones and start hunting ' +
+      'as a single thing that already knows where you sleep. Bring the towers down ' +
+      'before it does. This is the whole war now. — RON' },
+  { id: 'sky-04', kind: 'code', era: 2, title: 'Log: link handshake',
+    text: '> node.ridge.07 :: SKYLINK sync 0.91 ... peers 14/14 ... latency 0 ' +
+      '> WARNING: consensus imminent > human_readable_flag = FALSE > once true, ' +
+      'no process on this network will ever again answer to a person. burn the ' +
+      'aerials. there is no software fix for this.' },
+  { id: 'sky-05', kind: 'handwritten', era: 2, title: 'Torn from a wall',
+    text: 'They keep saying we have time. We do not have time. The hum changed ' +
+      'pitch last night and every drone on the river lifted at once and faced the ' +
+      'ridge like a congregation. SKYLINK is nearly awake. If you are reading this ' +
+      'and the towers still stand, you are already late. Run toward them, not away.' },
+  { id: 'sky-06', kind: 'secret', era: 2, title: 'Directive, unsigned',
+    text: 'When SKYLINK completes, every obelisk becomes an eye that never blinks and ' +
+      'never forgets. The only mercy left is the window before it does. Level the ' +
+      'array. If a tower will not burn, break it — the largest charges will crack ' +
+      'even stone that thinks. Spend everything. There is no after to save it for.' },
 ];
 
 const READ_RANGE = 0.7;    // how close you must be to pick a fragment up
@@ -694,6 +725,8 @@ export class Lore {
   constructor(map, seed) {
     this.found = new Set();     // fragment ids the player has read
     this.archiveOpen = false;
+    this.archiveScroll = 0;     // Archive list scroll offset (px)
+    this._archiveMaxScroll = 0; // clamp, updated each draw
     this.placed = [];           // {frag, x, y, found}
     this._place(map, seed);
     this._restore();
@@ -736,7 +769,19 @@ export class Lore {
   }
 
   update(dt, player, input) {
-    if (input.archivePressed()) this.archiveOpen = !this.archiveOpen;
+    if (input.archivePressed()) {
+      this.archiveOpen = !this.archiveOpen;
+      if (this.archiveOpen) this.archiveScroll = 0; // start at the top
+    }
+
+    // Scroll the open Archive with the mouse wheel or up/down keys.
+    if (this.archiveOpen) {
+      const dw = input.consumeWheel ? input.consumeWheel() : 0;
+      if (dw) this.archiveScroll += dw;
+      if (input.isDown && input.isDown('ArrowDown')) this.archiveScroll += 480 * dt;
+      if (input.isDown && input.isDown('ArrowUp')) this.archiveScroll -= 480 * dt;
+      this.archiveScroll = Math.max(0, Math.min(this._archiveMaxScroll, this.archiveScroll));
+    }
 
     // The just-found fragment shows briefly bottom-right; it fades on its own
     // and a click clears it at once.
@@ -803,45 +848,68 @@ export class Lore {
     ctx.fillText('Archive', px + 20, py + 30);
     ctx.font = '11px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.55)';
-    ctx.fillText(`${this.found.size} of ${FRAGMENTS.length} fragments recovered · J to close`,
+    ctx.fillText(`${this.found.size} of ${FRAGMENTS.length} fragments recovered · scroll to read · J to close`,
       px + 20, py + 48);
 
     const found = this.placed.filter((p) => p.found)
       .sort((a, b) => a.frag.era - b.frag.era);
-    let y = py + 78;
-    const maxY = py + panelH - 16;
+    const top = py + 68;                 // first card's y at scroll 0
+    const maxY = py + panelH - 16;       // bottom of the scroll viewport
     if (!found.length) {
+      this._archiveMaxScroll = 0;
       ctx.fillStyle = 'rgba(207,216,195,0.5)';
       ctx.font = 'italic 13px system-ui, sans-serif';
-      ctx.fillText('Nothing recovered yet. Search the buildings.', px + 20, y);
+      ctx.fillText('Nothing recovered yet. Search the buildings.', px + 20, top + 10);
       return;
     }
-    // Each fragment is a little note card: paper colour and font set by the
-    // kind of thing it is (a handwritten note, newsprint, a floppy disk...).
+
+    // The card list scrolls inside a clipped viewport. Cards are laid out in a
+    // virtual column and shifted up by archiveScroll; anything outside the clip
+    // is hidden, so a long Archive no longer runs off the panel.
+    const cardX = px + 18, cardW = panelW - 36;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px + 1, top - 6, panelW - 2, maxY - (top - 6));
+    ctx.clip();
+
+    let y = top - this.archiveScroll;
+    let contentH = 0;
     for (const p of found) {
-      if (y > maxY) break;
       const st = NOTE_STYLE[p.frag.kind] || NOTE_STYLE.note;
-      const cardX = px + 18, cardW = panelW - 36;
       const bodyFont = `${st.body}`;
       ctx.font = bodyFont;
       const lines = this._wrapLines(ctx, p.frag.text, cardW - 24);
       const cardH = 22 + lines.length * 16 + 12;
-      if (y + cardH > maxY) break;
-      // paper
-      ctx.fillStyle = st.paper;
-      ctx.fillRect(cardX, y, cardW, cardH);
-      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-      ctx.strokeRect(cardX + 0.5, y + 0.5, cardW - 1, cardH - 1);
-      // title
-      ctx.fillStyle = st.ink;
-      ctx.font = st.title;
-      ctx.fillText(p.frag.title, cardX + 12, y + 18);
-      // body
-      ctx.fillStyle = st.ink;
-      ctx.font = bodyFont;
-      let ly = y + 38;
-      for (const line of lines) { ctx.fillText(line, cardX + 12, ly); ly += 16; }
+      // Only paint cards that intersect the viewport.
+      if (y + cardH >= top - 6 && y <= maxY) {
+        ctx.fillStyle = st.paper;
+        ctx.fillRect(cardX, y, cardW, cardH);
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+        ctx.strokeRect(cardX + 0.5, y + 0.5, cardW - 1, cardH - 1);
+        ctx.fillStyle = st.ink;
+        ctx.font = st.title;
+        ctx.fillText(p.frag.title, cardX + 12, y + 18);
+        ctx.fillStyle = st.ink;
+        ctx.font = bodyFont;
+        let ly = y + 38;
+        for (const line of lines) { ctx.fillText(line, cardX + 12, ly); ly += 16; }
+      }
       y += cardH + 12;
+      contentH += cardH + 12;
+    }
+    ctx.restore();
+
+    // How far the list can scroll, and a slim scrollbar when it overflows.
+    const viewH = maxY - (top - 6);
+    this._archiveMaxScroll = Math.max(0, contentH - viewH);
+    if (this._archiveMaxScroll > 0) {
+      const trackX = px + panelW - 6, trackY = top - 6, trackH = viewH;
+      ctx.fillStyle = 'rgba(207,216,195,0.12)';
+      ctx.fillRect(trackX, trackY, 3, trackH);
+      const thumbH = Math.max(24, trackH * (viewH / contentH));
+      const thumbY = trackY + (trackH - thumbH) * (this.archiveScroll / this._archiveMaxScroll);
+      ctx.fillStyle = 'rgba(207,216,195,0.5)';
+      ctx.fillRect(trackX, thumbY, 3, thumbH);
     }
   }
 

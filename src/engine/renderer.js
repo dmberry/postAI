@@ -1,9 +1,10 @@
-import { worldToScreen, screenToWorld } from './iso.js';
+import { worldToScreen, screenToWorld, TILE_W } from './iso.js';
 import { FLOORS } from '../game/tiles.js';
 import { ITEMS, WEAPON_ORDER } from '../game/items.js';
 import { drawAnimal } from '../game/animals.js';
 import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
+import { drawWaterDroid } from '../game/waterdroids.js';
 
 // Canvas renderer. Two passes per frame: floor diamonds first, then all
 // "drawables" (objects + player) painter-sorted by world depth (x + y).
@@ -32,14 +33,27 @@ function rgbScale([r, g, b], f) {
   return `rgb(${(r * f) | 0},${(g * f) | 0},${(b * f) | 0})`;
 }
 
-// An amusing rank for the certificate of death, from score and skill count.
-function deathRank(score, skillCount) {
-  if (score >= 250 && skillCount >= 4) return { title: 'L33T', color: '#e8d27a', blurb: 'A legend of the ruins. The machines will tell stories.' };
-  if (score >= 150) return { title: 'VETERAN', color: '#8fd0e0', blurb: 'You lasted. That is more than most.' };
-  if (score >= 70) return { title: 'SURVIVOR', color: '#6fbf4a', blurb: 'You knew which end of the crowbar to hold.' };
-  if (score >= 25) return { title: 'SCRAPPER', color: '#d8a04f', blurb: 'Scrappy. Doomed, but scrappy.' };
-  if (score >= 5) return { title: 'NOOB', color: '#c9905a', blurb: 'Everyone starts somewhere. You did not get far.' };
-  return { title: 'COMPOST', color: '#9a7a5a', blurb: 'The wildlife thanks you for the nutrients.' };
+// The rank for the certificate, banded purely by score.
+function deathRank(score) {
+  const s = score || 0;
+  let title, blurb;
+  if (s <= 0) { title = 'LAME'; blurb = 'You achieved precisely nothing. Impressive, in a way.'; }
+  else if (s < 100) { title = 'NOOB'; blurb = 'Everyone starts somewhere. You did not get far.'; }
+  else if (s < 200) { title = 'BEGINNER'; blurb = 'The basics, grasped. Barely.'; }
+  else if (s < 300) { title = 'INTERN'; blurb = 'Unpaid, unnoticed, unalive.'; }
+  else if (s < 400) { title = 'NORMIE'; blurb = 'Gloriously average. A credit to the mean.'; }
+  else if (s < 600) { title = 'POST-NORMIE'; blurb = 'You have transcended average, if not survival.'; }
+  else if (s < 800) { title = 'SEASONED'; blurb = 'Salt, scars, and a healthy fear of rivers.'; }
+  else if (s < 1200) { title = 'SERIOUS'; blurb = 'Nobody laughed at your loadout. Nobody.'; }
+  else if (s < 1500) { title = 'TRAINED'; blurb = 'Muscle memory and a mean crowbar swing.'; }
+  else if (s < 2000) { title = 'SNIPER'; blurb = 'One shot, one less machine. Usually.'; }
+  else if (s < 3000) { title = 'AI STALKER'; blurb = 'You hunt the things that hunt you.'; }
+  else if (s < 4000) { title = 'L33T'; blurb = 'The towers whisper your name in binary.'; }
+  else if (s < 5000) { title = 'L33T PRO'; blurb = 'Professionally terrifying to circuitry.'; }
+  else if (s < 10000) { title = 'ULTRA-L33T'; blurb = 'Small children draw you defeating obelisks.'; }
+  else { title = 'MEGA L33T'; blurb = 'SKYLINK has a folder named after you. It is afraid.'; }
+  const colors = { LAME: '#9a7a5a', NOOB: '#c9905a', BEGINNER: '#c9a05a', INTERN: '#c9b05a', NORMIE: '#b9c95a', 'POST-NORMIE': '#9fd058', SEASONED: '#6fbf4a', SERIOUS: '#4abf7a', TRAINED: '#4ac0b0', SNIPER: '#4aa8d8', 'AI STALKER': '#6f8fe0', L33T: '#e8d27a', 'L33T PRO': '#f0c040', 'ULTRA-L33T': '#f09040', 'MEGA L33T': '#ff5040' };
+  return { title, blurb, color: colors[title] || '#e8d27a' };
 }
 
 // Cheap deterministic hash for per-tile pseudo-randomness (grass blades)
@@ -113,6 +127,15 @@ export class Renderer {
       if (r.x < range.minX || r.x > range.maxX + 1 || r.y < range.minY || r.y > range.maxY + 1) continue;
       drawables.push({ depth: r.x + r.y, robot: r });
     }
+    for (const wd of hud.waterdroids || []) {
+      if (wd.dead) continue;
+      if (wd.x < range.minX || wd.x > range.maxX + 1 || wd.y < range.minY || wd.y > range.maxY + 1) continue;
+      drawables.push({ depth: wd.x + wd.y, droid: wd });
+    }
+    for (const b of map.bombs || []) {
+      if (b.x < range.minX || b.x > range.maxX + 1 || b.y < range.minY || b.y > range.maxY + 1) continue;
+      drawables.push({ depth: b.x + b.y - 0.02, bomb: b });
+    }
     drawables.push({ depth: player.x + player.y, player });
     drawables.sort((a, b) => a.depth - b.depth);
 
@@ -123,6 +146,8 @@ export class Renderer {
         : d.animal ? elevOf(d.animal.x, d.animal.y)
         : d.bird ? elevOf(d.bird.x, d.bird.y)
         : d.robot ? elevOf(d.robot.x, d.robot.y)
+        : d.droid ? elevOf(d.droid.x, d.droid.y)
+        : d.bomb ? elevOf(d.bomb.x, d.bomb.y)
         : d.groundItem ? elevOf(d.groundItem.x, d.groundItem.y)
         : elevOf(d.obj.x + 0.5, d.obj.y + 0.5);
       if (lift) { ctx.save(); ctx.translate(0, -lift); }
@@ -130,6 +155,8 @@ export class Renderer {
       else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 44); }
       else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
       else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 48); }
+      else if (d.droid) { drawWaterDroid(this.ctx, d.droid, worldToScreen); this.creatureHealthBar(d.droid, player, 40); }
+      else if (d.bomb) this.drawBomb(d.bomb);
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
@@ -137,6 +164,8 @@ export class Renderer {
 
     // In-flight rounds, in world space.
     if (map.projectiles) this.drawProjectiles(map.projectiles);
+    // Fire clouds from detonating bombs.
+    if (map.explosions) this.drawExplosions(map.explosions);
 
     // Lore fragments float in world space, under the camera transform.
     if (hud.lore) hud.lore.drawWorld(ctx);
@@ -186,11 +215,13 @@ export class Renderer {
     if (hud.showBackpack) this.drawBackpackPanel(player);
     if (hud.lore) hud.lore.drawOverlay(ctx, this.w, this.h);
     if (hud.craftPrompt) {
-      const msg = 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
+      const msg = hud.craftWaveGun
+        ? 'You have all eight circuit boards — press C to build a wave gun'
+        : 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
       ctx.font = 'bold 13px system-ui, sans-serif';
       const w = ctx.measureText(msg).width + 24;
       const x = (this.w - w) / 2, y = this.h - DASH_H - 40;
-      ctx.fillStyle = 'rgba(224,100,47,0.9)';
+      ctx.fillStyle = hud.craftWaveGun ? 'rgba(64,224,208,0.92)' : 'rgba(224,100,47,0.9)';
       ctx.fillRect(x, y, w, 26);
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
@@ -417,7 +448,7 @@ export class Renderer {
       ctx.fillText(`taken by ${cert.cause}.`, px + pw / 2, py + 108);
     }
 
-    const rank = deathRank(cert.score, cert.skills.length);
+    const rank = deathRank(cert.score);
     ctx.textAlign = 'left';
     ctx.font = '13px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.9)';
@@ -530,6 +561,68 @@ export class Renderer {
       ctx.arc(head.x, head.y - 18, 2, 0, Math.PI * 2);
       ctx.fill();
       ctx.lineCap = 'butt';
+    }
+  }
+
+  // A dropped bomb, ticking. A dark canister with a blinking light whose
+  // pulse quickens as the fuse runs down.
+  drawBomb(b) {
+    const ctx = this.ctx;
+    const s = worldToScreen(b.x, b.y);
+    const y = s.y - 6;
+    // Body.
+    ctx.fillStyle = '#2b2b30';
+    ctx.beginPath();
+    ctx.ellipse(s.x, y, 9, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = ITEMS[b.key] ? ITEMS[b.key].color : '#c0552f';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Blink: faster as the fuse nears zero.
+    const rate = Math.max(0.08, b.fuse * 0.25);
+    const on = Math.floor(b.fuse / rate) % 2 === 0;
+    ctx.fillStyle = on ? '#ff3b30' : '#5a1512';
+    ctx.beginPath();
+    ctx.arc(s.x, y - 8, 2.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Fire clouds: expanding rings of flame that fade over their short life.
+  drawExplosions(explosions) {
+    const ctx = this.ctx;
+    for (const e of explosions) {
+      const k = 1 - e.ttl / e.max;          // 0 → 1 over the life
+      const s = worldToScreen(e.x, e.y);
+      const rx = e.radius * (TILE_W / 2) * (0.4 + 0.6 * k);
+      const ry = rx * 0.5;
+      const alpha = (1 - k) * 0.8;
+      ctx.save();
+      // Outer smoke/heat.
+      ctx.globalAlpha = alpha * 0.5;
+      ctx.fillStyle = '#3a2016';
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y - 10, rx, ry, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Flame bursts.
+      const puffs = 10;
+      for (let i = 0; i < puffs; i++) {
+        const ang = (i / puffs) * Math.PI * 2;
+        const rr = rx * (0.3 + 0.7 * ((i % 3) / 3 + k * 0.5));
+        const px = s.x + Math.cos(ang) * rr;
+        const py = s.y - 10 + Math.sin(ang) * rr * 0.5;
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = i % 2 ? '#ff7a1a' : '#ffd23b';
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(2, rx * 0.18 * (1 - k)), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // Bright core.
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#fff1c0';
+      ctx.beginPath();
+      ctx.ellipse(s.x, s.y - 10, rx * 0.3 * (1 - k), ry * 0.3 * (1 - k), 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 
@@ -1374,6 +1467,29 @@ export class Renderer {
         ctx.fillRect(-6, -10, 3, 4); // strap
         ctx.fillRect(3, -10, 3, 4);
         break;
+      case 'bomb_small':
+      case 'bomb_medium':
+      case 'bomb_large':
+      case 'bomb_insane': {
+        // Round canister with a rim and a lit fuse.
+        ctx.fillStyle = '#2b2b30';
+        ctx.beginPath();
+        ctx.arc(0, 2, 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = itemDef.color;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.strokeStyle = '#8a6a3c'; // fuse
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(3, -4); ctx.quadraticCurveTo(8, -8, 6, -11);
+        ctx.stroke();
+        ctx.fillStyle = key === 'bomb_insane' ? '#ff3010' : '#ffd23b'; // spark
+        ctx.beginPath();
+        ctx.arc(6, -11, 2, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      }
       default:
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-6, -6, 12, 12);

@@ -10,11 +10,13 @@ import { Minimap } from './game/minimap.js';
 import { spawnBirds, updateBirds } from './game/birds.js';
 import { spawnRobots, updateRobots } from './game/robots.js';
 import { resolveBodyOverlaps } from './game/collision.js';
+import { spawnWaterDroids, updateWaterDroids } from './game/waterdroids.js';
 import { Lore } from './game/lore.js';
+import { ITEMS } from './game/items.js';
 import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
-const VERSION = '0.46';
+const VERSION = '0.47';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -96,20 +98,29 @@ const obelisks = [];
     [{ item: 'shovel', qty: 1 }],
     // A saw: fells trees fast and scores more per tree.
     [{ item: 'saw', qty: 1 }],
+    // Demolition caches: a couple of bombs to get you started.
+    [{ item: 'bomb_small', qty: 1 }, { item: 'bomb_small', qty: 1 }],
+    [{ item: 'bomb_medium', qty: 1 }],
   ];
   const rollLoot = () => {
     const r = rng();
-    if (r < 0.30) {
+    if (r < 0.28) {
       const MELEE = ['crowbar', 'bat', 'machete', 'crowbar'];
       return [{ item: MELEE[Math.floor(rng() * MELEE.length)], qty: 1 }];
     }
-    if (r < 0.65) {
+    if (r < 0.58) {
       const AMMO = [
         [{ item: 'battery', qty: 2 }],
         [{ item: 'ammo', qty: 6 }],
         [{ item: 'shells', qty: 4 }],
       ];
       return AMMO[Math.floor(rng() * AMMO.length)];
+    }
+    // Bombs: small/medium common, large uncommon, insane a rare find.
+    if (r < 0.80) {
+      const br = rng();
+      const bomb = br < 0.45 ? 'bomb_small' : br < 0.78 ? 'bomb_medium' : br < 0.97 ? 'bomb_large' : 'bomb_insane';
+      return [{ item: bomb, qty: 1 }];
     }
     return rng() < 0.5 ? [{ item: 'tin', qty: 1 }] : [{ item: 'torch', qty: 1 }];
   };
@@ -120,6 +131,7 @@ const obelisks = [];
   }
 }
 const robots = spawnRobots(map, WORLD_SEED, obelisks, { x: spawn.x, y: spawn.y, r: 14 });
+const waterdroids = spawnWaterDroids(map, WORLD_SEED);
 // The tower objects themselves (for alert/blink state): {x,y} plus the
 // alert level cannot live on the plain {x,y} obelisks list, since that's
 // shared with spawnRobots as a read-only anchor list.
@@ -140,6 +152,7 @@ try {
     if (Array.isArray(saved.skillLog)) player.skillLog = saved.skillLog;
     if (Array.isArray(saved.weaponsFound)) player.weaponsFound = new Set(saved.weaponsFound);
     if (Array.isArray(saved.killLog)) player.killLog = saved.killLog;
+    if (Array.isArray(saved.circuitNums)) player.circuitNums = new Set(saved.circuitNums);
     if (saved.xp) Object.assign(player.xp, saved.xp);
     if (typeof saved.score === 'number') player.score = saved.score;
     if (typeof saved.deaths === 'number') player.deaths = saved.deaths;
@@ -159,7 +172,7 @@ const persist = () => {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       name: player.name, gender: player.gender, skills: [...player.skills], skillLog: player.skillLog,
-      weaponsFound: [...player.weaponsFound], killLog: player.killLog,
+      weaponsFound: [...player.weaponsFound], killLog: player.killLog, circuitNums: [...player.circuitNums],
       xp: player.xp, score: player.score, deaths: player.deaths || 0,
       state: {
         health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
@@ -210,6 +223,8 @@ window.addEventListener('keydown', unlockAudio, { once: true });
 window.addEventListener('pointerdown', unlockAudio, { once: true });
 
 map.projectiles = []; // in-flight gun rounds (cosmetic tracers)
+map.bombs = [];       // dropped ticking bombs
+map.explosions = [];  // active fire clouds (visual)
 
 // Fog of war: the minimap only shows where you have been.
 map.explored = new Uint8Array(map.w * map.h);
@@ -229,7 +244,7 @@ function revealAround(px, py) {
 }
 
 // Debug handle for inspecting live state from the console.
-window.__game = { player, map, camera, animals, birds, robots, obelisks, dayNight, lore, input, renderer };
+window.__game = { player, map, camera, animals, birds, robots, waterdroids, obelisks, dayNight, lore, input, renderer };
 
 function resize() {
   renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
@@ -339,7 +354,10 @@ function update(dt) {
       return;
     }
   }
-  if (input.craftPressed() && player.canCraftObGun()) player.craftObGun(map);
+  if (input.craftPressed()) {
+    if (player.canCraftWaveGun()) player.craftWaveGun(map);
+    else if (player.canCraftObGun()) player.craftObGun(map);
+  }
   if (input.zoomTogglePressed()) camera.toggleZoom();
   lore.update(dt, player, input);
   if (input.musicTogglePressed()) {
@@ -396,13 +414,32 @@ function update(dt) {
     drag = null; // released outside any slot: cancel the drag
   }
 
-  player.update(dt, input, map, animals, robots, mouseWorld);
+  // Weapons target robots and water droids alike (a combined foe list, only
+  // for the player's own targeting — each still updates on its own array).
+  const foes = waterdroids.length ? robots.concat(waterdroids) : robots;
+  player.update(dt, input, map, animals, foes, mouseWorld);
+  updateWaterDroids(dt, waterdroids, player, map);
   // Advance in-flight rounds.
   for (const p of map.projectiles) {
     const dist = Math.hypot(p.x1 - p.x0, p.y1 - p.y0) || 0.001;
     p.prog += (PROJECTILE_SPEED * dt) / dist;
   }
   if (map.projectiles.length) map.projectiles = map.projectiles.filter((p) => p.prog < 1);
+
+  // Timed bombs: tick fuses, then detonate — a fire cloud that hurts every
+  // living thing in its radius (the player included), and an insane bomb
+  // brings down an obelisk it engulfs.
+  for (const b of map.bombs) {
+    b.fuse -= dt;
+    if (b.fuse > 0) continue;
+    b.done = true;
+    sfx.play('charge');
+    map.explosions.push({ x: b.x, y: b.y, radius: b.radius, ttl: 0.8, max: 0.8 });
+    player.detonateBomb(b, map, animals, robots, waterdroids, obeliskObjs);
+  }
+  if (map.bombs.some((b) => b.done)) map.bombs = map.bombs.filter((b) => !b.done);
+  for (const e of map.explosions) e.ttl -= dt;
+  if (map.explosions.length) map.explosions = map.explosions.filter((e) => e.ttl > 0);
 
   // Trees grow: saplings thicken over about a minute, and now and then a new
   // one sprouts on open grass, so felled forest slowly comes back.
@@ -569,6 +606,7 @@ function frame(now) {
     minimap,
     birds,
     robots,
+    waterdroids,
     lore,
     torch: player.pockets.some((s) => s && s.item === 'torch'),
     showBackpack,
@@ -577,7 +615,8 @@ function frame(now) {
     deathCert: player.deathCert,
     showSkills,
     showWeapons,
-    craftPrompt: player.canCraftObGun() && player.hands !== 'obgun',
+    craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun'),
+    craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',
   });
 
   frameCount += 1;
