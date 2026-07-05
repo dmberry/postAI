@@ -43,6 +43,7 @@ export function buildWorld(seed) {
   const hills = raiseHills(map, rng);
   carveStreams(map, rng, hills);
   finalizeHeights(map, keepClear);
+  carveHollows(map, rng, keepClear);
 
   plantForests(map, rng, keepClear);
   layMeadows(map, rng, keepClear);
@@ -376,6 +377,93 @@ function finalizeHeights(map, keepClear) {
       }
       H[y * w + x] = v;
     }
+  }
+}
+
+// Hollows: sunken dips and valleys (heights -1 to -2) in the wilds, built
+// exactly like hills but as a separate non-negative DEPTH field with its own
+// Lipschitz clamp, then subtracted. Zones sit well away from every hill zone
+// so the two fields never overlap (their difference would otherwise be able
+// to step by two). Locked ground (roads, water, streams, buildings, aprons)
+// stays at depth 0, so all valley floors and rims remain walkable.
+function carveHollows(map, rng, keepClear) {
+  const w = map.w, h = map.h;
+  const zones = [
+    { x: 70, y: 38 },  // open country east of the river, north of the main road
+    { x: 20, y: 52 },  // west bank wilds
+    { x: 60, y: 112 }, // deep south, east of the river
+    { x: 100, y: 122 },// south-east corner
+  ];
+  const n = 3 + (rng() < 0.5 ? 1 : 0);
+  const D = new Int8Array(w * h);
+
+  for (const z of zones.slice(0, n)) {
+    const cx = z.x + Math.round((rng() - 0.5) * 4);
+    const cy = z.y + Math.round((rng() - 0.5) * 4);
+    const depth = rng() < 0.4 ? 2 : 1;
+    const r = 4 + rng() * 2.5;
+    const R = Math.ceil(r);
+    for (let y = cy - R; y <= cy + R; y++) {
+      for (let x = cx - R; x <= cx + R; x++) {
+        if (!map.inBounds(x, y)) continue;
+        const v = Math.round(depth * (1 - Math.hypot(x - cx, y - cy) / r));
+        if (v > D[y * w + x]) D[y * w + x] = Math.min(2, v);
+      }
+    }
+  }
+
+  // Lock depth to 0 everywhere the height field is locked, and anywhere the
+  // ground is already raised (hills and hollows must not meet).
+  const nearRoad = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const f = map.floorAt(x, y);
+      if (f !== 'road' && f !== 'bridge') continue;
+      for (let dy = -2; dy <= 2; dy++) {
+        for (let dx = -2; dx <= 2; dx++) {
+          if (map.inBounds(x + dx, y + dy)) nearRoad[(y + dy) * w + x + dx] = 1;
+        }
+      }
+    }
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const f = map.floorAt(x, y);
+      const open = f === 'grass' || f === 'tallgrass';
+      if (!open || nearRoad[y * w + x] || inKeepClear(x, y, keepClear) || map.heightAt(x, y) > 0) {
+        D[y * w + x] = 0;
+      }
+    }
+  }
+
+  // Two-pass Chebyshev clamp on the depth field (same relaxation as hills).
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      let v = D[y * w + x];
+      if (x > 0) v = Math.min(v, D[y * w + x - 1] + 1);
+      if (y > 0) {
+        v = Math.min(v, D[(y - 1) * w + x] + 1);
+        if (x > 0) v = Math.min(v, D[(y - 1) * w + x - 1] + 1);
+        if (x < w - 1) v = Math.min(v, D[(y - 1) * w + x + 1] + 1);
+      }
+      D[y * w + x] = v;
+    }
+  }
+  for (let y = h - 1; y >= 0; y--) {
+    for (let x = w - 1; x >= 0; x--) {
+      let v = D[y * w + x];
+      if (x < w - 1) v = Math.min(v, D[y * w + x + 1] + 1);
+      if (y < h - 1) {
+        v = Math.min(v, D[(y + 1) * w + x] + 1);
+        if (x < w - 1) v = Math.min(v, D[(y + 1) * w + x + 1] + 1);
+        if (x > 0) v = Math.min(v, D[(y + 1) * w + x - 1] + 1);
+      }
+      D[y * w + x] = v;
+    }
+  }
+
+  for (let i = 0; i < w * h; i++) {
+    if (D[i] > 0) map.height[i] -= D[i];
   }
 }
 

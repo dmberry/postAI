@@ -2,6 +2,7 @@ import { worldToScreen, screenToWorld } from './iso.js';
 import { FLOORS } from '../game/tiles.js';
 import { ITEMS } from '../game/items.js';
 import { drawAnimal } from '../game/animals.js';
+import { drawBird } from '../game/birds.js';
 
 // Canvas renderer. Two passes per frame: floor diamonds first, then all
 // "drawables" (objects + player) painter-sorted by world depth (x + y).
@@ -10,7 +11,7 @@ import { drawAnimal } from '../game/animals.js';
 
 const WALL_H = 40;
 const DASH_H = 78; // dashboard panel height
-const ELEV = 10;   // pixels of lift per height level
+const ELEV = 16;   // pixels of lift per height level
 const MINIMAP_SIZE = 160;
 
 const WALL_BASE = [122, 113, 102];
@@ -83,6 +84,10 @@ export class Renderer {
       if (a.x < range.minX || a.x > range.maxX + 1 || a.y < range.minY || a.y > range.maxY + 1) continue;
       drawables.push({ depth: a.x + a.y, animal: a });
     }
+    for (const b of hud.birds || []) {
+      if (b.x < range.minX || b.x > range.maxX + 1 || b.y < range.minY || b.y > range.maxY + 1) continue;
+      drawables.push({ depth: b.x + b.y, bird: b });
+    }
     drawables.push({ depth: player.x + player.y, player });
     drawables.sort((a, b) => a.depth - b.depth);
 
@@ -91,11 +96,13 @@ export class Renderer {
     for (const d of drawables) {
       const lift = d.player ? elevOf(player.x, player.y)
         : d.animal ? elevOf(d.animal.x, d.animal.y)
+        : d.bird ? elevOf(d.bird.x, d.bird.y)
         : d.groundItem ? elevOf(d.groundItem.x, d.groundItem.y)
         : elevOf(d.obj.x + 0.5, d.obj.y + 0.5);
       if (lift) { ctx.save(); ctx.translate(0, -lift); }
       if (d.player) this.drawPlayer(d.player);
       else if (d.animal) drawAnimal(this.ctx, d.animal, worldToScreen);
+      else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
@@ -128,7 +135,18 @@ export class Renderer {
       }
     }
     if (hud.minimap) {
-      hud.minimap.draw(ctx, map, player, this.w - MINIMAP_SIZE - 12, 12, MINIMAP_SIZE);
+      const mmX = this.w - MINIMAP_SIZE - 12, mmY = 12;
+      hud.minimap.draw(ctx, map, player, mmX, mmY, MINIMAP_SIZE);
+      this.drawFog(map, mmX, mmY, MINIMAP_SIZE);
+      // Tracking skill: nearby animals ping on the minimap.
+      if (player.skills && player.skills.has('tracking')) {
+        const s = MINIMAP_SIZE / map.w;
+        ctx.fillStyle = '#e05548';
+        for (const a of animals) {
+          if (a.dead || Math.hypot(a.x - player.x, a.y - player.y) > 24) continue;
+          ctx.fillRect(mmX + a.x * s - 1, mmY + a.y * s - 1, 2.5, 2.5);
+        }
+      }
     }
     this.drawDashboard(player, hud);
   }
@@ -180,8 +198,9 @@ export class Renderer {
     const def = FLOORS[type];
     const h = map.heightAt ? map.heightAt(tx, ty) : 0;
     const corners = this.tileCorners(tx, ty, h * ELEV);
-    // Skirts: visible hillside faces where the south/east neighbour is lower.
-    if (h > 0) {
+    // Skirts: visible hillside faces wherever the south/east neighbour sits
+    // lower, including level ground dropping into a hollow.
+    if (map.heightAt) {
       const hs = map.heightAt(tx, ty + 1);
       if (hs < h) this.skirt(corners[3], corners[2], (h - hs) * ELEV, shadeHex(def.color, shade - 0.3));
       const he = map.heightAt(tx + 1, ty);
@@ -302,6 +321,43 @@ export class Renderer {
     }
   }
 
+  // Fog of war over the minimap: an offscreen 1px-per-tile mask, darkened
+  // everywhere, with visited tiles punched out as the game reveals them.
+  drawFog(map, x, y, size) {
+    if (!map.explored) return;
+    if (!this.fogCanvas || this.fogCanvas.width !== map.w) {
+      this.fogCanvas = document.createElement('canvas');
+      this.fogCanvas.width = map.w;
+      this.fogCanvas.height = map.h;
+      const f = this.fogCanvas.getContext('2d');
+      f.fillStyle = 'rgba(6, 8, 5, 0.94)';
+      f.fillRect(0, 0, map.w, map.h);
+      // Catch up on anything revealed before the first draw.
+      f.globalCompositeOperation = 'destination-out';
+      for (let ty = 0; ty < map.h; ty++) {
+        for (let tx = 0; tx < map.w; tx++) {
+          if (map.explored[ty * map.w + tx]) f.fillRect(tx, ty, 1, 1);
+        }
+      }
+      f.globalCompositeOperation = 'source-over';
+      map.newlyRevealed.length = 0;
+    }
+    if (map.newlyRevealed.length) {
+      const f = this.fogCanvas.getContext('2d');
+      f.globalCompositeOperation = 'destination-out';
+      for (let i = 0; i < map.newlyRevealed.length; i += 2) {
+        f.fillRect(map.newlyRevealed[i], map.newlyRevealed[i + 1], 1, 1);
+      }
+      f.globalCompositeOperation = 'source-over';
+      map.newlyRevealed.length = 0;
+    }
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.fogCanvas, x, y, size, size);
+    ctx.restore();
+  }
+
   drawGroundItem(gi) {
     const ctx = this.ctx;
     const def = ITEMS[gi.item];
@@ -349,11 +405,20 @@ export class Renderer {
     const horiz = (player.facing.x - player.facing.y) * 0.7071;  // screen-right component
     const toward = (player.facing.x + player.facing.y) * 0.7071; // toward-camera component
     const hb = by - bob; // head bobs with the torso
+    // Persona: Adam short brown mop, Eve longer auburn hair that falls to
+    // the shoulders, Neve a close dark crop.
+    const gender = player.gender || 'm';
+    const hairCol = gender === 'f' ? '#7a4520' : gender === 'u' ? '#26262c' : '#5a3d22';
     ctx.fillStyle = '#d9b48c';
     ctx.beginPath();
     ctx.arc(c.x, hb - 29, 6, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#5a3d22';
+    ctx.fillStyle = hairCol;
+    if (gender === 'f') {
+      // Side falls, visible from every direction.
+      ctx.fillRect(c.x - 7.5, hb - 31, 3, 12);
+      ctx.fillRect(c.x + 4.5, hb - 31, 3, 12);
+    }
     if (toward < -0.15) {
       // Back to us: hair wraps the whole back of the head, a sliver of neck.
       ctx.beginPath();
@@ -365,7 +430,7 @@ export class Renderer {
       ctx.arc(c.x - horiz * 0.8, hb - 30.5, 6, Math.PI, Math.PI * 2);
       ctx.closePath();
       ctx.fill();
-      ctx.fillRect(c.x - 6 - horiz * 0.8, hb - 31.5, 12, 2.5);
+      if (gender !== 'u') ctx.fillRect(c.x - 6 - horiz * 0.8, hb - 31.5, 12, 2.5);
       // Eyes and mouth track the horizontal component of travel.
       const ex = horiz * 2.4;
       ctx.fillStyle = '#2c2119';
@@ -448,9 +513,13 @@ export class Renderer {
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(207,216,195,0.85)';
-    const state = player.sprinting ? 'Sprinting' : player.moving ? 'Walking' : 'Idle';
+    let state = player.sprinting ? 'Sprinting' : player.moving ? 'Walking' : 'Idle';
+    if (player.skills && player.skills.size) {
+      state += ` · ${player.skills.size} skill${player.skills.size > 1 ? 's' : ''}`;
+    }
     let line = top + 16;
-    if (hud.timeLabel) { ctx.fillText(hud.timeLabel, this.w - 16, line); line += 16; }
+    const nameLine = hud.timeLabel ? `${player.name || ''} · ${hud.timeLabel}` : (player.name || '');
+    ctx.fillText(nameLine, this.w - 16, line); line += 16;
     ctx.fillText(state, this.w - 16, line); line += 16;
     ctx.fillText(`tile ${player.x.toFixed(1)}, ${player.y.toFixed(1)}`, this.w - 16, line); line += 16;
     ctx.fillText(`${hud.fps ?? 0} fps`, this.w - 16, line);

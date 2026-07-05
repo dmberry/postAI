@@ -1,6 +1,8 @@
 # postAI
 
-**Version:** 0.3 · **Authors:** David M. Berry and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI
+**Version:** 0.31 · **Authors:** David M. Berry and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI
+
+*(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
 An isometric 2D survival game set in a world devastated by the collapse that followed a failed AI takeover. Civilisation burned down its own infrastructure to win, and years later the survivors scavenge the ruins while avoiding wild animals that have gained strange powers. The truth of what happened is never stated: the player pieces it together from newspapers, diaries, floppy disks, VHS tapes, and dead computers scattered through the world.
 

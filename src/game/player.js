@@ -1,10 +1,12 @@
 import { screenDirToWorld } from '../engine/iso.js';
+import { sfx } from '../engine/sound.js';
 import { ITEMS } from './items.js';
 
 const WALK_SPEED = 4.2;   // tiles per second
-const SPRINT_SPEED = 6.4;
-const WOUNDED_SPEED = 3.2; // hobble pace when health is very low
+const SPRINT_SPEED = 7.5;
+const WOUNDED_SPEED = 3.2; // hobble walking pace when health is very low
 const WOUNDED_AT = 20;     // health threshold for the hobble
+const WOUNDED_SPRINT_DRAIN = 2.5; // wounded sprinting burns stamina this much faster
 const RADIUS = 0.28;      // collision radius in tiles
 const REACH = 0.9;        // how far ahead the player can use a tool
 const TREE_HP = 4;        // penknife swings to fell a tree
@@ -97,7 +99,8 @@ export class Player {
     this.sprinting = wantSprint && this.stamina > 0;
 
     if (this.sprinting) {
-      const drain = this.skills.has('fleetfoot') ? SPRINT_DRAIN * 0.45 : SPRINT_DRAIN;
+      let drain = this.skills.has('fleetfoot') ? SPRINT_DRAIN * 0.45 : SPRINT_DRAIN;
+      if (this.health < WOUNDED_AT) drain *= WOUNDED_SPRINT_DRAIN; // adrenaline is brief
       this.stamina = Math.max(0, this.stamina - drain * dt);
     } else {
       const regen = this.food < HUNGRY_AT ? STAMINA_REGEN * 0.5 : STAMINA_REGEN;
@@ -108,8 +111,9 @@ export class Player {
       const dir = screenDirToWorld(intent.dx, intent.dy);
       this.facing = dir;
       let speed = this.sprinting ? SPRINT_SPEED : WALK_SPEED;
-      // Badly hurt, you hobble: no better than the old walking pace.
-      if (this.health < WOUNDED_AT) speed = Math.min(speed, WOUNDED_SPEED);
+      // Badly hurt, you hobble — though adrenaline still lets you sprint,
+      // just not for long (see the wounded stamina drain above).
+      if (this.health < WOUNDED_AT && !this.sprinting) speed = WOUNDED_SPEED;
       // Wading a stream is slow; climbing costs stamina (handled below).
       if (map.floorAt(Math.floor(this.x), Math.floor(this.y)) === 'stream') speed *= 0.55;
       const hBefore = map.heightAt ? map.heightAt(Math.floor(this.x), Math.floor(this.y)) : 0;
@@ -118,6 +122,12 @@ export class Player {
       const hAfter = map.heightAt ? map.heightAt(Math.floor(this.x), Math.floor(this.y)) : 0;
       if (hAfter > hBefore) this.stamina = Math.max(0, this.stamina - CLIMB_COST);
       this.walkPhase += dt * (this.sprinting ? 13 : 9);
+      // Footstep on each stride, voiced by the surface underfoot.
+      const stride = Math.floor(this.walkPhase / Math.PI);
+      if (stride !== this.lastStride && this.z === 0) {
+        this.lastStride = stride;
+        sfx.step(map.floorAt(Math.floor(this.x), Math.floor(this.y)) || 'grass');
+      }
     } else {
       this.walkPhase = 0;
     }
@@ -126,6 +136,7 @@ export class Player {
     if (input.jumpPressed() && this.z === 0 && this.stamina >= JUMP_COST) {
       this.vz = JUMP_VZ;
       this.stamina -= JUMP_COST;
+      sfx.play('jump');
     }
     if (this.z > 0 || this.vz !== 0) {
       this.vz -= GRAVITY * dt;
@@ -176,6 +187,7 @@ export class Player {
       slot.qty -= 1;
       if (slot.qty <= 0) this.pockets[i] = null;
       this.food = Math.min(this.maxFood, this.food + def.food);
+      sfx.play('eat');
       if (slot.item === 'berries' && this.skills.has('herbalism')) {
         this.venom = 0;
         this.health = Math.min(this.maxHealth, this.health + 5);
@@ -211,6 +223,7 @@ export class Player {
     if (target) {
       this.swingTimer = tool.swingCooldown;
       this.stamina -= tool.staminaCost;
+      sfx.play('chop');
       target.hp -= tool.animalDamage ?? 3;
       target.hurt = true; // animals module reads this for pack flee/enrage
       if (target.hp <= 0) {
@@ -226,10 +239,14 @@ export class Player {
     const tx = Math.floor(this.x + this.facing.x * REACH);
     const ty = Math.floor(this.y + this.facing.y * REACH);
     const obj = map.objectAt(tx, ty);
-    if (!obj || obj.type !== 'tree') return;
+    if (!obj || obj.type !== 'tree') {
+      sfx.play('swing');
+      return;
+    }
 
     this.swingTimer = tool.swingCooldown;
     this.stamina -= tool.staminaCost;
+    sfx.play('chop');
     const treeDmg = this.skills.has('woodcraft') ? tool.treeDamage * 2 : tool.treeDamage;
     obj.hp = (obj.hp ?? TREE_HP) - treeDmg;
     obj.shake = 0.3;
@@ -238,6 +255,7 @@ export class Player {
     if (obj.hp <= 0) {
       map.removeObject(obj);
       map.groundItems.push({ item: 'wood', qty: WOOD_PER_TREE, x: obj.x + 0.5, y: obj.y + 0.5 });
+      sfx.play('treefall');
       this.say('The tree comes down.');
     } else {
       this.say('You hack at the tree with the penknife.');
@@ -251,6 +269,7 @@ export class Player {
       const stored = this.stow(gi.item, gi.qty);
       if (stored <= 0) continue;
       gi.qty -= stored;
+      sfx.play('pickup');
       this.say(`+${stored} ${ITEMS[gi.item].name.toLowerCase()}`);
     }
     map.groundItems = map.groundItems.filter((gi) => gi.qty > 0);
@@ -259,6 +278,8 @@ export class Player {
   takeDamage(amount, source) {
     this.health -= amount;
     this.hurtTimer = 0.35;
+    if (source === 'viper') sfx.play('hiss');
+    sfx.play('hurt');
     if (this.health <= 0) this.die(this.map, `the ${source}`);
   }
 
@@ -279,6 +300,7 @@ export class Player {
     this.y = this.spawnY;
     this.z = 0;
     this.vz = 0;
+    sfx.play('die');
     this.say(`You were killed by ${cause}. You wake back at the road.`);
   }
 

@@ -7,6 +7,8 @@ import { Player } from './game/player.js';
 import { makeRng } from './game/rng.js';
 import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
+import { spawnBirds, updateBirds } from './game/birds.js';
+import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
 
@@ -79,10 +81,36 @@ const camera = new Camera(player.x, player.y);
 
 const dayNight = new DayNight();
 const minimap = new Minimap(map);
+const birds = spawnBirds(map, WORLD_SEED);
 let lastObjectCount = map.objects.length;
 
+// Audio unlocks on the first user gesture (browser requirement).
+const unlockAudio = () => {
+  sfx.unlock();
+  sfx.setAmbience({ night: dayNight.isNight() });
+};
+window.addEventListener('keydown', unlockAudio, { once: true });
+window.addEventListener('pointerdown', unlockAudio, { once: true });
+
+// Fog of war: the minimap only shows where you have been.
+map.explored = new Uint8Array(map.w * map.h);
+map.newlyRevealed = [];
+const FOG_RADIUS = 9;
+let lastRevealX = -1, lastRevealY = -1;
+function revealAround(px, py) {
+  for (let dy = -FOG_RADIUS; dy <= FOG_RADIUS; dy++) {
+    for (let dx = -FOG_RADIUS; dx <= FOG_RADIUS; dx++) {
+      if (dx * dx + dy * dy > FOG_RADIUS * FOG_RADIUS) continue;
+      const x = px + dx, y = py + dy;
+      if (!map.inBounds(x, y) || map.explored[y * map.w + x]) continue;
+      map.explored[y * map.w + x] = 1;
+      map.newlyRevealed.push(x, y);
+    }
+  }
+}
+
 // Debug handle for inspecting live state from the console.
-window.__game = { player, map, camera, animals, dayNight };
+window.__game = { player, map, camera, animals, birds, dayNight };
 
 function resize() {
   renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
@@ -104,16 +132,50 @@ const toggleHelp = (force) => {
 document.getElementById('helpBtn').addEventListener('click', () => toggleHelp(true));
 helpEl.addEventListener('click', (e) => { if (e.target === helpEl) toggleHelp(false); });
 
+let wasNight = null;
 function update(dt) {
   if (input.consumePress('KeyH')) toggleHelp();
   player.update(dt, input, map, animals);
   updateAnimals(dt, animals, player, map);
+  updateBirds(dt, birds, animals, player, map);
   map.updateShakes(dt);
   dayNight.update(dt);
   camera.follow(player.x, player.y, dt);
   if (map.objects.length !== lastObjectCount) {
     lastObjectCount = map.objects.length;
     minimap.refresh(map); // felled trees disappear from the minimap
+  }
+
+  // Reveal fog as the player moves.
+  const ptx = Math.floor(player.x), pty = Math.floor(player.y);
+  if (ptx !== lastRevealX || pty !== lastRevealY) {
+    lastRevealX = ptx; lastRevealY = pty;
+    revealAround(ptx, pty);
+  }
+
+  // Ambience follows the clock; creature calls fire on state transitions.
+  const night = dayNight.isNight();
+  if (night !== wasNight) {
+    wasNight = night;
+    sfx.setAmbience({ night });
+  }
+  for (const a of animals) {
+    if (a.dead) continue;
+    const close = Math.hypot(a.x - player.x, a.y - player.y) < 18;
+    if (a.type === 'dog') {
+      if (a.aggro && !a._sBark && close) { a._sBark = true; sfx.play('bark'); }
+      if (!a.aggro) a._sBark = false;
+    } else if (a.type === 'boar') {
+      if (a.state !== a._sState) {
+        if (close && a.state === 'telegraph') sfx.play('boar');
+        if (close && a.state === 'charge') sfx.play('charge');
+        a._sState = a.state;
+      }
+    }
+  }
+  for (const b of birds) {
+    if (b.shrieking && !b._sShriek) { b._sShriek = true; sfx.play('shriek'); }
+    if (!b.shrieking) b._sShriek = false;
   }
 }
 
@@ -131,6 +193,7 @@ function frame(now) {
     light: dayNight.light(),
     timeLabel: dayNight.label,
     minimap,
+    birds,
     torch: player.pockets.some((s) => s && s.item === 'torch'),
   });
 
