@@ -6,7 +6,7 @@ const TRACKED = new Set([
   'KeyW', 'KeyA', 'KeyS', 'KeyD',
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight',
-  'KeyE', 'Slash', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG',
+  'KeyE', 'Slash', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG', 'KeyF',
   'Digit1', 'Digit2', 'Digit3', 'Digit4',
 ]);
 
@@ -111,5 +111,9 @@ export class Input {
 
   swapPressed() {
     return this.consumePress('KeyG');
+  }
+
+  dropPressed() {
+    return this.consumePress('KeyF');
   }
 }

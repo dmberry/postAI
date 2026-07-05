@@ -414,7 +414,7 @@ export class Renderer {
       this.fogCanvas.width = map.w;
       this.fogCanvas.height = map.h;
       const f = this.fogCanvas.getContext('2d');
-      f.fillStyle = 'rgba(6, 8, 5, 0.94)';
+      f.fillStyle = 'rgba(128, 128, 128, 0.88)';
       f.fillRect(0, 0, map.w, map.h);
       // Catch up on anything revealed before the first draw.
       f.globalCompositeOperation = 'destination-out';
@@ -583,6 +583,17 @@ export class Renderer {
       ctx.fillStyle = 'rgba(207,216,195,0.7)';
       ctx.font = '10px system-ui, sans-serif';
       ctx.fillText(ITEMS[player.hands].name, handsX, top + 74);
+
+      const heldDef = ITEMS[player.hands];
+      if (heldDef.kind === 'gun') {
+        const ammoCount = player.pockets.reduce(
+          (sum, s) => (s && s.item === heldDef.ammoType ? sum + s.qty : sum), 0);
+        ctx.font = 'bold 10px system-ui, sans-serif';
+        ctx.fillStyle = ammoCount > 0 ? '#e8e0d0' : '#e05548';
+        ctx.textAlign = 'right';
+        ctx.fillText(String(ammoCount), handsX + 41, top + 60);
+        ctx.textAlign = 'left';
+      }
     }
 
     // Pockets
@@ -629,6 +640,11 @@ export class Renderer {
     ctx.font = '12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
     ctx.fillText('postAI', 12, 20);
+    if (hud.version) {
+      ctx.font = '8px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(207,216,195,0.4)';
+      ctx.fillText(`v${hud.version}`, 12, 30);
+    }
   }
 
   drawLabel(text, x, y) {

@@ -162,7 +162,30 @@ export class Player {
     const picked = input.pocketSelectPressed();
     if (picked >= 0) this.selectPocket(picked);
     if (input.swapPressed()) this.swapHands();
+    if (input.dropPressed()) this.drop(map);
     this.pickupNearby(map);
+  }
+
+  // F drops the selected pocket's contents, or the held tool/gun if no
+  // pocket is selected. Lands a step ahead of the player (beyond pickup
+  // range) so it doesn't just walk straight back into the pockets.
+  drop(map) {
+    const dropX = this.x + this.facing.x * (PICKUP_RANGE + 0.4);
+    const dropY = this.y + this.facing.y * (PICKUP_RANGE + 0.4);
+    if (this.selectedPocket != null && this.pockets[this.selectedPocket]) {
+      const slot = this.pockets[this.selectedPocket];
+      map.groundItems.push({ item: slot.item, qty: slot.qty, x: dropX, y: dropY });
+      this.pockets[this.selectedPocket] = null;
+      this.say(`You drop the ${ITEMS[slot.item].name.toLowerCase()}.`);
+      return;
+    }
+    if (this.hands) {
+      map.groundItems.push({ item: this.hands, qty: 1, x: dropX, y: dropY });
+      this.say(`You drop the ${ITEMS[this.hands].name.toLowerCase()}.`);
+      this.hands = null;
+      return;
+    }
+    this.say('Nothing to drop.');
   }
 
   // Press 1-4 to select a pocket slot (toggle off by pressing it again).
@@ -264,11 +287,25 @@ export class Player {
 
   // Swing the held tool: hits a robot or animal in reach first, otherwise
   // searches a cache box or chops the tree on the faced tile. No swinging
-  // mid-jump.
+  // mid-jump. A gun (or an empty hand) can't melee or chop, but a cache
+  // ahead is always searched with the free hand regardless of what's in
+  // the primary hand.
   useHands(map, animals = [], robots = []) {
     const tool = ITEMS[this.hands];
-    if (!tool || (tool.kind !== 'tool' && tool.kind !== 'gun') || this.swingTimer > 0 || this.z > 0) return;
-    if (tool.kind === 'gun') { this.fire(tool, map, animals, robots); return; }
+    if (this.swingTimer > 0 || this.z > 0) return;
+
+    const tx = Math.floor(this.x + this.facing.x * REACH);
+    const ty = Math.floor(this.y + this.facing.y * REACH);
+    const obj = map.objectAt(tx, ty);
+    const facingBox = obj && obj.type === 'box';
+
+    if (!tool || tool.kind === 'gun') {
+      if (facingBox) { this.openBox(obj, map); return; }
+      if (tool) this.fire(tool, map, animals, robots);
+      else this.say('Your hands are empty.');
+      return;
+    }
+    if (tool.kind !== 'tool') return;
     if (this.stamina < tool.staminaCost) {
       this.say('Too exhausted to swing.');
       return;
@@ -322,23 +359,8 @@ export class Player {
       return;
     }
 
-    const tx = Math.floor(this.x + this.facing.x * REACH);
-    const ty = Math.floor(this.y + this.facing.y * REACH);
-    const obj = map.objectAt(tx, ty);
     // Resistance cache: search it rather than hit it.
-    if (obj && obj.type === 'box') {
-      this.swingTimer = 0.4;
-      if (obj.opened) {
-        this.say('The box is empty.');
-      } else {
-        obj.opened = true;
-        const drops = Array.isArray(obj.loot) ? obj.loot : [obj.loot];
-        for (const l of drops) map.groundItems.push({ ...l, x: this.x, y: this.y });
-        sfx.play('pickup');
-        this.say(`You prise open the cache: ${drops.map((l) => ITEMS[l.item].name.toLowerCase()).join(', ')}.`);
-      }
-      return;
-    }
+    if (facingBox) { this.openBox(obj, map); return; }
     if (!obj || obj.type !== 'tree') {
       sfx.play('swing');
       return;
@@ -360,6 +382,21 @@ export class Player {
     } else {
       this.say(`You hack at the tree with the ${ITEMS[this.hands].name.toLowerCase()}.`);
     }
+  }
+
+  // Search a resistance cache with the free hand — usable whatever the
+  // primary hand is holding, gun, tool, or nothing.
+  openBox(obj, map) {
+    this.swingTimer = 0.4;
+    if (obj.opened) {
+      this.say('The box is empty.');
+      return;
+    }
+    obj.opened = true;
+    const drops = Array.isArray(obj.loot) ? obj.loot : [obj.loot];
+    for (const l of drops) map.groundItems.push({ ...l, x: this.x, y: this.y });
+    sfx.play('pickup');
+    this.say(`You prise open the cache: ${drops.map((l) => ITEMS[l.item].name.toLowerCase()).join(', ')}.`);
   }
 
   // Fire the held gun at the nearest target in range and roughly in front.
@@ -467,6 +504,7 @@ export class Player {
       }
     }
     this.pockets = [null, null, null, null];
+    this.hands = 'penknife';
     this.health = this.maxHealth;
     this.stamina = this.maxStamina;
     this.food = this.maxFood;

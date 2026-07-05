@@ -13,6 +13,7 @@ import { resolveBodyOverlaps } from './game/collision.js';
 import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
+const VERSION = '0.36';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -279,6 +280,7 @@ function frame(now) {
 
   renderer.draw(camera, map, player, animals, {
     fps,
+    version: VERSION,
     light: dayNight.light(),
     timeLabel: dayNight.label,
     minimap,
