@@ -7,6 +7,7 @@ const TRACKED = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight',
   'KeyE', 'Slash', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG', 'KeyF', 'KeyI', 'KeyP', 'KeyZ', 'KeyJ',
+  'KeyK', 'KeyC', 'KeyM',
   'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
 ]);
 
@@ -186,5 +187,17 @@ export class Input {
   // Lore Archive / journal screen (J). Owned by the lore module.
   archivePressed() {
     return this.consumePress('KeyJ');
+  }
+
+  skillsPressed() {
+    return this.consumePress('KeyK');
+  }
+
+  craftPressed() {
+    return this.consumePress('KeyC');
+  }
+
+  phonePressed() {
+    return this.consumePress('KeyM');
   }
 }

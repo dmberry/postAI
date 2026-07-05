@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.44)
+## Where we are (v0.45)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -70,10 +70,22 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
 
+### v0.45 — the win/lose loop
+- **BUG FIX (urgent):** opening a crate bare-handed froze the game — `stow(null)` did `ITEMS[null].stack` and threw inside the update loop, killing the rAF chain. Guarded the auto-equip (only stow a displaced item if there is one) and hardened `stow()` against null/unknown keys.
+- **Countdown to SKYLINK-9000**: `DEADLINE_DAYS = 7` in daynight.js; dashboard shows `Nd HH:MM to SKYLINK` (replaces count-up). At zero the AI wins → SKYLINK death cert. `player._ended` guards re-trigger.
+- **OB-gun + obelisk destruction**: craft the OB-gun (C) from stun-gun + electro-gun + Wi-Fi block held anywhere (prompt banner shows when you have all three). It burns the nearest obelisk in range; 5 hits → destroyed (lower/scorched each hit, flames while burning), drops circuits + batteries + scrap, tile becomes walkable. Destroy all obelisks → **victory** cert (+100). New items: `obgun`, `circuit`. Wi-Fi block respawns random on craft.
+- **Wi-Fi charge persists on drop** (was resetting to full): charge rides on the dropped ground item via `giDrop()`; read back on pickup.
+- **128 lore fragments, 8 kinds** (science/handwritten/letter/note/code/ron/secret/crafting), agent-written; `NOTE_STYLE` restyled per kind (paper + typeface; code/ron/secret/crafting are dark screens).
+- **Skills screen (K)**: practice levels + books-read history; removed the idle/skill/xp lines from the dashboard. `player.skillLog` tracks book order, persisted.
+- **Health bars sit higher** over creatures/robots. **Swimming shows only the head** bobbing with ripples.
+- **Obelisk detection light**: brighter, fast-blinking saturated red with a glow when it senses you.
+- **DEFERRED to next push (large new systems):** W1 hunter-killer robots + 9x9 AI factory (one per map, releases W1 in waves ~1/min once an obelisk is destroyed, until fully down); mobile phone object (M to call → draws all robots; carried in pocket → receive RON text tips + new gun designs). Both are sizeable and want their own focused, tested pass.
+
 ## Planned / backlog
 
 **Near term**
-- Obelisk destruction mechanic — towers are placed and blinking but indestructible. Idea: destroying one quiets/disables the robots it controls, making tower-toppling the endgame loop. (See Henrik's hacking-parts proposal below for a concrete resource to gate this on.)
+- W1 hunter-killer robots + AI factory (see v0.45 deferred, above) — the next big build.
+- Mobile phone + RON texts (see v0.45 deferred, above).
 - Friendly-robot orders: currently follow + (T2) tree-felling; add "collect wood/loot and bring it back", guard mode, and a way to see your robots on the minimap.
 - Visual pass on the machines art (obelisks, crates, robots) and hollows.
 - Limping animation + WOUNDED tag when health is low (the slowdown exists; it needs a visual cue).

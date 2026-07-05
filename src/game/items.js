@@ -151,6 +151,26 @@ export const ITEMS = {
     ammoType: 'battery',
     color: '#4fd8c3',
   },
+  // Crafted from a stun-gun + electro-gun + Wi-Fi block (press C when you
+  // hold all three). Sets an obelisk ablaze; five hits bring one down.
+  obgun: {
+    name: 'OB-gun',
+    kind: 'gun',
+    tier: 6,
+    range: 7,
+    effect: 'burn',
+    ammoType: 'battery',
+    swingCooldown: 1.2,
+    staminaCost: 3,
+    stack: 1,
+    color: '#e0642f',
+  },
+  circuit: {
+    name: 'Circuit board',
+    kind: 'resource',
+    stack: 10,
+    color: '#3f8f5f',
+  },
   battery: {
     name: 'Battery',
     kind: 'resource',

@@ -14,7 +14,7 @@ import { Lore } from './game/lore.js';
 import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
-const VERSION = '0.44';
+const VERSION = '0.45';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -133,6 +133,7 @@ try {
   if (saved) {
     player.setPersona(saved.name || 'Adam', saved.gender || 'm');
     for (const s of saved.skills || []) player.skills.add(s);
+    if (Array.isArray(saved.skillLog)) player.skillLog = saved.skillLog;
     if (saved.xp) Object.assign(player.xp, saved.xp);
     if (typeof saved.score === 'number') player.score = saved.score;
     if (typeof saved.deaths === 'number') player.deaths = saved.deaths;
@@ -151,7 +152,7 @@ try {
 const persist = () => {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      name: player.name, gender: player.gender, skills: [...player.skills],
+      name: player.name, gender: player.gender, skills: [...player.skills], skillLog: player.skillLog,
       xp: player.xp, score: player.score, deaths: player.deaths || 0,
       state: {
         health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
@@ -252,9 +253,28 @@ let playTime = 0;
 // read-only because the pockets/backpack split is already automatic —
 // there's nothing to drag between them.
 let showBackpack = false;
+let showSkills = false;
 let detail = null;   // right-click inspection tooltip {text, x, y, ttl}
 let drag = null;     // in-progress pointer drag {from: slotDescriptor}
 const PROJECTILE_SPEED = 16; // tiles/sec for gun tracers
+
+// When an obelisk falls, a fresh Wi-Fi block (consumed to craft the OB-gun)
+// respawns somewhere random in the ruins so the loop can continue.
+const boardTiles = [];
+for (let by = 0; by < map.h; by++) for (let bx = 0; bx < map.w; bx++) if (map.floorAt(bx, by) === 'boards') boardTiles.push([bx, by]);
+player.onObeliskDestroyed = () => {
+  if (boardTiles.length) {
+    const [bx, by] = boardTiles[Math.floor(Math.random() * boardTiles.length)];
+    map.groundItems.push({ item: 'wifiblock', qty: 1, power: 600, x: bx + 0.5, y: by + 0.5 });
+  }
+  // Victory: every obelisk toppled before the deadline.
+  if (obeliskObjs.every((o) => o.destroyed) && !player._ended) {
+    player._ended = true;
+    player.addScore(100);
+    player.deathCert = { name: player.name, cause: 'nothing — you won', score: player.score, skills: [...player.skills], deaths: player.deaths || 0, victory: true };
+    persist();
+  }
+};
 
 // Right-click inspection: describe whatever occupies a tile. Cars get an
 // invented make and model (deterministic from their hue), stone an age from
@@ -299,6 +319,8 @@ let wasRobotNear = false;
 function update(dt) {
   if (input.consumePress('KeyH')) toggleHelp();
   if (input.inventoryPressed()) showBackpack = !showBackpack;
+  if (input.skillsPressed()) showSkills = !showSkills;
+  if (input.craftPressed() && player.canCraftObGun()) player.craftObGun(map);
   if (input.zoomTogglePressed()) camera.toggleZoom();
   lore.update(dt, player, input);
   if (input.musicTogglePressed()) {
@@ -372,6 +394,13 @@ function update(dt) {
   resolveBodyOverlaps(player, animals, robots);
   map.updateShakes(dt);
   dayNight.update(dt);
+  // Time's up: SKYLINK-9000 comes online and the AI wins.
+  if (dayNight.hoursLeft() <= 0 && !player.deathCert && !player._ended) {
+    player._ended = true;
+    player.deaths = (player.deaths || 0) + 1;
+    player.deathCert = { name: player.name, cause: 'SKYLINK-9000 coming online', score: player.score, skills: [...player.skills], deaths: player.deaths, skylink: true };
+    persist();
+  }
   camera.follow(player.x, player.y, dt);
   if (map.objects.length !== lastObjectCount) {
     lastObjectCount = map.objects.length;
@@ -452,6 +481,8 @@ function update(dt) {
   // and holds, and nearby non-aggro robots get nudged to sweep near the
   // tower — a report of closeness, never an exact position.
   for (const ob of obeliskObjs) {
+    if (ob.burning > 0) ob.burning -= dt; // OB-gun flame timer, ticked for the renderer
+    if (ob.destroyed) continue;
     const d = Math.hypot(ob.x + 0.5 - player.x, ob.y + 0.5 - player.y);
     if (d < 9) {
       ob.alert = Math.min(1, ob.alert + dt * 1.5);
@@ -498,7 +529,7 @@ function frame(now) {
     fps,
     version: VERSION,
     light: dayNight.light(),
-    timeLabel: dayNight.label,
+    timeLabel: dayNight.countdownLabel,
     minimap,
     birds,
     robots,
@@ -508,6 +539,8 @@ function frame(now) {
     detail,
     drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
     deathCert: player.deathCert,
+    showSkills,
+    craftPrompt: player.canCraftObGun() && player.hands !== 'obgun',
   });
 
   frameCount += 1;

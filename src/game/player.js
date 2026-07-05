@@ -78,6 +78,7 @@ export class Player {
     this.name = 'Adam';
     this.gender = 'm';    // 'm' | 'f' | 'u'
     this.skills = new Set(); // knowledge from books; survives death
+    this.skillLog = [];   // books read, in order (for the skills screen)
 
     this.wifiPower = 0;   // Wi-Fi block charge (seconds) while one is held
     this.wifiMax = WIFI_MAX;
@@ -112,6 +113,58 @@ export class Player {
   addScore(n) {
     this.score += n;
     if (this.onScore) this.onScore();
+  }
+
+  // True if a single named item sits anywhere on the player (hand, pockets,
+  // backpack, spare-weapon slot).
+  hasItem(key) {
+    if (this.hands === key) return true;
+    if (this.pockets.some((s) => s && s.item === key)) return true;
+    if (this.backpack) {
+      if (this.backpack.weapon === key) return true;
+      if (this.backpack.slots.some((s) => s && s.item === key)) return true;
+    }
+    return false;
+  }
+
+  // Remove one of a named item from wherever it is. Returns whether it went.
+  removeItem(key) {
+    if (this.hands === key) { this.hands = null; return true; }
+    let i = this.pockets.findIndex((s) => s && s.item === key);
+    if (i >= 0) { this.pockets[i].qty -= 1; if (this.pockets[i].qty <= 0) this.pockets[i] = null; return true; }
+    if (this.backpack) {
+      if (this.backpack.weapon === key) { this.backpack.weapon = null; return true; }
+      i = this.backpack.slots.findIndex((s) => s && s.item === key);
+      if (i >= 0) { this.backpack.slots[i].qty -= 1; if (this.backpack.slots[i].qty <= 0) this.backpack.slots[i] = null; return true; }
+    }
+    return false;
+  }
+
+  // Can the OB-gun be crafted right now? (Stun-gun + electro-gun + Wi-Fi block.)
+  canCraftObGun() {
+    return this.hasItem('stungun') && this.hasItem('electrogun') && this.hasItem('wifiblock');
+  }
+
+  // Combine the three into the OB-gun and take it in hand. The Wi-Fi block is
+  // consumed, so main respawns a fresh one somewhere random.
+  craftObGun(map) {
+    if (!this.canCraftObGun()) { this.say('You need a stun-gun, an electro-gun and a Wi-Fi block.'); return false; }
+    this.removeItem('stungun');
+    this.removeItem('electrogun');
+    this.removeItem('wifiblock');
+    if (this.hands && this.hands !== 'obgun') this.stow(this.hands, 1);
+    this.hands = 'obgun';
+    sfx.play('zap');
+    this.say('You wire the three together into an OB-gun. It hums, hungry for a tower.');
+    return true;
+  }
+
+  // A ground-item drop that carries the Wi-Fi block's remaining charge, so a
+  // dropped block keeps its charge instead of resetting to full on re-pickup.
+  giDrop(item, qty, x, y) {
+    const g = { item, qty, x, y };
+    if (item === 'wifiblock') g.power = this.wifiPower;
+    return g;
   }
 
   // ---- generic slot access (for click-equip and pointer drag) ----------
@@ -263,7 +316,8 @@ export class Player {
 
     // Swimming a river is exhausting: it drains stamina fast and chips at
     // health, whether you're moving or treading water. Get across and out.
-    if (map.floorAt(Math.floor(this.x), Math.floor(this.y)) === 'water') {
+    this.swimming = map.floorAt(Math.floor(this.x), Math.floor(this.y)) === 'water';
+    if (this.swimming) {
       this.stamina = Math.max(0, this.stamina - SWIM_STAMINA_DRAIN * dt);
       this.health = Math.max(0, this.health - SWIM_HEALTH_DRAIN * dt);
       if (this.health <= 0) { this.die(map, 'the cold river'); return; }
@@ -318,20 +372,20 @@ export class Player {
     const dropX = this.x + this.facing.x * (PICKUP_RANGE + 0.4);
     const dropY = this.y + this.facing.y * (PICKUP_RANGE + 0.4);
     if (this.selectedPocket === 'bw' && this.backpack && this.backpack.weapon) {
-      map.groundItems.push({ item: this.backpack.weapon, qty: 1, x: dropX, y: dropY });
+      map.groundItems.push(this.giDrop(this.backpack.weapon, 1, dropX, dropY));
       this.say(`You drop the ${ITEMS[this.backpack.weapon].name.toLowerCase()}.`);
       this.backpack.weapon = null;
       return;
     }
     if (this.selectedPocket != null && this.selectedPocket !== 'bw' && this.pockets[this.selectedPocket]) {
       const slot = this.pockets[this.selectedPocket];
-      map.groundItems.push({ item: slot.item, qty: slot.qty, x: dropX, y: dropY });
+      map.groundItems.push(this.giDrop(slot.item, slot.qty, dropX, dropY));
       this.pockets[this.selectedPocket] = null;
       this.say(`You drop the ${ITEMS[slot.item].name.toLowerCase()}.`);
       return;
     }
     if (this.hands) {
-      map.groundItems.push({ item: this.hands, qty: 1, x: dropX, y: dropY });
+      map.groundItems.push(this.giDrop(this.hands, 1, dropX, dropY));
       this.say(`You drop the ${ITEMS[this.hands].name.toLowerCase()}.`);
       this.hands = null;
       return;
@@ -440,6 +494,7 @@ export class Player {
       this.say(`You have already read ${def.name}.`);
     } else {
       this.skills.add(def.skill);
+      this.skillLog.push({ skill: def.skill });
       this.gainXp('knowledge', 10);
       this.addScore(SCORE.book);
       this.say(`You read "${def.name}". ${def.skillText}`);
@@ -739,12 +794,55 @@ export class Player {
     this.say(`You prise open the cache: ${drops.map((l) => ITEMS[l.item].name.toLowerCase()).join(', ')}.`);
   }
 
+  // Set fire to the nearest obelisk in range and roughly in front. Five hits
+  // bring one down; it looks more damaged each time and finally collapses
+  // into a heap of salvage. Costs a battery per shot.
+  burnObelisk(tool, map, range) {
+    let ob = null, best = Infinity;
+    for (const o of map.objects) {
+      if (o.type !== 'obelisk' || o.destroyed) continue;
+      const dx = o.x + 0.5 - this.x, dy = o.y + 0.5 - this.y;
+      const d = Math.hypot(dx, dy);
+      if (d > range) continue;
+      if (dx * this.facing.x + dy * this.facing.y < 0) continue;
+      if (d < best) { best = d; ob = o; }
+    }
+    if (!ob) { this.say('No obelisk in your sights.'); return; }
+    let i = this.pockets.findIndex((s) => s && s.item === 'battery');
+    let slots = this.pockets;
+    if (i < 0 && this.backpack) { i = this.backpack.slots.findIndex((s) => s && s.item === 'battery'); slots = this.backpack.slots; }
+    if (i < 0) { this.say('The OB-gun needs a battery.'); return; }
+    slots[i].qty -= 1; if (slots[i].qty <= 0) slots[i] = null;
+    this.swingTimer = tool.swingCooldown;
+    sfx.play('zap');
+    ob.obDamage = (ob.obDamage || 0) + 1;
+    ob.burning = 3; // seconds of visible flame, ticked by the renderer/main
+    if (ob.obDamage >= 5) {
+      ob.destroyed = true;
+      // The heap is walkable now, so the salvage on it can be collected.
+      map.objectGrid[ob.y * map.w + ob.x] = null;
+      this.addScore(20);
+      // A heap of salvage where the tower stood.
+      for (let k = 0; k < 3; k++) map.groundItems.push({ item: 'circuit', qty: 1 + Math.floor(Math.random() * 2), x: ob.x + 0.5 + (Math.random() - 0.5), y: ob.y + 0.5 + (Math.random() - 0.5) });
+      map.groundItems.push({ item: 'battery', qty: 2, x: ob.x + 0.5, y: ob.y + 0.5 });
+      map.groundItems.push({ item: 'scrap', qty: 3, x: ob.x + 0.5, y: ob.y + 0.5 });
+      if (this.onObeliskDestroyed) this.onObeliskDestroyed(ob);
+      this.say('The obelisk buckles and comes down in a shower of sparks and circuitry.');
+    } else {
+      this.say(`The obelisk catches fire. ${5 - ob.obDamage} more should finish it.`);
+    }
+  }
+
   // Fire the held gun at the nearest target in range and roughly in front.
   // Guns consume ammunition (ammoType) from the pockets per shot. Stun and
   // fuse effects work on machines only; pistol and shotgun hit flesh too.
   fire(tool, map, animals, robots) {
     // Gun practice steadies the hand: range grows a little with the level.
     const range = tool.range + this.xpLevel('guns') * 0.3;
+
+    // The OB-gun burns obelisks, not creatures: find the nearest tower in
+    // range and set it alight.
+    if (tool.effect === 'burn') { this.burnObelisk(tool, map, range); return; }
     let target = null, best = Infinity, isRobot = false;
     const consider = (e, robot) => {
       if (e.dead || e.fused || e.drained || e.friendly) return;
@@ -850,10 +948,15 @@ export class Player {
         const old = this.hands;
         this.hands = gi.item;
         gi.qty -= 1;
-        if (this.backpack && !this.backpack.weapon) {
-          this.backpack.weapon = old;
-        } else if (this.stow(old, 1) === 0) {
-          map.groundItems.push({ item: old, qty: 1, x: this.x, y: this.y });
+        // Only stow the displaced item if there was one — grabbing a tool
+        // with empty hands must not try to stow null (that used to throw and
+        // freeze the game when opening a crate bare-handed).
+        if (old) {
+          if (this.backpack && !this.backpack.weapon) {
+            this.backpack.weapon = old;
+          } else if (this.stow(old, 1) === 0) {
+            map.groundItems.push({ item: old, qty: 1, x: this.x, y: this.y });
+          }
         }
         sfx.play('pickup');
         this.say(`You take the ${def.name.toLowerCase()} in hand.`);
@@ -864,7 +967,7 @@ export class Player {
       gi.qty -= stored;
       // A found Wi-Fi block comes with a charge — a genuine reward, and
       // usable at once (hold it, and top it up with batteries later).
-      if (gi.item === 'wifiblock') this.wifiPower = this.wifiMax;
+      if (gi.item === 'wifiblock') this.wifiPower = (gi.power != null) ? gi.power : this.wifiMax;
       sfx.play('pickup');
       this.say(gi.item === 'wifiblock'
         ? 'You find a Wi-Fi block — hold it and the machines cannot see you.'
@@ -887,14 +990,14 @@ export class Player {
     map = map || this.map;
     if (map) {
       for (const slot of this.pockets) {
-        if (slot) map.groundItems.push({ item: slot.item, qty: slot.qty, x: this.x, y: this.y });
+        if (slot) map.groundItems.push(this.giDrop(slot.item, slot.qty, this.x, this.y));
       }
       if (this.backpack) {
         for (const slot of this.backpack.slots) {
-          if (slot) map.groundItems.push({ item: slot.item, qty: slot.qty, x: this.x, y: this.y });
+          if (slot) map.groundItems.push(this.giDrop(slot.item, slot.qty, this.x, this.y));
         }
         if (this.backpack.weapon) {
-          map.groundItems.push({ item: this.backpack.weapon, qty: 1, x: this.x, y: this.y });
+          map.groundItems.push(this.giDrop(this.backpack.weapon, 1, this.x, this.y));
         }
         map.groundItems.push({ item: 'backpack', qty: 1, x: this.x, y: this.y });
       }
@@ -927,6 +1030,7 @@ export class Player {
   // Add qty of an item to pockets, stacking first, then overflow into the
   // backpack (if carried). Returns how many fitted.
   stow(itemKey, qty) {
+    if (!itemKey || !ITEMS[itemKey]) return 0; // never stow a null/unknown item
     let left = this._fillSlots(this.pockets, itemKey, qty);
     if (left > 0 && this.backpack) left = this._fillSlots(this.backpack.slots, itemKey, left);
     return qty - left;

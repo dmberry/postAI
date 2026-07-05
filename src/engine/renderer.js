@@ -127,9 +127,9 @@ export class Renderer {
         : elevOf(d.obj.x + 0.5, d.obj.y + 0.5);
       if (lift) { ctx.save(); ctx.translate(0, -lift); }
       if (d.player) this.drawPlayer(d.player);
-      else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 34); }
+      else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 44); }
       else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
-      else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 36); }
+      else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 48); }
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
@@ -185,9 +185,88 @@ export class Renderer {
     this.drawDashboard(player, hud);
     if (hud.showBackpack) this.drawBackpackPanel(player);
     if (hud.lore) hud.lore.drawOverlay(ctx, this.w, this.h);
+    if (hud.craftPrompt) {
+      const msg = 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      const w = ctx.measureText(msg).width + 24;
+      const x = (this.w - w) / 2, y = this.h - DASH_H - 40;
+      ctx.fillStyle = 'rgba(224,100,47,0.9)';
+      ctx.fillRect(x, y, w, 26);
+      ctx.fillStyle = '#fff';
+      ctx.textAlign = 'center';
+      ctx.fillText(msg, this.w / 2, y + 17);
+      ctx.textAlign = 'left';
+    }
+    if (hud.showSkills) this.drawSkillModal(player);
     if (hud.detail) this.drawDetail(hud.detail);
     if (hud.drag) this.drawDragGhost(hud.drag, player);
     if (hud.deathCert) this.drawDeathCert(hud.deathCert);
+  }
+
+  // The skills screen (K): learned book-skills in the order gained, plus the
+  // three practice tracks and their levels — the history the dashboard used
+  // to cram into one line.
+  drawSkillModal(player) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(6,8,5,0.8)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    const pw = Math.min(420, this.w - 60), ph = 380;
+    const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    ctx.fillStyle = '#12160e';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = 'rgba(207,216,195,0.4)';
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+    ctx.fillStyle = '#cfd8c3';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillText('Skills & Knowledge', px + 20, py + 30);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.55)';
+    ctx.fillText('K to close · all of it survives death', px + 20, py + 48);
+
+    let y = py + 78;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('PRACTICE', px + 20, y); y += 20;
+    ctx.font = '13px system-ui, sans-serif';
+    const tracks = [['Swordarm (melee)', 'melee'], ['Aim (guns)', 'guns'], ['Mind (reading)', 'knowledge']];
+    for (const [label, key] of tracks) {
+      const lvl = player.xpLevel ? player.xpLevel(key) : 0;
+      ctx.fillStyle = '#e8e0d0';
+      ctx.fillText(label, px + 30, y);
+      ctx.fillStyle = '#e8d27a';
+      ctx.textAlign = 'right';
+      ctx.fillText(`level ${lvl}`, px + pw - 24, y);
+      ctx.textAlign = 'left';
+      y += 22;
+    }
+    y += 12;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('BOOKS READ', px + 20, y); y += 20;
+    ctx.font = '13px system-ui, sans-serif';
+    const log = player.skillLog && player.skillLog.length ? player.skillLog
+      : [...(player.skills || [])].map((s) => ({ skill: s }));
+    if (!log.length) {
+      ctx.fillStyle = 'rgba(207,216,195,0.5)';
+      ctx.font = 'italic 13px system-ui, sans-serif';
+      ctx.fillText('No books read yet. Find them in the ruins.', px + 30, y);
+    } else {
+      const NAMES = { woodcraft: 'Woodcraft', herbalism: 'Herbalism', tracking: 'Tracking', fleetfoot: 'Fleet foot' };
+      let n = 1;
+      for (const e of log) {
+        if (y > py + ph - 16) break;
+        ctx.fillStyle = '#e8e0d0';
+        ctx.fillText(`${n}. ${NAMES[e.skill] || e.skill}`, px + 30, y);
+        if (e.day) {
+          ctx.fillStyle = 'rgba(207,216,195,0.5)';
+          ctx.textAlign = 'right';
+          ctx.fillText(`day ${e.day}`, px + pw - 24, y);
+          ctx.textAlign = 'left';
+        }
+        y += 22; n += 1;
+      }
+    }
   }
 
   // Right-click inspection tooltip, near the cursor.
@@ -255,16 +334,24 @@ export class Renderer {
     ctx.lineWidth = 1;
 
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#b0392f';
+    ctx.fillStyle = cert.victory ? '#6fbf4a' : '#b0392f';
     ctx.font = 'bold 22px Georgia, serif';
-    ctx.fillText('CERTIFICATE OF DEATH', px + pw / 2, py + 42);
+    ctx.fillText(cert.victory ? 'THE TOWERS ARE DOWN' : 'CERTIFICATE OF DEATH', px + pw / 2, py + 42);
     ctx.strokeStyle = 'rgba(207,216,195,0.3)';
     ctx.beginPath(); ctx.moveTo(px + 40, py + 56); ctx.lineTo(px + pw - 40, py + 56); ctx.stroke();
 
     ctx.fillStyle = '#cfd8c3';
     ctx.font = '14px Georgia, serif';
-    ctx.fillText(`Here lies ${cert.name || 'a survivor'},`, px + pw / 2, py + 88);
-    ctx.fillText(`taken by ${cert.cause}.`, px + pw / 2, py + 108);
+    if (cert.victory) {
+      ctx.fillText(`${cert.name || 'A survivor'} pulled down every obelisk.`, px + pw / 2, py + 88);
+      ctx.fillText('The machines forget. SKYLINK never wakes.', px + pw / 2, py + 108);
+    } else if (cert.skylink) {
+      ctx.fillText('SKYLINK-9000 is online.', px + pw / 2, py + 88);
+      ctx.fillText(`${cert.name || 'You'} ran out of days.`, px + pw / 2, py + 108);
+    } else {
+      ctx.fillText(`Here lies ${cert.name || 'a survivor'},`, px + pw / 2, py + 88);
+      ctx.fillText(`taken by ${cert.cause}.`, px + pw / 2, py + 108);
+    }
 
     const rank = deathRank(cert.score, cert.skills.length);
     ctx.textAlign = 'left';
@@ -674,7 +761,25 @@ export class Renderer {
   drawObelisk(obj) {
     const ctx = this.ctx;
     const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
-    const H = 96, W = 9;
+    // Destroyed: a low heap of blackened rubble and circuitry where it stood.
+    if (obj.destroyed) {
+      ctx.fillStyle = 'rgba(0,0,0,0.3)';
+      ctx.beginPath();
+      ctx.ellipse(c.x, c.y, 16, 8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      for (const [ox, oy, r, col] of [[-6, -1, 6, '#1a1a20'], [4, -2, 7, '#141418'], [-1, 2, 6, '#20201a'], [7, 1, 4, '#2a2a30']]) {
+        ctx.fillStyle = col;
+        ctx.beginPath();
+        ctx.ellipse(c.x + ox, c.y + oy - 3, r, r * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = '#3f8f5f'; // exposed circuit-green flecks
+      for (const [ox, oy] of [[-3, -2], [3, 0], [0, 1]]) ctx.fillRect(c.x + ox, c.y + oy - 4, 2, 2);
+      return;
+    }
+    // Damage lowers and scorches the tower as it's burned down.
+    const dmg = obj.obDamage || 0;
+    const H = Math.round(96 * (1 - dmg * 0.13)), W = 9;
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.beginPath();
     ctx.ellipse(c.x, c.y, 15, 7, 0, 0, Math.PI * 2);
@@ -724,6 +829,19 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(c.x, ly, 2.6 + flash * 1.5, 0, Math.PI * 2);
       ctx.fill();
+    }
+    // Flames licking up the shaft while it burns from an OB-gun hit.
+    if (obj.burning > 0) {
+      const t = performance.now() / 90;
+      for (let i = 0; i < 5; i++) {
+        const fy = c.y - 6 - i * (H / 6) - Math.abs(Math.sin(t + i)) * 6;
+        const fx = c.x + Math.sin(t * 1.3 + i * 2) * 5;
+        const r = 5 - i * 0.6;
+        ctx.fillStyle = i < 2 ? 'rgba(255,180,60,0.85)' : 'rgba(230,90,30,0.7)';
+        ctx.beginPath();
+        ctx.ellipse(fx, fy, r, r * 1.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 
@@ -1038,6 +1156,29 @@ export class Renderer {
         ctx.fillRect(-4, 1, 15, 2.2); // barrels
         ctx.fillRect(-4, 3.6, 15, 2.2);
         break;
+      case 'obgun': {
+        // A cobbled-together cannon with a glowing ember muzzle.
+        ctx.fillStyle = '#2c2f34';
+        ctx.fillRect(-9, -4, 15, 7);
+        ctx.fillRect(-6, 3, 4, 6);
+        ctx.fillStyle = itemDef.color;
+        ctx.beginPath(); ctx.arc(8, -0.5, 3.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ffd060';
+        ctx.beginPath(); ctx.arc(8, -0.5, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#4fd8c3'; // salvaged wifi coil
+        ctx.fillRect(-8, -3, 2, 5);
+        break;
+      }
+      case 'circuit':
+        ctx.fillStyle = itemDef.color;
+        ctx.fillRect(-7, -6, 14, 12);
+        ctx.strokeStyle = '#d8e0b0';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-4, -6); ctx.lineTo(-4, 2); ctx.lineTo(4, 2); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(2, -6); ctx.lineTo(2, -2); ctx.lineTo(6, -2); ctx.stroke();
+        ctx.fillStyle = '#2c2f34';
+        for (const [ox, oy] of [[-4, 2], [4, 2], [2, -2]]) { ctx.beginPath(); ctx.arc(ox, oy, 1.3, 0, Math.PI * 2); ctx.fill(); }
+        break;
       case 'battery':
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-4, -7, 8, 14);
@@ -1158,6 +1299,30 @@ export class Renderer {
   drawPlayer(player) {
     const ctx = this.ctx;
     const c = worldToScreen(player.x, player.y);
+
+    // Swimming: only the head shows above the water, bobbing, with ripples.
+    if (player.swimming) {
+      const bobY = Math.sin(performance.now() / 380) * 1.8;
+      ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+      ctx.lineWidth = 1;
+      for (let i = 1; i <= 2; i++) {
+        ctx.beginPath();
+        ctx.ellipse(c.x, c.y - 4, 7 * i, 3.5 * i, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      const hy = c.y - 10 + bobY;
+      ctx.fillStyle = '#d9b48c';
+      ctx.beginPath(); ctx.arc(c.x, hy, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = player.gender === 'f' ? '#7a4520' : player.gender === 'u' ? '#26262c' : '#5a3d22';
+      ctx.beginPath(); ctx.arc(c.x, hy - 1.5, 6, Math.PI, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2c2119';
+      ctx.beginPath();
+      ctx.arc(c.x - 2.2, hy + 1, 1, 0, Math.PI * 2);
+      ctx.arc(c.x + 2.2, hy + 1, 1, 0, Math.PI * 2);
+      ctx.fill();
+      return;
+    }
+
     const lift = (player.z || 0) * 32; // jump height in pixels
     // Shadow stays grounded and shrinks as the player rises.
     const sh = Math.max(0.45, 1 - (player.z || 0) * 0.9);
@@ -1376,25 +1541,15 @@ export class Renderer {
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillStyle = 'rgba(207,216,195,0.85)';
-    let state = player.sprinting ? 'Sprinting' : player.moving ? 'Walking' : 'Idle';
-    if (player.skills && player.skills.size) {
-      state += ` · ${player.skills.size} skill${player.skills.size > 1 ? 's' : ''}`;
-    }
-    let line = top + 16;
+    let line = top + 18;
     const nameLine = hud.timeLabel ? `${player.name || ''} · ${hud.timeLabel}` : (player.name || '');
-    ctx.fillText(nameLine, this.w - 16, line); line += 16;
-    ctx.fillText(state, this.w - 16, line); line += 16;
-    if (player.xp) {
-      ctx.fillText(`melee ${player.xpLevel('melee')} · aim ${player.xpLevel('guns')} · mind ${player.xpLevel('knowledge')}`,
-        this.w - 16, line);
-      line += 16;
-    }
-    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillText(nameLine, this.w - 16, line); line += 18;
+    ctx.font = 'bold 13px system-ui, sans-serif';
     ctx.fillStyle = '#e8d27a';
-    ctx.fillText(`Score ${player.score ?? 0}`, this.w - 16, line); line += 16;
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(207,216,195,0.85)';
-    ctx.fillText(`${hud.fps ?? 0} fps`, this.w - 16, line);
+    ctx.fillText(`Score ${player.score ?? 0}`, this.w - 16, line); line += 18;
+    ctx.font = '10px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText(`K: skills · ${hud.fps ?? 0} fps`, this.w - 16, line);
     ctx.textAlign = 'left';
 
     // Transient message line above the panel

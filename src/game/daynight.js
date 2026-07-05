@@ -8,6 +8,7 @@ const DUSK_START = 18;  // ramp down begins (18:00)
 const DUSK_END = 21;    // full night (21:00)
 const NIGHT_FLOOR = 0.16;   // ambient light at deep night
 const NIGHT_THRESHOLD = 0.4; // below this counts as night
+const DEADLINE_DAYS = 7;    // days to defeat the AI before SKYLINK-9000
 
 // Hermite smoothstep: eases 0..1 with zero slope at both ends, so the light
 // curve has no kinks at the ramp boundaries.
@@ -48,6 +49,21 @@ export class DayNight {
     const m = Math.floor((this.hour - h) * 60);
     const pad = (n) => String(n).padStart(2, '0');
     return `Day ${this.day} · ${pad(h)}:${pad(m)}`;
+  }
+
+  // A countdown to doom: DEADLINE_DAYS days before SKYLINK-9000 comes online.
+  // Returns whole hours remaining (0 when time is up).
+  hoursLeft() {
+    return Math.max(0, DEADLINE_DAYS * 24 - this.totalHours);
+  }
+
+  get countdownLabel() {
+    const total = this.hoursLeft();
+    const d = Math.floor(total / 24);
+    const h = Math.floor(total % 24);
+    const m = Math.floor((total - Math.floor(total)) * 60);
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${d}d ${pad(h)}:${pad(m)} to SKYLINK`;
   }
 
   // Ambient light 0..1: full through midday, smooth dawn and dusk ramps,
