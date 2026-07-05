@@ -18,6 +18,19 @@ Versioning: 0.01 increments (v0.32, v0.33, ...). The game is pushed after every 
 
 ## Planned / backlog
 
+**v0.34 (in progress — David's requests, 5 July)**
+- Version number in tiny writing under the postAI logo in the UI.
+- Item icons that look like the thing they are (weapons, guns, food, books, ammo), in the dashboard slots and on the ground.
+- Item names under the pocket slots.
+- Weapon toggling: press 1-4 to select a pocket, G to swap it with the hands slot (lets you put weapons away).
+- Show the held weapon in the player sprite's hands.
+- Mouse-cursor aiming: facing follows the cursor, for better fighting control.
+- Player collides with animals/robots — never overlapping the same space, so a target is always hittable.
+- Experience points: melee practice improves fighting, gun practice sharpens aim and effect, books give knowledge points.
+- Crickets fall silent when a machine is near (they are scared of them).
+- Machines carry a quiet drone hum you can hear approaching.
+- Obelisk light: blinks occasionally rather than pulsing; goes deeper red when it senses you close, and reports your closeness (not exact position) to robots nearby.
+
 **Near term**
 - Obelisk destruction mechanic — towers are placed and pulsing but indestructible. Idea: destroying one quiets/disables the robots it controls, making tower-toppling the endgame loop.
 - Friendly-robot orders: currently follow + (T2) tree-felling; add "collect wood/loot and bring it back", guard mode, and a way to see your robots on the minimap.
