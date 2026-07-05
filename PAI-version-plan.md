@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.47)
+## Where we are (v0.48)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -70,6 +70,20 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
 
+### v0.48 — the war escalates: victory, revenge squads, zombies
+
+- **Win condition confirmed and made explicit**: bring down every obelisk before SKYLINK completes and you get the victory certificate ("THE TOWERS ARE DOWN"). This already worked in v0.47; it's now called out plainly in the help.
+- **W1 hunter-killers**: the instant an obelisk falls, 2-4 W1s (new robot type, tougher/faster than a T2, `robots.js`) boil out of the wreckage already aggroed on the player — no detection phase, no giving up the trail. Rendered with a scorched red-black palette to read as distinct from T1/T2.
+- **W-factory + W3 repair drones**: a single foundry object placed on the map (new `wfactory` object type). While any obelisk is damaged (hit by the OB-gun) but not yet destroyed, it periodically fields one unarmed W3 drone that walks to the nearest damaged tower and heals it back to full — leave a half-burned obelisk alone too long and you'll have to start the burn over. Only one W3 is ever out at a time.
+- **OB-gun robot "zombies"**: firing the OB-gun's beam at a robot (rather than a tower) no longer just pierces it — it corrupts the machine into a zombie (green halo tell) immune to every weapon except the **bow** and the **wave gun**. Stun-gun, electro-gun, pistol, shotgun, railgun, melee, and even bombs all bounce off; only those two builds can finish one.
+- **Sparks on impact**: any weapon landing on a robot now throws a brief shower of sparks (`map.sparks`, drawn by the renderer) — melee, guns, the cone, and bomb splash all trigger it.
+- **Certificate of Death is shareable**: press **S** on the cert screen to copy it to the clipboard as a PNG (falls back to a download if the browser won't allow clipboard image writes) — `renderer.shareCertificate()` crops the panel straight off the live canvas.
+- **World seed is now randomised per game** instead of a fixed constant (`postai-seed` in localStorage; a continuing run keeps its seed for autosave, New Game rolls a fresh one). Fixes every playthrough dropping weapons and caches in identical spots.
+- **RON resupply**: every 90-150 seconds, one already-emptied resistance cache is quietly restocked with a fresh battery/ammo/shells drop.
+- **All weapons now have hand-drawn icons**: sledgehammer, bow, arrows, katana, railgun, and wave gun previously fell back to a plain coloured square; every item in `ITEMS` now has a distinct vector icon.
+- **BUG FIX (pre-existing):** New Game never actually reset your score/skills/kill log — `location.reload()` fires `beforeunload` synchronously, which ran the autosave and rewrote the character save right back *after* New Game's `removeItem` calls, undoing the reset every time. Fixed with a `resettingGame` flag that `persist()` checks first. Also means the new random-seed-per-game feature above only worked reliably for score/skills once this was fixed too.
+- **Docs**: help modal rewritten to cover all of the above, plus a long-stale line claiming the penknife fells trees (it hasn't since v0.47) fixed.
+
 ### v0.47 — bombs, wave gun, water droids, SKYLINK
 
 - **Timed bombs** (new `bomb` item kind, holdable, stack:1): small / medium / large, plus a rare **insane** bomb. Hold one and use (**/** or click) to set it ticking a step ahead; it detonates after its fuse in a fire cloud that damages every animal, robot, water droid — and the player — inside its radius. Blink-rate on the canister quickens as the fuse runs down. The **insane bomb also brings down any obelisk** caught in the blast (drops the same numbered-circuit + battery + scrap heap as an OB-gun kill). Detonation lives in `player.detonateBomb()`; `main` ticks fuses and spawns the `map.explosions` cloud; renderer draws ticking bombs + expanding flame rings. Bombs seeded in caches (small/medium common, large uncommon, insane a rare find).
@@ -107,7 +121,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 ## Planned / backlog
 
 **Near term**
-- W1 hunter-killer robots + AI factory (see v0.45 deferred, above) — the next big build.
+- W1 hunter-killers + the W-factory shipped in v0.48, but scoped down from the original v0.45 backlog note below: W1s spawn as a one-off revenge squad per obelisk destroyed (not released in ongoing waves by the factory), and the factory itself only fields W3 repair drones. A scarier approach drone and wave-released W1s from the factory remain open if we want the fuller original design later.
 - Mobile phone + RON texts (see v0.45 deferred, above).
 - Friendly-robot orders: currently follow + (T2) tree-felling; add "collect wood/loot and bring it back", guard mode, and a way to see your robots on the minimap.
 - Visual pass on the machines art (obelisks, crates, robots) and hollows.

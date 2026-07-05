@@ -38,6 +38,31 @@ const T2_HIT_RANGE = 0.9;
 const T2_HIT_DAMAGE = 15;
 const T2_HIT_COOLDOWN = 1.2;
 
+// W1s: a "revenge squad" the AI releases the instant an obelisk falls. They
+// don't patrol — they walk in facing your last-known position from the
+// moment they're deployed, faster and harder-hitting than a T2. Otherwise
+// they share the biped's collision, battery and recharge behaviour, seating
+// at the crater where their tower stood as if it were still a charger.
+const W1_HP = 45;
+const W1_CHASE_SPEED = 4.6;
+const W1_DETECT_RANGE = 999;    // deployed hunting you; no detection needed
+const W1_HIT_RANGE = 0.9;
+const W1_HIT_DAMAGE = 20;
+const W1_HIT_COOLDOWN = 1.0;
+const W1_BODY = '#3a1418';      // scorched red-black chassis
+const W1_HEAD = '#2a0e10';
+
+// W3s: unarmed repair drones fielded by the W-factory. They walk straight to
+// the nearest obelisk that's been damaged but not yet destroyed and mend it
+// back to full over a few seconds, then disperse (the same generic death
+// path scraps them if the player kills one first).
+const W3_HP = 20;
+const W3_SPEED = 3.0;
+const W3_REPAIR_RANGE = 1.3;
+const W3_REPAIR_RATE = 2;       // obDamage points healed per second
+const W3_BODY = '#1c3a44';      // dull blue-teal, unmistakably not a hunter
+const W3_HEAD = '#122730';
+
 const STUCK_AFTER = 2;          // seconds of no progress while aggroed
 const PROGRESS_FRACTION = 0.25; // moved less than this share of a full step counts as no progress
 const SPAWN_MIN_R = 1.5;        // robots seat this far from their tower...
@@ -121,6 +146,7 @@ function baseRobot(type, x, y, hp, rng) {
     recharging: false,    // heading home / drinking from the obelisk
     friendly: false,      // reprogrammed: serves the player, never attacks
     fused: false,         // dead-in-place wreck; external mining code owns it
+    zombie: false,        // OB-gun-corrupted: immune to everything but bow/wave gun
     disabledT: 0,         // stun seconds remaining; external code sets this
     scrapPenalty: false,  // set by external gun code: a penalised kill drops 1
     workTarget: null,     // T2 friendly: the tree currently being felled
@@ -178,6 +204,38 @@ export function spawnRobots(map, seed, obelisks, avoid) {
   });
 
   return robots;
+}
+
+// A revenge squad released the instant an obelisk falls: two to four W1s
+// seated around the crater, immediately hunting. `seed` should vary per call
+// (e.g. folded with the obelisk's coordinates) so repeat destructions don't
+// all produce the same squad.
+export function spawnW1s(map, seed, ox, oy, count = 3) {
+  const rng = makeRng(seed >>> 0);
+  const used = new Set();
+  const avoid = { x: ox, y: oy, r: 0 };
+  const squad = [];
+  for (let i = 0; i < count; i++) {
+    const spot = seatNear(map, ox, oy, avoid, used, rng, SPAWN_MAX_R_FALLBACK);
+    if (!spot) continue;
+    used.add(`${spot[0]},${spot[1]}`);
+    const r = baseRobot('w1', spot[0], spot[1], W1_HP, rng);
+    r.aggro = true; // deployed hunting: no detection phase
+    squad.push(r);
+  }
+  return squad;
+}
+
+// One repair drone off the factory floor, sent out to mend the nearest
+// damaged obelisk. `seed` should vary per call so its seated tile isn't
+// always the same.
+export function spawnW3(map, seed, fx, fy) {
+  const rng = makeRng(seed >>> 0);
+  const used = new Set();
+  const avoid = { x: fx, y: fy, r: 0 };
+  const spot = seatNear(map, fx, fy, avoid, used, rng, SPAWN_MAX_R_FALLBACK);
+  if (!spot) return null;
+  return baseRobot('w3', spot[0], spot[1], W3_HP, rng);
 }
 
 // ---- Movement helpers -----------------------------------------------------
@@ -397,6 +455,8 @@ export function updateRobots(dt, robots, player, map) {
     }
 
     if (r.type === 't1') updateT1(r, dt, player, map);
+    else if (r.type === 'w1') updateW1(r, dt, player, map);
+    else if (r.type === 'w3') updateW3(r, dt, map);
     else updateT2(r, dt, player, map);
   }
 }
@@ -459,6 +519,49 @@ function updateT2(r, dt, player, map) {
   } else {
     patrol(r, T2_PATROL_SPEED, T2_PATROL_RANGE, dt, map);
   }
+}
+
+// A W1 revenge-squad hunter: spawned already aggroed and never disengages —
+// no detection phase, no giving up the trail, no patrol. Only a flat
+// battery stops it (handled generically in updateRobots, same as any type).
+function updateW1(r, dt, player, map) {
+  r.attackTimer = Math.max(0, r.attackTimer - dt);
+  r.aggro = true;
+  drainBattery(r, DRAIN_CHASE, dt);
+  if (r.drained) return;
+  moveToward(r, player.x, player.y, W1_CHASE_SPEED, dt, map);
+  if (distTo(r, player) < W1_HIT_RANGE && r.attackTimer <= 0) {
+    r.attackTimer = W1_HIT_COOLDOWN;
+    player.takeDamage(W1_HIT_DAMAGE, 'machine');
+  }
+}
+
+// A W3 repair drone: unarmed, never aggros, walks to the nearest obelisk
+// with obDamage > 0 (hit by an OB-gun but not yet toppled) and heals it back
+// to zero over a few seconds, then disperses — its job done.
+function updateW3(r, dt, map) {
+  r.aggro = false;
+  if (!r.repairTarget || r.repairTarget.destroyed || !(r.repairTarget.obDamage > 0)) {
+    let best = null, bestD = Infinity;
+    for (const o of map.objects) {
+      if (o.type !== 'obelisk' || o.destroyed || !(o.obDamage > 0)) continue;
+      const d = Math.hypot(o.x + 0.5 - r.x, o.y + 0.5 - r.y);
+      if (d < bestD) { bestD = d; best = o; }
+    }
+    r.repairTarget = best;
+  }
+  if (!r.repairTarget) { r.dead = true; return; } // nothing left to mend: stand down
+  const ob = r.repairTarget;
+  const d = Math.hypot(ob.x + 0.5 - r.x, ob.y + 0.5 - r.y);
+  drainBattery(r, DRAIN_PATROL, dt);
+  if (r.drained) return;
+  if (d > W3_REPAIR_RANGE) {
+    moveToward(r, ob.x + 0.5, ob.y + 0.5, W3_SPEED, dt, map);
+    return;
+  }
+  ob.obDamage = Math.max(0, ob.obDamage - W3_REPAIR_RATE * dt);
+  ob.burning = 0;
+  if (ob.obDamage <= 0) { r.repairTarget = null; r.dead = true; }
 }
 
 // ---- Friendly (reprogrammed) ----------------------------------------------
@@ -625,6 +728,13 @@ function drawBatteryIcon(ctx, x, y) {
 export function drawRobot(ctx, robot, worldToScreen) {
   if (robot.dead) return;
   const c = worldToScreen(robot.x, robot.y);
+  if (robot.zombie) {
+    // A sickly green halo: the tell that only a bow or the wave gun works.
+    ctx.fillStyle = 'rgba(120,255,90,0.28)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y - 14, 16, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
   if (robot.type === 't1') drawT1(ctx, robot, c, worldToScreen);
   else drawT2(ctx, robot, c);
 }
@@ -714,14 +824,16 @@ function drawT2(ctx, r, c) {
   ctx.fillRect(-4 + swing, -10, 3, 10);
   ctx.fillRect(1 - swing, -10, 3, 10);
 
-  ctx.fillStyle = bodyTone(T2_BODY, r); // blocky torso, roughly player height overall
+  const bodyBase = r.type === 'w1' ? W1_BODY : r.type === 'w3' ? W3_BODY : T2_BODY;
+  const headBase = r.type === 'w1' ? W1_HEAD : r.type === 'w3' ? W3_HEAD : T2_HEAD;
+  ctx.fillStyle = bodyTone(bodyBase, r); // blocky torso, roughly player height overall
   ctx.fillRect(-6, -25, 12, 16);
   if (!r.fused) {
     ctx.fillStyle = 'rgba(255,255,255,0.06)'; // dull sheen along the shoulders
     ctx.fillRect(-6, -25, 12, 2);
   }
 
-  ctx.fillStyle = r.fused ? FUSED_DARK : T2_HEAD; // small head
+  ctx.fillStyle = r.fused ? FUSED_DARK : headBase; // small head
   ctx.fillRect(-4, -33, 8, 7);
 
   // Horizontal visor; colour and glow track the state.

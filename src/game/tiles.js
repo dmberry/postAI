@@ -22,4 +22,5 @@ export const OBJECTS = {
   obelisk: { solid: true }, // AI signal tower; destructible in a later phase
   box:     { solid: true }, // resistance weapons cache, searchable
   car:     { solid: true }, // abandoned wreck littering the roads; scenery only
+  wfactory: { solid: true }, // W-unit foundry; periodically fields a W3 repair drone
 };

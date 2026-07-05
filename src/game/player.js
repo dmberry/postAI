@@ -41,6 +41,13 @@ const SCORE = { tree: 1, animal: 3, robot: 10, wreck: 2, cache: 2, book: 5, frag
 // Item kinds that can occupy the hands slot.
 const HOLDABLE = new Set(['tool', 'gun', 'gadget', 'bomb']);
 
+// A robot the OB-gun's beam has corrupted into a "zombie" shrugs off every
+// weapon except the bow and the wave gun — the only two builds precise
+// enough to hit whatever in it is still killable.
+function zombieImmune(target, tool) {
+  return !!(target && target.zombie) && tool.key !== 'bow' && tool.key !== 'wavegun';
+}
+
 // Soft ground a shovel can sink into; hard surfaces (road, boards, water)
 // resist digging.
 const DIGGABLE = new Set(['grass', 'tallgrass', 'dirt', 'sand']);
@@ -197,6 +204,12 @@ export class Player {
     const g = { item, qty, x, y };
     if (item === 'wifiblock') g.power = this.wifiPower;
     return g;
+  }
+
+  // A brief burst of sparks where a weapon lands on a robot. Purely visual;
+  // main.js ticks the ttl and the renderer draws + prunes it.
+  sparkAt(map, x, y) {
+    (map.sparks ??= []).push({ x, y, ttl: 0.3, max: 0.3 });
   }
 
   // ---- generic slot access (for click-equip and pointer drag) ----------
@@ -612,6 +625,7 @@ export class Player {
       this.swingTimer = tool.swingCooldown;
       this.stamina -= tool.staminaCost;
       sfx.play('chop');
+      this.sparkAt(map, target.x, target.y);
       target.mineCharges = (target.mineCharges ?? 3) - 1;
       map.groundItems.push({ item: 'scrap', qty: 2, x: target.x, y: target.y });
       if (target.mineCharges <= 0) {
@@ -621,6 +635,13 @@ export class Player {
       } else {
         this.say('You pry parts out of the fused machine.');
       }
+      return;
+    }
+    if (target && isRobot && zombieImmune(target, tool)) {
+      this.swingTimer = tool.swingCooldown;
+      this.stamina -= tool.staminaCost;
+      sfx.play('chop');
+      this.say('The blade clangs off the husk without effect — only a bow or the wave gun can finish a zombie machine.');
       return;
     }
     if (target) {
@@ -633,6 +654,7 @@ export class Player {
       target.hurt = true; // modules read this (pack flee, boar enrage, robot aggro)
       this.gainXp('melee', target.hp <= 0 ? 5 : 1);
       if (isRobot) {
+        this.sparkAt(map, target.x, target.y);
         // The robots module marks it dead and drops scrap on its next tick.
         if (target.hp <= 0) this.addScore(SCORE.robot);
         this.say(target.hp <= 0
@@ -915,9 +937,10 @@ export class Player {
     const hitList = (arr, robot) => {
       for (const e of arr) {
         if (e.dead || e.fused) continue;
+        if (robot && e.zombie) continue; // bombs can't touch a zombified machine either
         if (Math.hypot(e.x - b.x, e.y - b.y) > b.radius) continue;
         e.hp -= b.damage; e.hurt = true; e.justHurt = true;
-        if (robot) e.scrapPenalty = true;
+        if (robot) { e.scrapPenalty = true; this.sparkAt(map, e.x, e.y); }
         if (e.hp <= 0 && !robot) { e.dead = true; map.groundItems.push({ item: 'meat', qty: 1, x: e.x, y: e.y }); this.addScore(SCORE.animal); }
         else if (e.hp <= 0 && robot) this.addScore(SCORE.robot);
       }
@@ -956,6 +979,7 @@ export class Player {
     this.swingTimer = tool.swingCooldown;
     sfx.play('zap');
     const rng = tool.range + this.xpLevel('guns') * 0.3;
+    let zombified = false;
     // Everything within a narrow corridor ahead, up to range, gets hit.
     const hit = (e, robot) => {
       if (e.dead || e.fused || e.drained || e.friendly) return;
@@ -964,9 +988,17 @@ export class Player {
       if (along < 0 || along > rng) return;
       const perp = Math.abs(dx * -this.facing.y + dy * this.facing.x);
       if (perp > 0.8) return;
+      // The OB-gun's own beam doesn't kill a machine outright — it corrupts
+      // it into a zombie, immune to everything but a bow or the wave gun.
+      if (robot && tool.effect === 'burn' && !e.zombie) {
+        e.zombie = true; e.hurt = true; zombified = true;
+        this.sparkAt(map, e.x, e.y);
+        return;
+      }
+      if (robot && zombieImmune(e, tool)) return;
       e.hp -= robot ? (tool.robotDamage + this.xpLevel('guns')) : (tool.animalDamage + this.xpLevel('guns'));
       e.hurt = true;
-      if (robot) e.scrapPenalty = true;
+      if (robot) { e.scrapPenalty = true; this.sparkAt(map, e.x, e.y); }
       this.gainXp('guns', 2);
       if (e.hp <= 0 && !robot) { e.dead = true; map.groundItems.push({ item: 'meat', qty: 1, x: e.x, y: e.y }); this.addScore(SCORE.animal); }
       else if (e.hp <= 0 && robot) this.addScore(SCORE.robot);
@@ -976,7 +1008,9 @@ export class Player {
     // A long tracer to the end of the beam.
     map.projectiles = map.projectiles || [];
     map.projectiles.push({ x0: this.x + this.facing.x * 0.4, y0: this.y + this.facing.y * 0.4, x1: this.x + this.facing.x * rng, y1: this.y + this.facing.y * rng, prog: 0, kind: 'fuse' });
-    this.say('The beam cuts a line clean through them.');
+    this.say(zombified
+      ? "The beam doesn't kill the machine — it corrupts it into a lurching husk. Only a bow or the wave gun will finish it now."
+      : 'The beam cuts a line clean through them.');
   }
 
   // The wave gun: a fan of laser shots that hits every enemy inside a wide
@@ -1000,7 +1034,7 @@ export class Player {
       if ((dx * this.facing.x + dy * this.facing.y) / d < HALF) return; // outside the cone
       e.hp -= robot ? tool.robotDamage : tool.animalDamage;
       e.hurt = true;
-      if (robot) e.scrapPenalty = true;
+      if (robot) { e.scrapPenalty = true; this.sparkAt(map, e.x, e.y); }
       hitCount++;
       if (e.hp <= 0 && !robot) { e.dead = true; map.groundItems.push({ item: 'meat', qty: 1, x: e.x, y: e.y }); this.addScore(SCORE.animal); }
       else if (e.hp <= 0 && robot) this.addScore(SCORE.robot);
@@ -1075,21 +1109,26 @@ export class Player {
       kind: tool.effect === 'stun' ? 'stun' : tool.effect === 'fuse' ? 'fuse' : 'bullet',
     });
 
-    if (tool.effect === 'stun') {
+    if (isRobot && zombieImmune(target, tool)) {
+      this.say('The shot has no effect — the husk is only vulnerable to a bow or the wave gun now.');
+    } else if (tool.effect === 'stun') {
       sfx.play('zap');
       target.disabledT = tool.stunTime;
+      this.sparkAt(map, target.x, target.y);
       this.say('The stun bolt drops the machine cold. It will not stay down forever.');
     } else if (tool.effect === 'fuse') {
       sfx.play('zap');
       target.fused = true;
       target.mineCharges = 3;
       target.disabledT = 0;
+      this.sparkAt(map, target.x, target.y);
       this.say('The machine fuses solid: blackened, dead, and full of parts.');
     } else if (isRobot) {
       sfx.play('shot');
       target.scrapPenalty = true; // gunfire mangles the salvage
       target.hp -= tool.robotDamage + this.xpLevel('guns');
       target.hurt = true;
+      this.sparkAt(map, target.x, target.y);
       this.gainXp('guns', target.hp <= 0 ? 5 : 1);
       if (target.hp <= 0) this.addScore(SCORE.robot);
       this.say(target.hp <= 0

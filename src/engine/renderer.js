@@ -166,6 +166,8 @@ export class Renderer {
     if (map.projectiles) this.drawProjectiles(map.projectiles);
     // Fire clouds from detonating bombs.
     if (map.explosions) this.drawExplosions(map.explosions);
+    // Sparks where a weapon just landed on a robot.
+    if (map.sparks) this.drawSparks(map.sparks);
 
     // Lore fragments float in world space, under the camera transform.
     if (hud.lore) hud.lore.drawWorld(ctx);
@@ -421,6 +423,7 @@ export class Renderer {
     ctx.fillRect(0, 0, this.w, this.h);
     const pw = Math.min(440, this.w - 60), ph = 340;
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._certBounds = { x: px, y: py, w: pw, h: ph }; // for the S-to-share capture
     ctx.fillStyle = '#141810';
     ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = 'rgba(207,216,195,0.5)';
@@ -468,8 +471,43 @@ export class Renderer {
     ctx.fillText(rank.blurb, px + pw / 2, py + ph - 34);
     ctx.font = '11px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.5)';
-    ctx.fillText('click to carry on', px + pw / 2, py + ph - 14);
+    ctx.fillText('S to share as an image · click to carry on', px + pw / 2, py + ph - 14);
     ctx.textAlign = 'left';
+  }
+
+  // Crops the certificate panel out of the live canvas and either copies it
+  // to the clipboard (if the browser allows) or downloads it as a PNG, so
+  // it can be shared outside the game. Returns 'clipboard', 'download', or
+  // null if there was nothing to capture.
+  async shareCertificate() {
+    const b = this._certBounds;
+    if (!b) return null;
+    const dpr = this.dpr || 1;
+    const off = document.createElement('canvas');
+    off.width = Math.round(b.w * dpr);
+    off.height = Math.round(b.h * dpr);
+    off.getContext('2d').drawImage(
+      this.canvas,
+      Math.round(b.x * dpr), Math.round(b.y * dpr), Math.round(b.w * dpr), Math.round(b.h * dpr),
+      0, 0, off.width, off.height,
+    );
+    const blob = await new Promise((resolve) => off.toBlob(resolve, 'image/png'));
+    if (!blob) return null;
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+        return 'clipboard';
+      }
+    } catch { /* denied or unsupported: fall through to a download */ }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'postai-death-certificate.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return 'download';
   }
 
   // Read-only backpack view (I). Read-only because the split between
@@ -626,6 +664,31 @@ export class Renderer {
     }
   }
 
+  // A quick burst of bright sparks where a weapon just landed on a robot.
+  drawSparks(sparks) {
+    const ctx = this.ctx;
+    for (const sp of sparks) {
+      const k = 1 - sp.ttl / sp.max; // 0 → 1 over the life
+      const s = worldToScreen(sp.x, sp.y);
+      const n = 6;
+      ctx.save();
+      ctx.globalAlpha = 1 - k;
+      for (let i = 0; i < n; i++) {
+        const ang = (i / n) * Math.PI * 2 + k * 2;
+        const r = 3 + k * 12;
+        const px = s.x + Math.cos(ang) * r;
+        const py = s.y - 14 - Math.sin(ang) * r * 0.6;
+        ctx.strokeStyle = i % 2 ? '#fff1c0' : '#ffd23b';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y - 14);
+        ctx.lineTo(px, py);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
   // A small health bar floating over a creature or machine the player is
   // standing near, so you can read how damaged it is. Hidden for the dead,
   // fused wrecks, and drained/friendly machines.
@@ -770,7 +833,34 @@ export class Renderer {
       case 'obelisk': this.drawObelisk(obj); break;
       case 'box': this.drawBox(obj); break;
       case 'car': this.drawCar(obj); break;
+      case 'wfactory': this.drawWfactory(obj); break;
     }
+  }
+
+  // The W-factory: a squat, riveted foundry block with a vent that pulses a
+  // dull orange — visually distinct from the obelisks' clean red sensor.
+  drawWfactory(obj) {
+    const ctx = this.ctx;
+    const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y, 20, 9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#2a2620';
+    ctx.fillRect(c.x - 18, c.y - 34, 36, 34);
+    ctx.strokeStyle = '#1a1712';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(c.x - 18, c.y - 34, 36, 34);
+    ctx.fillStyle = '#453f34'; // corrugated roof band
+    ctx.fillRect(c.x - 18, c.y - 34, 36, 6);
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 420);
+    ctx.fillStyle = `rgba(224,120,40,${(0.4 + 0.4 * pulse).toFixed(3)})`;
+    ctx.fillRect(c.x - 6, c.y - 24, 12, 8); // vent glow
+    ctx.font = 'bold 9px system-ui, sans-serif';
+    ctx.fillStyle = '#b8bcc2';
+    ctx.textAlign = 'center';
+    ctx.fillText('W-FACTORY', c.x, c.y - 12);
+    ctx.textAlign = 'left';
   }
 
   // Sprayed lore fragment on a wall face: irregular baseline and a slight
@@ -1333,6 +1423,86 @@ export class Renderer {
         ctx.fillStyle = '#2c2f34';
         ctx.fillRect(-4, 1, 15, 2.2); // barrels
         ctx.fillRect(-4, 3.6, 15, 2.2);
+        break;
+      case 'sledgehammer':
+        ctx.strokeStyle = '#6a4c2c'; // handle
+        ctx.lineCap = 'round';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(-7, 9); ctx.lineTo(3, -3); ctx.stroke();
+        ctx.lineCap = 'butt';
+        ctx.save();
+        ctx.translate(4, -6);
+        ctx.rotate(-0.7);
+        ctx.fillStyle = itemDef.color; // heavy head
+        ctx.fillRect(-4, -6, 8, 12);
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.strokeRect(-4, -6, 8, 12);
+        ctx.restore();
+        break;
+      case 'bow':
+        ctx.strokeStyle = itemDef.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(-2, 0, 10, -Math.PI * 0.35, Math.PI * 0.35);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(230,220,200,0.8)'; // string
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(1.6, -8.6); ctx.lineTo(1.6, 8.6);
+        ctx.stroke();
+        break;
+      case 'arrow':
+        ctx.strokeStyle = '#7a5a34'; // shaft
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(-8, 7); ctx.lineTo(7, -7); ctx.stroke();
+        ctx.fillStyle = '#c9cdd1'; // head
+        ctx.beginPath();
+        ctx.moveTo(7, -7); ctx.lineTo(10, -10); ctx.lineTo(9, -6);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = itemDef.color; // fletching
+        ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.moveTo(-8, 7); ctx.lineTo(-5, 3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-8, 7); ctx.lineTo(-4, 6); ctx.stroke();
+        break;
+      case 'katana':
+        ctx.save();
+        ctx.rotate(-0.55);
+        ctx.fillStyle = '#c9cdd1'; // slim curved blade
+        ctx.beginPath();
+        ctx.moveTo(-2, 9); ctx.quadraticCurveTo(2, 0, 3, -10); ctx.lineTo(5, -10);
+        ctx.quadraticCurveTo(4, 0, 0, 9);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#2f2a24'; // guard + wrapped grip
+        ctx.fillRect(-5, 8, 8, 2);
+        ctx.fillStyle = itemDef.color;
+        ctx.fillRect(-4, 10, 6, 4);
+        ctx.restore();
+        break;
+      case 'railgun':
+        ctx.fillStyle = '#2c3036';
+        ctx.fillRect(-9, -3, 16, 5); // barrel body
+        ctx.fillRect(-6, 2, 4, 7);   // grip
+        ctx.strokeStyle = itemDef.color; // energy rails along the barrel
+        ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(-9, -3); ctx.lineTo(7, -3); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(-9, 2); ctx.lineTo(7, 2); ctx.stroke();
+        ctx.fillStyle = itemDef.color; // charged muzzle
+        ctx.beginPath();
+        ctx.arc(8, -0.5, 3, 0, Math.PI * 2);
+        ctx.fill();
+        break;
+      case 'wavegun':
+        ctx.fillStyle = '#2c3036';
+        ctx.fillRect(-8, -3, 12, 6); // body
+        ctx.fillRect(-5, 3, 4, 6);   // grip
+        ctx.strokeStyle = itemDef.color; // fanned wave arcs from the muzzle
+        ctx.lineWidth = 1.4;
+        for (let i = 0; i < 3; i++) {
+          const r = 4 + i * 3;
+          ctx.beginPath();
+          ctx.arc(4, 0, r, -0.6, 0.6);
+          ctx.stroke();
+        }
         break;
       case 'obgun': {
         // A cobbled-together cannon with a glowing ember muzzle.

@@ -8,15 +8,29 @@ import { makeRng } from './game/rng.js';
 import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
 import { spawnBirds, updateBirds } from './game/birds.js';
-import { spawnRobots, updateRobots } from './game/robots.js';
+import { spawnRobots, updateRobots, spawnW1s, spawnW3 } from './game/robots.js';
 import { resolveBodyOverlaps } from './game/collision.js';
 import { spawnWaterDroids, updateWaterDroids } from './game/waterdroids.js';
 import { Lore } from './game/lore.js';
 import { ITEMS } from './game/items.js';
 import { sfx } from './engine/sound.js';
 
-const WORLD_SEED = 1337;
-const VERSION = '0.47';
+// Each new game gets its own random seed, persisted so a continuing run
+// (autosave) always regenerates the same map. Without this every playthrough
+// put weapons and caches in identical spots — easy to memorise.
+const SEED_KEY = 'postai-seed';
+function loadOrCreateSeed() {
+  try {
+    const saved = localStorage.getItem(SEED_KEY);
+    const n = saved && parseInt(saved, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  } catch { /* storage unavailable */ }
+  const seed = 1 + Math.floor(Math.random() * 0x7ffffffe);
+  try { localStorage.setItem(SEED_KEY, String(seed)); } catch { /* storage unavailable */ }
+  return seed;
+}
+const WORLD_SEED = loadOrCreateSeed();
+const VERSION = '0.48';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -130,6 +144,24 @@ const obelisks = [];
     map.addObject('box', x, y, { loot, opened: false });
   }
 }
+
+// The W-factory: the AI's foundry for repair drones. It never attacks on
+// its own, but every so often — while any obelisk is damaged but not yet
+// toppled — it fields a W3 to go and mend one.
+let wfactory = null;
+{
+  const rng = makeRng(WORLD_SEED ^ 0x5a11c0de);
+  let guard = 0;
+  while (!wfactory && guard++ < 5000) {
+    const x = 4 + Math.floor(rng() * (map.w - 8));
+    const y = 4 + Math.floor(rng() * (map.h - 8));
+    const f = map.floorAt(x, y);
+    if ((f !== 'grass' && f !== 'tallgrass') || map.objectAt(x, y)) continue;
+    if (Math.hypot(x - spawn.x, y - spawn.y) < 20) continue;
+    wfactory = map.addObject('wfactory', x, y);
+  }
+}
+
 const robots = spawnRobots(map, WORLD_SEED, obelisks, { x: spawn.x, y: spawn.y, r: 14 });
 const waterdroids = spawnWaterDroids(map, WORLD_SEED);
 // The tower objects themselves (for alert/blink state): {x,y} plus the
@@ -168,7 +200,12 @@ try {
     }
   }
 } catch { /* corrupt save: start fresh */ }
+// Set just before New Game reloads, so the beforeunload/visibilitychange
+// autosave below can't silently rewrite the character save out from under
+// the reset the player just confirmed.
+let resettingGame = false;
 const persist = () => {
+  if (resettingGame) return;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       name: player.name, gender: player.gender, skills: [...player.skills], skillLog: player.skillLog,
@@ -244,7 +281,7 @@ function revealAround(px, py) {
 }
 
 // Debug handle for inspecting live state from the console.
-window.__game = { player, map, camera, animals, birds, robots, waterdroids, obelisks, dayNight, lore, input, renderer };
+window.__game = { player, map, camera, animals, birds, robots, waterdroids, obelisks, obeliskObjs, wfactory, dayNight, lore, input, renderer };
 
 function resize() {
   renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
@@ -286,10 +323,19 @@ const PROJECTILE_SPEED = 16; // tiles/sec for gun tracers
 // respawns somewhere random in the ruins so the loop can continue.
 const boardTiles = [];
 for (let by = 0; by < map.h; by++) for (let bx = 0; bx < map.w; bx++) if (map.floorAt(bx, by) === 'boards') boardTiles.push([bx, by]);
-player.onObeliskDestroyed = () => {
+player.onObeliskDestroyed = (ob) => {
   if (boardTiles.length) {
     const [bx, by] = boardTiles[Math.floor(Math.random() * boardTiles.length)];
     map.groundItems.push({ item: 'wifiblock', qty: 1, power: 600, x: bx + 0.5, y: by + 0.5 });
+  }
+  // A revenge squad boils out of the wreckage the instant a tower falls.
+  if (ob) {
+    const squadSeed = ((ob.x * 92821 + ob.y * 1237 + Math.floor(Math.random() * 1e6)) >>> 0) || 1;
+    const squad = spawnW1s(map, squadSeed, ob.x + 0.5, ob.y + 0.5, 2 + Math.floor(Math.random() * 3));
+    if (squad.length) {
+      robots.push(...squad);
+      player.say(`A revenge squad boils out of the wreckage: ${squad.length} W1 hunter${squad.length > 1 ? 's' : ''}, already coming for you.`);
+    }
   }
   // Victory: every obelisk toppled before the deadline.
   if (obeliskObjs.every((o) => o.destroyed) && !player._ended) {
@@ -321,6 +367,7 @@ function describeAt(tx, ty) {
       return `${mat}, ${ages[Math.min(5, obj.decay || 0)]}.`;
     }
     if (obj.type === 'obelisk') return `An AI signal obelisk. Black, humming, ${obj.alert > 0.3 ? 'and it has seen you.' : 'watching.'}`;
+    if (obj.type === 'wfactory') return 'The W-factory. It fields repair drones for damaged towers — bring one down for good before it can be mended.';
     if (obj.type === 'box') return obj.opened ? 'An emptied resistance cache.' : 'A resistance cache. Search it (E).';
     if (obj.type === 'tree') return 'A tree. Fell it for wood.';
     if (obj.type === 'rock') return 'A weathered boulder.';
@@ -341,6 +388,8 @@ let wasNight = null;
 let wasDusk = null;
 let wasRobotNear = false;
 let regrowClock = 0;
+let ronResupplyClock = 0, ronResupplyNext = 90 + Math.random() * 60;
+let wFactoryClock = 0, wFactoryNext = 60 + Math.random() * 60;
 function update(dt) {
   if (input.consumePress('KeyH')) toggleHelp();
   if (input.inventoryPressed()) showBackpack = !showBackpack;
@@ -348,8 +397,10 @@ function update(dt) {
   if (input.weaponChartPressed()) showWeapons = !showWeapons;
   if (input.newGamePressed()) {
     if (window.confirm('Start a new game? This erases your saved progress.')) {
+      resettingGame = true; // block the beforeunload/hidden autosave from undoing this
       localStorage.removeItem('postai-character');
       localStorage.removeItem('postai-lore');
+      localStorage.removeItem(SEED_KEY); // a fresh game gets a freshly shuffled world
       location.reload();
       return;
     }
@@ -377,6 +428,12 @@ function update(dt) {
 
   // Death certificate: freeze the world behind the modal until it's clicked.
   if (player.deathCert) {
+    if (input.consumePress('KeyS')) {
+      renderer.shareCertificate().then((result) => {
+        if (result === 'clipboard') player.say('Certificate copied to the clipboard — paste it to share.');
+        else if (result === 'download') player.say('Certificate saved as an image.');
+      });
+    }
     if (input.clickPos() || input.consumeUp()) { input.consumeClick(); player.deathCert = null; }
     return;
   }
@@ -440,6 +497,42 @@ function update(dt) {
   if (map.bombs.some((b) => b.done)) map.bombs = map.bombs.filter((b) => !b.done);
   for (const e of map.explosions) e.ttl -= dt;
   if (map.explosions.length) map.explosions = map.explosions.filter((e) => e.ttl > 0);
+  if (map.sparks && map.sparks.length) {
+    for (const s of map.sparks) s.ttl -= dt;
+    map.sparks = map.sparks.filter((s) => s.ttl > 0);
+  }
+
+  // RON resupply: every couple of minutes, one already-emptied cache gets
+  // quietly restocked with a fresh drop of batteries, ammo or shells.
+  ronResupplyClock += dt;
+  if (ronResupplyClock > ronResupplyNext) {
+    ronResupplyClock = 0;
+    ronResupplyNext = 90 + Math.random() * 60;
+    const emptyBoxes = map.objects.filter((o) => o.type === 'box' && o.opened);
+    if (emptyBoxes.length) {
+      const box = emptyBoxes[Math.floor(Math.random() * emptyBoxes.length)];
+      const r = Math.random();
+      box.loot = r < 0.4 ? [{ item: 'battery', qty: 2 }] : r < 0.7 ? [{ item: 'ammo', qty: 6 }] : [{ item: 'shells', qty: 4 }];
+      box.opened = false;
+    }
+  }
+
+  // The W-factory: while any obelisk is damaged but not yet destroyed, it
+  // periodically fields a single W3 to go and mend the nearest one. Only
+  // one W3 is ever out at a time.
+  if (wfactory) {
+    wFactoryClock += dt;
+    if (wFactoryClock > wFactoryNext) {
+      wFactoryClock = 0;
+      wFactoryNext = 60 + Math.random() * 60;
+      const anyDamaged = obeliskObjs.some((o) => !o.destroyed && o.obDamage > 0);
+      const w3Active = robots.some((r) => r.type === 'w3' && !r.dead);
+      if (anyDamaged && !w3Active) {
+        const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), wfactory.x + 0.5, wfactory.y + 0.5);
+        if (drone) { robots.push(drone); player.say('A repair drone whirs out of the W-factory.'); }
+      }
+    }
+  }
 
   // Trees grow: saplings thicken over about a minute, and now and then a new
   // one sprouts on open grass, so felled forest slowly comes back.
