@@ -32,6 +32,16 @@ function rgbScale([r, g, b], f) {
   return `rgb(${(r * f) | 0},${(g * f) | 0},${(b * f) | 0})`;
 }
 
+// An amusing rank for the certificate of death, from score and skill count.
+function deathRank(score, skillCount) {
+  if (score >= 250 && skillCount >= 4) return { title: 'L33T', color: '#e8d27a', blurb: 'A legend of the ruins. The machines will tell stories.' };
+  if (score >= 150) return { title: 'VETERAN', color: '#8fd0e0', blurb: 'You lasted. That is more than most.' };
+  if (score >= 70) return { title: 'SURVIVOR', color: '#6fbf4a', blurb: 'You knew which end of the crowbar to hold.' };
+  if (score >= 25) return { title: 'SCRAPPER', color: '#d8a04f', blurb: 'Scrappy. Doomed, but scrappy.' };
+  if (score >= 5) return { title: 'NOOB', color: '#c9905a', blurb: 'Everyone starts somewhere. You did not get far.' };
+  return { title: 'COMPOST', color: '#9a7a5a', blurb: 'The wildlife thanks you for the nutrients.' };
+}
+
 // Cheap deterministic hash for per-tile pseudo-randomness (grass blades)
 // that stays put frame to frame instead of shimmering like Math.random().
 function tileHash(x, y) {
@@ -117,13 +127,16 @@ export class Renderer {
         : elevOf(d.obj.x + 0.5, d.obj.y + 0.5);
       if (lift) { ctx.save(); ctx.translate(0, -lift); }
       if (d.player) this.drawPlayer(d.player);
-      else if (d.animal) drawAnimal(this.ctx, d.animal, worldToScreen);
+      else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 34); }
       else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
-      else if (d.robot) drawRobot(this.ctx, d.robot, worldToScreen);
+      else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 36); }
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
     }
+
+    // In-flight rounds, in world space.
+    if (map.projectiles) this.drawProjectiles(map.projectiles);
 
     // Lore fragments float in world space, under the camera transform.
     if (hud.lore) hud.lore.drawWorld(ctx);
@@ -172,6 +185,109 @@ export class Renderer {
     this.drawDashboard(player, hud);
     if (hud.showBackpack) this.drawBackpackPanel(player);
     if (hud.lore) hud.lore.drawOverlay(ctx, this.w, this.h);
+    if (hud.detail) this.drawDetail(hud.detail);
+    if (hud.drag) this.drawDragGhost(hud.drag, player);
+    if (hud.deathCert) this.drawDeathCert(hud.deathCert);
+  }
+
+  // Right-click inspection tooltip, near the cursor.
+  drawDetail(d) {
+    const ctx = this.ctx;
+    ctx.font = '12px system-ui, sans-serif';
+    const maxW = 260;
+    const lines = this._wrapText(ctx, d.text, maxW);
+    const boxW = Math.min(maxW, Math.max(...lines.map((l) => ctx.measureText(l).width))) + 20;
+    const boxH = 12 + lines.length * 15;
+    let x = d.x + 14, y = d.y + 14;
+    if (x + boxW > this.w) x = d.x - boxW - 14;
+    if (y + boxH > this.h) y = d.y - boxH - 14;
+    const a = Math.min(1, d.ttl);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(10,14,8,0.92)';
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = 'rgba(207,216,195,0.45)';
+    ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1);
+    ctx.fillStyle = '#dfe6d4';
+    let ly = y + 16;
+    for (const l of lines) { ctx.fillText(l, x + 10, ly); ly += 15; }
+    ctx.globalAlpha = 1;
+  }
+
+  _wrapText(ctx, text, maxW) {
+    const words = text.split(' ');
+    const lines = [];
+    let line = '';
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  // The item being dragged, drawn under the cursor.
+  drawDragGhost(drag, player) {
+    if (!player.getSlot) return;
+    const s = player.getSlot(drag.from);
+    if (!s) return;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(drag.mx - 18, drag.my - 18, 36, 36);
+    this.drawItemIcon(ITEMS[s.item], drag.mx, drag.my, 0.9);
+    ctx.restore();
+  }
+
+  // A certificate of death: a modal listing the run's achievements and an
+  // amusing rank. Click anywhere to dismiss (handled in main).
+  drawDeathCert(cert) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(4,6,3,0.85)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    const pw = Math.min(440, this.w - 60), ph = 340;
+    const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    ctx.fillStyle = '#141810';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = 'rgba(207,216,195,0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(px + 1, py + 1, pw - 2, ph - 2);
+    ctx.lineWidth = 1;
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#b0392f';
+    ctx.font = 'bold 22px Georgia, serif';
+    ctx.fillText('CERTIFICATE OF DEATH', px + pw / 2, py + 42);
+    ctx.strokeStyle = 'rgba(207,216,195,0.3)';
+    ctx.beginPath(); ctx.moveTo(px + 40, py + 56); ctx.lineTo(px + pw - 40, py + 56); ctx.stroke();
+
+    ctx.fillStyle = '#cfd8c3';
+    ctx.font = '14px Georgia, serif';
+    ctx.fillText(`Here lies ${cert.name || 'a survivor'},`, px + pw / 2, py + 88);
+    ctx.fillText(`taken by ${cert.cause}.`, px + pw / 2, py + 108);
+
+    const rank = deathRank(cert.score, cert.skills.length);
+    ctx.textAlign = 'left';
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.9)';
+    const lx = px + 48;
+    let y = py + 148;
+    const row = (label, val) => { ctx.fillStyle = 'rgba(207,216,195,0.65)'; ctx.fillText(label, lx, y); ctx.fillStyle = '#e8e0d0'; ctx.fillText(String(val), lx + 150, y); y += 26; };
+    row('Final score', cert.score);
+    row('Skills mastered', cert.skills.length ? cert.skills.join(', ') : 'none');
+    row('Deaths so far', cert.deaths);
+
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 30px Georgia, serif';
+    ctx.fillStyle = rank.color;
+    ctx.fillText(rank.title, px + pw / 2, py + ph - 58);
+    ctx.font = 'italic 13px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.7)';
+    ctx.fillText(rank.blurb, px + pw / 2, py + ph - 34);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.5)';
+    ctx.fillText('click to carry on', px + pw / 2, py + ph - 14);
+    ctx.textAlign = 'left';
   }
 
   // Read-only backpack view (I). Read-only because the split between
@@ -238,6 +354,49 @@ export class Renderer {
         ctx.textAlign = 'left';
       }
     }
+  }
+
+  // In-flight rounds: a short bright streak travelling from muzzle to target.
+  drawProjectiles(projectiles) {
+    const ctx = this.ctx;
+    for (const p of projectiles) {
+      const t = Math.max(0, Math.min(1, p.prog));
+      const cx = p.x0 + (p.x1 - p.x0) * t, cy = p.y0 + (p.y1 - p.y0) * t;
+      const bx = p.x0 + (p.x1 - p.x0) * Math.max(0, t - 0.12);
+      const by = p.y0 + (p.y1 - p.y0) * Math.max(0, t - 0.12);
+      const head = worldToScreen(cx, cy);
+      const tail = worldToScreen(bx, by);
+      const col = p.kind === 'stun' ? '#5fe0ff' : p.kind === 'fuse' ? '#b78bff' : '#ffe27a';
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(tail.x, tail.y - 18);
+      ctx.lineTo(head.x, head.y - 18);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(head.x, head.y - 18, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineCap = 'butt';
+    }
+  }
+
+  // A small health bar floating over a creature or machine the player is
+  // standing near, so you can read how damaged it is. Hidden for the dead,
+  // fused wrecks, and drained/friendly machines.
+  creatureHealthBar(e, player, headH) {
+    if (e.dead || e.fused || e.drained) return;
+    if (Math.hypot(e.x - player.x, e.y - player.y) > 6.5) return;
+    const max = e.maxHp || e.hp || 1;
+    const frac = Math.max(0, Math.min(1, (e.hp ?? max) / max));
+    const ctx = this.ctx;
+    const c = worldToScreen(e.x, e.y);
+    const w = 22, h = 3.5, x = c.x - w / 2, y = c.y - headH;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = frac > 0.5 ? '#6fbf4a' : frac > 0.22 ? '#d8a04f' : '#d84f3a';
+    ctx.fillRect(x, y, w * frac, h);
   }
 
   // Which dashboard/backpack slot (if any) is under a screen point. Later
@@ -403,11 +562,12 @@ export class Renderer {
     const jag = decay >= 4 ? (tileHash(tx * 3 + 1, ty * 3 + 7) - 0.5) * 0.22 : 0;
     const hf = (decay >= 5 ? 0.6 : decay >= 4 ? 0.82 : 1) + jag;
     const H = WALL_H * hf;
-    // Weathered stone greys toward a mossy green as it ages.
+    // Red brick or grey stone; either weathers (darkens) as it ages.
+    const matBase = obj.material === 'brick' ? [150, 74, 58] : WALL_BASE;
     const base = [
-      WALL_BASE[0] * (1 - age * 0.26),
-      WALL_BASE[1] * (1 - age * 0.14),
-      WALL_BASE[2] * (1 - age * 0.30),
+      matBase[0] * (1 - age * 0.26),
+      matBase[1] * (1 - age * 0.14),
+      matBase[2] * (1 - age * 0.30),
     ];
 
     const [b0, b1, b2, b3] = this.tileCorners(tx, ty);
@@ -433,6 +593,19 @@ export class Renderer {
     ctx.strokeStyle = 'rgba(0,0,0,0.25)';
     ctx.lineWidth = 1;
     ctx.stroke();
+
+    // Brick coursing: faint mortar lines across the south-east face.
+    if (obj.material === 'brick') {
+      ctx.strokeStyle = 'rgba(230,220,205,0.14)';
+      ctx.lineWidth = 1;
+      for (let k = 1; k <= 3; k++) {
+        const t = k / 4;
+        ctx.beginPath();
+        ctx.moveTo(b1.x + (t1.x - b1.x) * t, b1.y + (t1.y - b1.y) * t);
+        ctx.lineTo(b2.x + (t2.x - b2.x) * t, b2.y + (t2.y - b2.y) * t);
+        ctx.stroke();
+      }
+    }
 
     // Cracks appear from "older" onward: a couple of thin dark seams down
     // the south-east face.
@@ -524,19 +697,34 @@ export class Renderer {
     ctx.lineTo(c.x + W, c.y - 4 - H); ctx.lineTo(c.x, c.y - 10 - H);
     ctx.closePath();
     ctx.fill();
-    // Signal light: normally a dim, occasional blink (obj.blinkFlash, ticked
-    // in main.js); it deepens toward a saturated blood-red and holds nearly
-    // steady as obj.alert rises — the tower has sensed someone close.
+    // Signal light: a dim, occasional blink at rest; when it has sensed
+    // someone close (obj.alert) it flares a bright, fast-blinking red and
+    // throws a soft halo — unmistakable that it's found you.
     const alert = obj.alert || 0;
     const flash = obj.blinkFlash || 0;
-    const baseAlpha = 0.15 + alert * 0.55;
-    const alpha = Math.min(1, baseAlpha + flash * 0.7);
-    const r = alert > 0.15 ? Math.round(200 - alert * 70) : 224;
-    const g = alert > 0.15 ? Math.round(60 - alert * 50) : 60;
-    ctx.fillStyle = `rgba(${r}, ${g}, 48, ${alpha})`;
-    ctx.beginPath();
-    ctx.arc(c.x, c.y - H + 8, 2.6 + flash * 1.5, 0, Math.PI * 2);
-    ctx.fill();
+    const ly = c.y - H + 8;
+    if (alert > 0.3) {
+      // Fast alarm blink, bright and saturated, with a glow halo.
+      const blink = 0.5 + 0.5 * Math.abs(Math.sin(performance.now() / 130));
+      const a = Math.min(1, 0.55 + alert * 0.45) * blink;
+      const glow = ctx.createRadialGradient(c.x, ly, 0, c.x, ly, 16);
+      glow.addColorStop(0, `rgba(255, 30, 20, ${0.5 * a})`);
+      glow.addColorStop(1, 'rgba(255, 30, 20, 0)');
+      ctx.fillStyle = glow;
+      ctx.beginPath();
+      ctx.arc(c.x, ly, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = `rgba(255, ${Math.round(40 * (1 - alert))}, 30, ${a})`;
+      ctx.beginPath();
+      ctx.arc(c.x, ly, 3.4, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      const alpha = Math.min(1, 0.15 + flash * 0.75);
+      ctx.fillStyle = `rgba(224, 60, 48, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(c.x, ly, 2.6 + flash * 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
 
   // Resistance cache: a wooden crate; opened ones sit dark and empty.

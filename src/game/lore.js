@@ -56,6 +56,17 @@ const NOTE_LIFT = 10;      // pixels the note floats above its tile
 const FLASH_TIME = 9;      // seconds the found-fragment note lingers on screen
 const FRAGMENT_SCORE = 5;  // points for recovering a fragment
 
+// Each kind of fragment reads as its own object: paper colour, ink, and
+// typeface. Disks and tapes are screens, not paper — dark with glowing text.
+const NOTE_STYLE = {
+  note:      { paper: '#efe6cf', ink: '#3a2f22', title: 'bold italic 13px Georgia, serif', body: 'italic 12px Georgia, serif' },
+  newspaper: { paper: '#dcdad0', ink: '#20201c', title: 'bold 13px "Times New Roman", Georgia, serif', body: '12px "Times New Roman", Georgia, serif' },
+  diary:     { paper: '#e6d8bc', ink: '#4a3520', title: 'bold italic 13px Georgia, serif', body: 'italic 12px Georgia, serif' },
+  poster:    { paper: '#d6c49a', ink: '#5a2018', title: 'bold 15px Impact, sans-serif', body: 'bold 12px system-ui, sans-serif' },
+  disk:      { paper: '#0e1a10', ink: '#6fe06f', title: 'bold 12px ui-monospace, monospace', body: '11px ui-monospace, monospace' },
+  tape:      { paper: '#141018', ink: '#d8b0ff', title: 'bold 12px ui-monospace, monospace', body: '11px ui-monospace, monospace' },
+};
+
 export class Lore {
   constructor(map, seed) {
     this.found = new Set();     // fragment ids the player has read
@@ -181,16 +192,32 @@ export class Lore {
       ctx.fillText('Nothing recovered yet. Search the buildings.', px + 20, y);
       return;
     }
+    // Each fragment is a little note card: paper colour and font set by the
+    // kind of thing it is (a handwritten note, newsprint, a floppy disk...).
     for (const p of found) {
       if (y > maxY) break;
-      ctx.fillStyle = '#e8d27a';
-      ctx.font = 'bold 12px system-ui, sans-serif';
-      ctx.fillText(p.frag.title, px + 20, y);
-      y += 16;
-      ctx.fillStyle = 'rgba(224,220,205,0.85)';
-      ctx.font = '12px system-ui, sans-serif';
-      y = this._wrap(ctx, p.frag.text, px + 20, y, panelW - 40, 15, maxY);
-      y += 12;
+      const st = NOTE_STYLE[p.frag.kind] || NOTE_STYLE.note;
+      const cardX = px + 18, cardW = panelW - 36;
+      const bodyFont = `${st.body}`;
+      ctx.font = bodyFont;
+      const lines = this._wrapLines(ctx, p.frag.text, cardW - 24);
+      const cardH = 22 + lines.length * 16 + 12;
+      if (y + cardH > maxY) break;
+      // paper
+      ctx.fillStyle = st.paper;
+      ctx.fillRect(cardX, y, cardW, cardH);
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+      ctx.strokeRect(cardX + 0.5, y + 0.5, cardW - 1, cardH - 1);
+      // title
+      ctx.fillStyle = st.ink;
+      ctx.font = st.title;
+      ctx.fillText(p.frag.title, cardX + 12, y + 18);
+      // body
+      ctx.fillStyle = st.ink;
+      ctx.font = bodyFont;
+      let ly = y + 38;
+      for (const line of lines) { ctx.fillText(line, cardX + 12, ly); ly += 16; }
+      y += cardH + 12;
     }
   }
 

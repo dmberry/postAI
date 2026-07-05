@@ -30,6 +30,11 @@ export class Camera {
     return this.zoom;
   }
 
+  // Nudge the zoom (mouse wheel); clamped to a sensible range.
+  zoomBy(delta) {
+    this.zoom = Math.max(0.7, Math.min(3, this.zoom + delta));
+  }
+
   // Translate and scale the canvas so the camera's world position sits at
   // screen centre at the current zoom.
   applyTransform(ctx, viewW, viewH) {

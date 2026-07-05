@@ -14,7 +14,7 @@ import { Lore } from './game/lore.js';
 import { sfx } from './engine/sound.js';
 
 const WORLD_SEED = 1337;
-const VERSION = '0.43';
+const VERSION = '0.44';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -135,18 +135,40 @@ try {
     for (const s of saved.skills || []) player.skills.add(s);
     if (saved.xp) Object.assign(player.xp, saved.xp);
     if (typeof saved.score === 'number') player.score = saved.score;
+    if (typeof saved.deaths === 'number') player.deaths = saved.deaths;
+    // Restore the in-progress run (vitals, position, inventory) so the game
+    // picks up where you left off. The world itself regenerates from the seed.
+    const st = saved.state;
+    if (st) {
+      for (const k of ['health', 'stamina', 'food', 'venom', 'wifiPower', 'x', 'y', 'hands']) {
+        if (st[k] !== undefined) player[k] = st[k];
+      }
+      if (Array.isArray(st.pockets)) player.pockets = st.pockets;
+      if (st.backpack) player.backpack = st.backpack;
+    }
   }
 } catch { /* corrupt save: start fresh */ }
 const persist = () => {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      name: player.name, gender: player.gender, skills: [...player.skills], xp: player.xp, score: player.score,
+      name: player.name, gender: player.gender, skills: [...player.skills],
+      xp: player.xp, score: player.score, deaths: player.deaths || 0,
+      state: {
+        health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
+        wifiPower: player.wifiPower, x: player.x, y: player.y, hands: player.hands,
+        pockets: player.pockets, backpack: player.backpack,
+      },
     }));
   } catch { /* storage unavailable */ }
 };
 player.onSkillLearned = persist;
 player.onXpGain = persist;
 player.onScore = persist;
+player.onDeath = persist;
+// Autosave the run periodically and when the tab is hidden or closed.
+let saveClock = 0;
+window.addEventListener('beforeunload', persist);
+document.addEventListener('visibilitychange', () => { if (document.hidden) persist(); });
 
 // Character picker in the help modal.
 const nameInput = document.getElementById('charName');
@@ -177,6 +199,8 @@ const unlockAudio = () => {
 };
 window.addEventListener('keydown', unlockAudio, { once: true });
 window.addEventListener('pointerdown', unlockAudio, { once: true });
+
+map.projectiles = []; // in-flight gun rounds (cosmetic tracers)
 
 // Fog of war: the minimap only shows where you have been.
 map.explored = new Uint8Array(map.w * map.h);
@@ -228,6 +252,46 @@ let playTime = 0;
 // read-only because the pockets/backpack split is already automatic —
 // there's nothing to drag between them.
 let showBackpack = false;
+let detail = null;   // right-click inspection tooltip {text, x, y, ttl}
+let drag = null;     // in-progress pointer drag {from: slotDescriptor}
+const PROJECTILE_SPEED = 16; // tiles/sec for gun tracers
+
+// Right-click inspection: describe whatever occupies a tile. Cars get an
+// invented make and model (deterministic from their hue), stone an age from
+// its decay, and so on — flavour, drawn from the world's own data.
+const CAR_MAKES = ['Vauxhall', 'Ford', 'Rover', 'Austin', 'Morris', 'Talbot', 'Hillman', 'Reliant'];
+const CAR_MODELS = ['Cavalier', 'Cortina', 'Metro', 'Allegro', 'Marina', 'Sunbeam', 'Avenger', 'Robin'];
+function describeAt(tx, ty) {
+  if (!map.inBounds(tx, ty)) return 'The edge of the world.';
+  const obj = map.objectAt(tx, ty);
+  if (obj) {
+    if (obj.type === 'car') {
+      const mk = CAR_MAKES[Math.floor((obj.hue ?? 0) * CAR_MAKES.length) % CAR_MAKES.length];
+      const md = CAR_MODELS[Math.floor(((obj.hue ?? 0) * 7.3) % 1 * CAR_MODELS.length)];
+      const year = 1978 + Math.floor((obj.hue ?? 0) * 22);
+      return `${year} ${mk} ${md}. ${obj.smashed ? 'Stripped and gutted.' : 'Dead where it stalled — worth breaking open.'}`;
+    }
+    if (obj.type === 'wall') {
+      const ages = ['newly built', 'weathered, a few years old', 'old, a decade or more', 'mossed over, long abandoned', 'crumbling, half-collapsed', 'a ruin, barely standing'];
+      const mat = obj.material === 'brick' ? 'Red-brick wall' : 'Stone wall';
+      return `${mat}, ${ages[Math.min(5, obj.decay || 0)]}.`;
+    }
+    if (obj.type === 'obelisk') return `An AI signal obelisk. Black, humming, ${obj.alert > 0.3 ? 'and it has seen you.' : 'watching.'}`;
+    if (obj.type === 'box') return obj.opened ? 'An emptied resistance cache.' : 'A resistance cache. Search it (E).';
+    if (obj.type === 'tree') return 'A tree. Fell it for wood.';
+    if (obj.type === 'rock') return 'A weathered boulder.';
+    if (obj.type === 'rubble') return 'Rubble from a fallen wall.';
+  }
+  const f = map.floorAt(tx, ty);
+  const h = map.heightAt ? map.heightAt(tx, ty) : 0;
+  const names = { grass: 'Overgrown grass', tallgrass: 'Tall grass — snakes hide here', road: 'Cracked tarmac road',
+    boards: 'Bare floorboards', dirt: 'Worn dirt', sand: 'River sand', water: 'Deep water — you can swim it',
+    stream: 'A shallow stream', bridge: 'A timber bridge', tallgrass2: '' };
+  let s = names[f] || f || 'Nothing here.';
+  if (h > 0) s += ` Raised ground (${h} up).`;
+  else if (h < 0) s += ` A trench (${-h} down).`;
+  return s;
+}
 
 let wasNight = null;
 let wasDusk = null;
@@ -247,14 +311,61 @@ function update(dt) {
   }
   const mouse = input.mousePos();
   const mouseWorld = camera.toWorld(mouse.x, mouse.y, renderer.w, renderer.h);
-  // A click on a dashboard/backpack slot equips or stows it, and is claimed
-  // here so it doesn't also swing the held tool in the world.
-  const click = input.clickPos();
-  if (click && renderer.slotAt) {
-    const slot = renderer.slotAt(click.x, click.y);
-    if (slot) { player.equipSlot(slot); input.consumeClick(); }
+
+  // Mouse wheel zooms (the HUD is screen-space, so it stays the same size).
+  const wheel = input.consumeWheel();
+  if (wheel) camera.zoomBy(-wheel * 0.0015);
+
+  // Death certificate: freeze the world behind the modal until it's clicked.
+  if (player.deathCert) {
+    if (input.clickPos() || input.consumeUp()) { input.consumeClick(); player.deathCert = null; }
+    return;
   }
+
+  // Right-click inspects whatever is under the cursor.
+  const right = input.consumeRight();
+  if (right) {
+    const w = camera.toWorld(right.x, right.y, renderer.w, renderer.h);
+    detail = { text: describeAt(Math.floor(w.x), Math.floor(w.y)), x: right.x, y: right.y, ttl: 6 };
+  }
+  if (detail) { detail.ttl -= dt; if (detail.ttl <= 0) detail = null; }
+
+  // Pointer over the dashboard/backpack slots: press begins a drag (or, on a
+  // same-slot release, a click-equip); release drops onto the target slot.
+  // Claimed here so a slot press never also swings the held tool.
+  const press = input.clickPos();
+  if (press && renderer.slotAt) {
+    const slot = renderer.slotAt(press.x, press.y);
+    if (slot) {
+      input.consumeClick();
+      if (player.getSlot(slot)) drag = { from: slot };
+      else player.equipSlot(slot); // empty hands slot: stow whatever's held
+    }
+  }
+  const up = input.consumeUp();
+  if (up && drag) {
+    const target = renderer.slotAt ? renderer.slotAt(up.x, up.y) : null;
+    if (target && target.kind === drag.from.kind && target.i === drag.from.i) {
+      player.equipSlot(drag.from); // released on the source: treat as a click
+    } else if (target) {
+      player.moveItem(drag.from, target);
+    }
+    drag = null;
+  } else if (!input.mouseHeld) {
+    drag = null; // released outside any slot: cancel the drag
+  }
+
   player.update(dt, input, map, animals, robots, mouseWorld);
+  // Advance in-flight rounds.
+  for (const p of map.projectiles) {
+    const dist = Math.hypot(p.x1 - p.x0, p.y1 - p.y0) || 0.001;
+    p.prog += (PROJECTILE_SPEED * dt) / dist;
+  }
+  if (map.projectiles.length) map.projectiles = map.projectiles.filter((p) => p.prog < 1);
+
+  // Autosave the run every few seconds.
+  saveClock += dt;
+  if (saveClock >= 8) { saveClock = 0; persist(); }
   updateAnimals(dt, animals, player, map);
   updateBirds(dt, birds, animals, player, map);
   updateRobots(dt, robots, player, map);
@@ -394,6 +505,9 @@ function frame(now) {
     lore,
     torch: player.pockets.some((s) => s && s.item === 'torch'),
     showBackpack,
+    detail,
+    drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
+    deathCert: player.deathCert,
   });
 
   frameCount += 1;

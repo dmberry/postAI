@@ -185,20 +185,28 @@ export function spawnAnimals(map, seed, avoid) {
 
 // ---- Movement helpers -----------------------------------------------------
 
-// Four-corner sample, same scheme as Player.collides.
-function collides(map, x, y) {
+// Four-corner sample, same scheme as Player.collides. A corner also blocks
+// if its tile is more than one height level from `h` (the animal's current
+// tile), so animals can't scale steep steps or climb out of a dug pit.
+function collides(map, x, y, h) {
+  const blocked = (tx, ty) => {
+    if (map.isSolid(tx, ty)) return true;
+    if (!map.heightAt || h == null) return false;
+    return Math.abs(map.heightAt(tx, ty) - h) > 1;
+  };
   return (
-    map.isSolid(Math.floor(x - RADIUS), Math.floor(y - RADIUS)) ||
-    map.isSolid(Math.floor(x + RADIUS), Math.floor(y - RADIUS)) ||
-    map.isSolid(Math.floor(x - RADIUS), Math.floor(y + RADIUS)) ||
-    map.isSolid(Math.floor(x + RADIUS), Math.floor(y + RADIUS))
+    blocked(Math.floor(x - RADIUS), Math.floor(y - RADIUS)) ||
+    blocked(Math.floor(x + RADIUS), Math.floor(y - RADIUS)) ||
+    blocked(Math.floor(x - RADIUS), Math.floor(y + RADIUS)) ||
+    blocked(Math.floor(x + RADIUS), Math.floor(y + RADIUS))
   );
 }
 
 function moveAxis(a, dx, dy, map) {
   const nx = a.x + dx;
   const ny = a.y + dy;
-  if (!collides(map, nx, ny)) {
+  const h = map.heightAt ? map.heightAt(Math.floor(a.x), Math.floor(a.y)) : null;
+  if (!collides(map, nx, ny, h)) {
     a.x = nx;
     a.y = ny;
   }

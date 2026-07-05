@@ -114,6 +114,45 @@ export class Player {
     if (this.onScore) this.onScore();
   }
 
+  // ---- generic slot access (for click-equip and pointer drag) ----------
+
+  // Read the {item, qty} in a slot descriptor, or null.
+  getSlot(slot) {
+    if (slot.kind === 'hands') return this.hands ? { item: this.hands, qty: 1 } : null;
+    if (slot.kind === 'bw') return this.backpack && this.backpack.weapon ? { item: this.backpack.weapon, qty: 1 } : null;
+    if (slot.kind === 'pocket') return this.pockets[slot.i] || null;
+    if (slot.kind === 'bpstore') return this.backpack ? (this.backpack.slots[slot.i] || null) : null;
+    return null;
+  }
+
+  setSlot(slot, val) {
+    if (slot.kind === 'hands') { this.hands = val ? val.item : null; return true; }
+    if (slot.kind === 'bw') { if (!this.backpack) return false; this.backpack.weapon = val ? val.item : null; return true; }
+    if (slot.kind === 'pocket') { this.pockets[slot.i] = val; return true; }
+    if (slot.kind === 'bpstore') { if (!this.backpack) return false; this.backpack.slots[slot.i] = val; return true; }
+    return false;
+  }
+
+  // Drag one slot's contents onto another, swapping if the target is full.
+  // The hands and spare-weapon slots only accept a single holdable item.
+  moveItem(from, to) {
+    const a = this.getSlot(from);
+    if (!a) return;
+    const b = this.getSlot(to);
+    const onlyHoldable = (s) => s.kind === 'hands' || s.kind === 'bw';
+    if (onlyHoldable(to) && (!HOLDABLE.has(ITEMS[a.item].kind) || a.qty > 1)) {
+      this.say("That won't go in the hand.");
+      return;
+    }
+    if (onlyHoldable(from) && b && (!HOLDABLE.has(ITEMS[b.item].kind) || b.qty > 1)) {
+      this.say("Can't swap that into the hand.");
+      return;
+    }
+    this.setSlot(to, a);
+    this.setSlot(from, b || null);
+    this.say(`Moved ${ITEMS[a.item].name.toLowerCase()}.`);
+  }
+
   // Equip / stow via a clicked dashboard or backpack slot. Clicking a pocket
   // (or the spare-weapon slot) swaps it with the hands slot; clicking the
   // hands slot puts the held item away; clicking a backpack storage slot
@@ -738,6 +777,15 @@ export class Player {
     this.swingTimer = tool.swingCooldown;
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
 
+    // A visible round travels from the muzzle to the target (cosmetic; the
+    // hit itself is instant). Electric guns fire a cyan/violet bolt.
+    map.projectiles = map.projectiles || [];
+    map.projectiles.push({
+      x0: this.x + this.facing.x * 0.4, y0: this.y + this.facing.y * 0.4,
+      x1: target.x, y1: target.y, prog: 0,
+      kind: tool.effect === 'stun' ? 'stun' : tool.effect === 'fuse' ? 'fuse' : 'bullet',
+    });
+
     if (tool.effect === 'stun') {
       sfx.play('zap');
       target.disabledT = tool.stunTime;
@@ -851,6 +899,15 @@ export class Player {
         map.groundItems.push({ item: 'backpack', qty: 1, x: this.x, y: this.y });
       }
     }
+    // A certificate of death, snapped from the run's final state. The score
+    // is cumulative and survives; deaths count up. main shows it as a modal.
+    this.deaths = (this.deaths || 0) + 1;
+    this.deathCert = {
+      name: this.name, cause, score: this.score,
+      skills: [...this.skills], deaths: this.deaths,
+    };
+    if (this.onDeath) this.onDeath();
+
     this.pockets = [null, null, null, null];
     this.backpack = null;
     this.selectedPocket = null;

@@ -21,7 +21,11 @@ export class Input {
     this.pressed = new Set();
     this.mouseX = 0;
     this.mouseY = 0;
-    this.mousePressed = false;
+    this.mousePressed = false;   // one-shot left-down (in-world use / slot click)
+    this.mouseHeld = false;      // true while the left button is down (drag)
+    this.upAt = null;            // one-shot left-up position (drag release)
+    this.rightAt = null;         // one-shot right-click position (inspect)
+    this.wheel = 0;              // accumulated wheel delta since last read
     target.addEventListener('keydown', (e) => {
       if (TRACKED.has(e.code)) {
         if (!e.repeat && !this.down.has(e.code)) this.pressed.add(e.code);
@@ -36,6 +40,7 @@ export class Input {
       this.down.clear();
       this.pressed.clear();
       this.mousePressed = false;
+      this.mouseHeld = false;
     });
     mouseTarget.addEventListener('mousemove', (e) => {
       this.mouseX = e.clientX;
@@ -44,8 +49,22 @@ export class Input {
     mouseTarget.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       this.mousePressed = true;
+      this.mouseHeld = true;
       e.preventDefault();
     });
+    mouseTarget.addEventListener('mouseup', (e) => {
+      if (e.button !== 0) return;
+      this.mouseHeld = false;
+      this.upAt = { x: e.clientX, y: e.clientY };
+    });
+    mouseTarget.addEventListener('contextmenu', (e) => {
+      this.rightAt = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+    });
+    mouseTarget.addEventListener('wheel', (e) => {
+      this.wheel += e.deltaY;
+      e.preventDefault();
+    }, { passive: false });
   }
 
   isDown(code) {
@@ -97,6 +116,27 @@ export class Input {
 
   consumeClick() {
     this.mousePressed = false;
+  }
+
+  // One-shot left-button release position (for drag-and-drop drops).
+  consumeUp() {
+    const u = this.upAt;
+    this.upAt = null;
+    return u;
+  }
+
+  // One-shot right-click position (for tile inspection).
+  consumeRight() {
+    const r = this.rightAt;
+    this.rightAt = null;
+    return r;
+  }
+
+  // Accumulated wheel delta since last read (positive = scroll down).
+  consumeWheel() {
+    const w = this.wheel;
+    this.wheel = 0;
+    return w;
   }
 
   jumpPressed() {

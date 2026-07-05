@@ -141,6 +141,7 @@ function placeBuilding(map, rng, lot) {
   const { x0, y0, w, h, door } = lot;
   const x1 = x0 + w - 1, y1 = y0 + h - 1;
   const ruin = lot.ruin + rng() * 0.08;
+  const material = rng() < 0.4 ? 'brick' : 'stone'; // some houses are red brick
   const key = (x, y) => x + ',' + y;
 
   // Interior floorboards (perimeter cells stay on grass under the walls).
@@ -207,7 +208,7 @@ function placeBuilding(map, rng, lot) {
     // buildings weather harder, with per-wall spread so a single wall shows a
     // range of ages rather than one uniform state.
     const decay = Math.max(0, Math.min(5, Math.round(ruin * 6 + (rng() - 0.5) * 2.5)));
-    map.addObject('wall', c.x, c.y, { decay });
+    map.addObject('wall', c.x, c.y, { decay, material });
   }
 
   // Worn dirt patch outside the door, reaching towards the road.

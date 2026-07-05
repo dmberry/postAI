@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.43)
+## Where we are (v0.44)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -59,6 +59,16 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Big smashable cars**: abandoned cars are now 2x3 six-tile hulks (one car object, whole footprint solid and pointing back at it). Smash with a crowbar (or any weapon, slower) to strip them: car battery, a salvaged **seatbelt** (improvised weapon), weapons, books, scrap, tins, torches. Loot spills at your feet since the footprint itself is solid.
 - **Lore fragment note**: on pickup the text shows in a soft, transparent panel bottom-right that auto-fades (~9s) or clears on a click — alongside the full Archive (J).
 - **Crickets at dusk only** (16:30–20:00), not all night. **T1/T2 hull labels** are a softer light grey, not stark white.
+- **Health bars** float over animals/robots within ~6.5 tiles of the player (uses each entity's `maxHp`); hidden for dead/fused/drained.
+- **Right-click a tile** to inspect it: car make/model+year (from hue), stone vs brick + age (from decay), obelisk/cache/tree/floor + terrain height. `describeAt()` in main; tooltip drawn near the cursor for ~6s.
+- **Drag and drop** items between slots (pocket / hands / spare-weapon / backpack storage) with the pointer, alongside click-to-equip. Renderer records slot rects + a `slotAt()`; player has generic `getSlot/setSlot/moveItem`. Input now tracks pointer up, right-click, wheel, and held state.
+- **Scroll-wheel zoom** (`camera.zoomBy`, clamped 0.7–3); HUD stays screen-space so it doesn't scale.
+- **Bullet tracers**: guns push a cosmetic projectile (`map.projectiles`) from muzzle to target; main advances them, renderer streaks them (yellow bullet / cyan stun / violet fuse). Damage stays instant.
+- **Red-brick buildings**: ~40% of buildings are brick (`material` on the wall object) with mortar courses, weathering through the same decay as stone.
+- **Entities respect terrain height**: animal movement now blocks steps of |Δh|>1, so a dug pit (or any steep drop) actually traps them instead of letting them walk out. (T1 already couldn't climb; T2's player-rule already trapped it in a -2 pit.)
+- **Certificate of Death**: on death a modal shows name, cause, score, skills, deaths, and an amusing rank (COMPOST → NOOB → SCRAPPER → SURVIVOR → VETERAN → L33T). Freezes the world until clicked. `player.deathCert` snapshot; `deathRank()` in renderer.
+- **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
+- **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
 
 ## Planned / backlog
 
