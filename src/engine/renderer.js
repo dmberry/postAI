@@ -166,7 +166,17 @@ export class Renderer {
       if (b.x < range.minX || b.x > range.maxX + 1 || b.y < range.minY || b.y > range.maxY + 1) continue;
       drawables.push({ depth: b.x + b.y - 0.02, bomb: b });
     }
-    drawables.push({ depth: player.x + player.y, player });
+    // Objects draw at depth x+y+1 so a wall occludes what's behind it. That
+    // wrongly hides the player standing ON TOP of a wall (the block they're
+    // on, and the ones a tile or two in front, would paint over their legs).
+    // Lifting the player's sort depth by how high they're standing on a
+    // climbable object (effectiveHeightAt above the terrain — 2.5 on a wall)
+    // puts them in front of the block they stand on and the near ones, so an
+    // elevated player reads as being on top rather than buried in it.
+    const pfx = Math.floor(player.x), pfy = Math.floor(player.y);
+    const climbRaise = (map.effectiveHeightAt && map.heightAt)
+      ? map.effectiveHeightAt(pfx, pfy) - map.heightAt(pfx, pfy) : 0;
+    drawables.push({ depth: player.x + player.y + climbRaise, player });
     drawables.sort((a, b) => a.depth - b.depth);
 
     // Everything on a hill tile is lifted by its elevation.
@@ -183,7 +193,12 @@ export class Renderer {
         : d.droid ? elevOf(d.droid.x, d.droid.y)
         : d.bomb ? elevOf(d.bomb.x, d.bomb.y)
         : d.groundItem ? elevOf(d.groundItem.x, d.groundItem.y)
-        : elevOf(d.obj.x + 0.5, d.obj.y + 0.5);
+        // Objects sit on the terrain height only — NOT effectiveHeightAt.
+        // A climbable object (a wall) draws its own extrusion upward from
+        // this base; effectiveHeightAt adds its climbHeight so an entity can
+        // stand on top, but adding that to the object's own lift would float
+        // the whole block up off the ground by its climb height.
+        : (map.heightAt ? map.heightAt(d.obj.x, d.obj.y) : 0) * ELEV;
       if (lift) { ctx.save(); ctx.translate(0, -lift); }
       if (d.player) this.drawPlayer(d.player);
       else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 44); }
@@ -1016,7 +1031,15 @@ export class Renderer {
       obj._graffitiCanvas = c;
     }
     const jitter = (tileHash(obj.x, obj.y) - 0.5) * 0.12;
-    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.06, 0.94, 0.28 + jitter, 0.62 + jitter);
+    // Orientation on the wall's SE face. subQuad's basis is u along b1 -> b2
+    // and v along b1 -> t1. drawTexturedQuad maps the text canvas so its own
+    // +x (left -> right of the text) follows p0 -> p1 and its own +y (top ->
+    // bottom) follows p0 -> p3. To read upright and un-mirrored on the face
+    // as the player sees it, the text's +x must point screen-rightward and
+    // its +y screen-downward, which means passing BOTH bounds high-then-low:
+    // u 0.94 -> 0.06 (un-mirror) and v 0.62 -> 0.28 (right way up). Verified
+    // in-game against "THE WIRES LIE".
+    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.94, 0.06, 0.62 + jitter, 0.28 + jitter);
     this.drawTexturedQuad(quad, obj._graffitiCanvas, null, null, null, 1);
   }
 
@@ -1359,13 +1382,28 @@ export class Renderer {
     ctx.lineTo(c.x, c.y + 3 - h); ctx.lineTo(c.x + w, c.y - 3 - h);
     ctx.closePath();
     ctx.fill();
-    // Lid: closed boxes get a pale top and strap; opened ones a dark hole.
-    ctx.fillStyle = obj.opened ? '#241a10' : '#8f6d42';
-    ctx.beginPath();
-    ctx.moveTo(c.x - w, c.y - 3 - h); ctx.lineTo(c.x, c.y + 3 - h);
-    ctx.lineTo(c.x + w, c.y - 3 - h); ctx.lineTo(c.x, c.y - 9 - h);
-    ctx.closePath();
-    ctx.fill();
+    // Lid: closed boxes get a wooden-plank top and a strap; opened ones a
+    // dark hole. The four lid corners form a rhombus (a parallelogram), so
+    // the plank texture warps straight onto it the same way floor and wall
+    // textures do — corner order [origin, +u, +u+v, +v] = [left, bottom,
+    // right, top]. A warm multiply tint keeps it reading as a crate rather
+    // than a bare floorboard, and the flat colour still shows through /
+    // stands in until the image loads.
+    const lidLeft = { x: c.x - w, y: c.y - 3 - h };
+    const lidBottom = { x: c.x, y: c.y + 3 - h };
+    const lidRight = { x: c.x + w, y: c.y - 3 - h };
+    const lidTop = { x: c.x, y: c.y - 9 - h };
+    if (obj.opened) {
+      ctx.fillStyle = '#241a10';
+      ctx.beginPath();
+      ctx.moveTo(lidLeft.x, lidLeft.y); ctx.lineTo(lidBottom.x, lidBottom.y);
+      ctx.lineTo(lidRight.x, lidRight.y); ctx.lineTo(lidTop.x, lidTop.y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      this.drawTexturedQuad([lidLeft, lidBottom, lidRight, lidTop],
+        FLOOR_TEXTURES.boards, '#8f6d42', '#7a5c34', 'multiply', 0.6);
+    }
     if (!obj.opened) {
       ctx.strokeStyle = 'rgba(40,30,18,0.7)';
       ctx.lineWidth = 1.5;
@@ -1995,6 +2033,23 @@ export class Renderer {
     const scale = 0.6; // 0.9 towered over a 32px-tall tile diamond; scaled down to fit
     const dw = sprite.naturalWidth * scale, dh = sprite.naturalHeight * scale;
     const cy = by - dh / 2 + 6;
+    // Idle sway: standing still on the ground, rock the sprite by a hair
+    // around the feet so it reads as breathing/alive rather than a frozen
+    // cardboard cutout. Two slightly out-of-phase sines give it an easy,
+    // non-mechanical drift. Suppressed while walking (the walk frames carry
+    // their own motion) and mid-jump.
+    const idle = !player.moving && player.z === 0;
+    let swayed = false;
+    if (idle) {
+      const t = performance.now();
+      const sway = Math.sin(t / 900) * 0.03 + Math.sin(t / 1730) * 0.012; // ~2.4 deg peak
+      const fx = c.x, fy = cy + dh / 2; // pivot at the feet
+      ctx.save();
+      ctx.translate(fx, fy);
+      ctx.rotate(sway);
+      ctx.translate(-fx, -fy);
+      swayed = true;
+    }
     const tint = player.hurtTimer > 0 ? 'rgba(220,60,50,0.55)'
       : player.sprinting ? 'rgba(255,190,110,0.18)' : null;
     if (tint) {
@@ -2013,6 +2068,7 @@ export class Renderer {
     } else {
       ctx.drawImage(sprite, c.x - dw / 2, cy - dh / 2, dw, dh);
     }
+    if (swayed) ctx.restore();
   }
 
   // ---- Dashboard ----------------------------------------------------------

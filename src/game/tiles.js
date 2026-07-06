@@ -16,21 +16,26 @@ export const FLOORS = {
 
 export const OBJECTS = {
   tree:    { solid: true },
-  // Rubble and rock are "solid" for everything except the player's own
+  // "climbable" objects are solid for everything except the player's own
   // climb check (Player.collides via GameMap.effectiveHeightAt), which
-  // treats them as a +1 height step instead of an outright wall — so they
-  // can be climbed (on foot, or jumped in one go) and stood on top of, same
-  // as any other terrain step. Walls stay flatly solid: they're the same
-  // generic type used for building/town perimeter walls (worldgen.js), and
-  // making those climbable let the player walk straight over any building
-  // or town boundary, breaking the interiors/exteriors the game builds
-  // around them. Obelisks/boxes/cars/the factory stay flatly solid too;
-  // climbing onto those doesn't make sense.
-  wall:    { solid: true },
+  // treats them as a raised step of `climbHeight` levels rather than an
+  // outright wall — so they can be climbed onto and stood on top of, same
+  // as a rise in the terrain.
+  //
+  // The step height is what gates walking vs jumping. Rubble and rock are a
+  // single level: low enough to step straight over on foot. A wall is
+  // `climbHeight` 2.5 (= WALL_H 40px / ELEV 16px, so standing on top lines
+  // up with its drawn height): more than the on-foot step of 1, so you still
+  // can't walk through a building or town wall (the v0.64 boundary the game
+  // is built around holds), but within a jump's reach, so a deliberate jump
+  // gets you up onto it. Obelisks/boxes/cars/the factory stay flatly solid;
+  // climbing onto those doesn't make sense (and a box you bump-and-search,
+  // not stand on).
+  wall:    { solid: true, climbable: true, climbHeight: 2.5 },
   rubble:  { solid: true, climbable: true, climbHeight: 1 },
   rock:    { solid: true, climbable: true, climbHeight: 1 },
   obelisk: { solid: true }, // AI signal tower; destructible in a later phase
-  box:     { solid: true }, // resistance weapons cache, searchable
+  box:     { solid: true }, // resistance weapons cache, searchable (kept flatly solid so you bump-and-search it rather than climbing on top)
   car:     { solid: true }, // abandoned wreck littering the roads; scenery only
   wfactory: { solid: true }, // W-unit foundry; periodically fields a W3 repair drone
 };

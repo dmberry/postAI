@@ -73,6 +73,7 @@ export class Player {
     this.spawnY = y;
     this.z = 0;           // height above ground while jumping
     this.vz = 0;
+    this.doubleJumped = false; // a second, mid-air jump: reaches block tops
     this.facing = { x: 0, y: 1 };
     this.moving = false;
     this.sprinting = false;
@@ -394,11 +395,24 @@ export class Player {
       if (this.health <= 0) { this.die(map, 'the cold river'); return; }
     }
 
-    // Jump: purely vertical hop; collision footprint is unchanged.
-    if (input.jumpPressed() && this.z === 0 && this.stamina >= JUMP_COST) {
-      this.vz = JUMP_VZ;
-      this.stamina -= JUMP_COST;
-      sfx.play('jump');
+    // Jump: purely vertical hop; collision footprint is unchanged. A normal
+    // jump (from the ground) clears terrain steps and hops out of a dug pit
+    // but is NOT tall enough to reach a block top. Press jump a second time
+    // in mid-air for a double jump — a fresh upward kick that raises how
+    // high you can step (see collides) just enough to land on a wall.
+    const airborne = this.z > 0 || this.vz !== 0;
+    if (input.jumpPressed()) {
+      if (this.z === 0 && this.stamina >= JUMP_COST) {
+        this.vz = JUMP_VZ;
+        this.stamina -= JUMP_COST;
+        this.doubleJumped = false;
+        sfx.play('jump');
+      } else if (airborne && !this.doubleJumped && this.stamina >= JUMP_COST) {
+        this.vz = JUMP_VZ;         // fresh kick upward off the first hop
+        this.stamina -= JUMP_COST;
+        this.doubleJumped = true;
+        sfx.play('jump');
+      }
     }
     if (this.z > 0 || this.vz !== 0) {
       this.vz -= GRAVITY * dt;
@@ -406,6 +420,7 @@ export class Player {
       if (this.z <= 0) {
         this.z = 0;
         this.vz = 0;
+        this.doubleJumped = false; // landed: next jump starts fresh
       }
     }
 
@@ -1398,32 +1413,63 @@ export class Player {
   }
 
   // Sample the four corners of the player's bounding square. A corner
-  // blocks if its tile is solid or too many height levels away. On foot you
-  // can step one level; while airborne (jumping) you can clear two, so a
-  // jump gets you up onto higher ground and out of a dug pit — where a
-  // wheeled robot, which cannot climb at all, stays stuck. A "climbable"
-  // object (wall, rubble, rock — tiles.js) counts as a +1 height step
-  // instead of flatly blocking, so it can be climbed the same way, and
-  // stood on top of once there.
+  // blocks if its tile is solid or too many height levels away. The height
+  // you can step in one move depends on what you're doing:
+  //   on foot        -> 1  (walk up a terrain step, over rubble/rock)
+  //   a normal jump   -> 2  (hop onto higher ground, out of a dug pit)
+  //   a double jump   -> 3  (reach a block top: walls are climbHeight 2.5)
+  // A "climbable" object (wall, rubble, rock — tiles.js) counts as a raised
+  // step of its climbHeight instead of flatly blocking, so it can be climbed
+  // and stood on top of once there — but a wall's 2.5 is out of reach of a
+  // single jump, so it takes the double jump. None of this lets a jump skip
+  // terrain, which is always at most one level between adjacent tiles (the
+  // generator's Lipschitz guarantee). A wheeled robot can't climb at all.
+  //
+  // Stepping UP is capped by maxStep (that's what stops you walking through a
+  // wall from the ground). Stepping DOWN is capped too — normally — so you
+  // can't stroll off a cliff or into a dug pit. The exception is when you're
+  // already standing on top of a climbable object (a wall/rock): then you can
+  // drop off any edge freely, so roaming a block top and walking off it feels
+  // natural instead of being fenced into the middle of the block.
   collides(x, y, map) {
-    const h = map.effectiveHeightAt ? map.effectiveHeightAt(Math.floor(this.x), Math.floor(this.y))
-      : (map.heightAt ? map.heightAt(Math.floor(this.x), Math.floor(this.y)) : 0);
-    const maxStep = (this.z > 0 || this.vz !== 0) ? 2 : 1;
-    const blocked = (tx, ty) => {
+    const cfx = Math.floor(this.x), cfy = Math.floor(this.y);
+    const h = map.effectiveHeightAt ? map.effectiveHeightAt(cfx, cfy)
+      : (map.heightAt ? map.heightAt(cfx, cfy) : 0);
+    const curObj = map.objectAt ? map.objectAt(cfx, cfy) : null;
+    const onLedge = !!(curObj && OBJECTS[curObj.type] && OBJECTS[curObj.type].climbable);
+    const airborne = this.z > 0 || this.vz !== 0;
+    const maxStep = !airborne ? 1 : (this.doubleJumped ? 3 : 2);
+
+    // A flatly-solid, NON-climbable object (obelisk, box, car, factory)
+    // blocks whenever any corner of the footprint overlaps it — that keeps
+    // the body from clipping into a building or a crate. Climbable objects
+    // (walls/rock/rubble) are deliberately excluded here; their passability
+    // is a height question, handled below, so you can stand on and step off
+    // them. Water is passable (the player swims).
+    const solidCorner = (tx, ty) => {
       const obj = map.objectAt ? map.objectAt(tx, ty) : null;
       const climbable = obj && OBJECTS[obj.type] && OBJECTS[obj.type].climbable;
-      // The player can swim: water is passable for them (slow and tiring,
-      // handled in movement) even though it stays solid for everything else.
-      if (map.isSolid(tx, ty) && map.floorAt(tx, ty) !== 'water' && !climbable) return true;
-      if (!map.heightAt) return false;
-      const targetH = map.effectiveHeightAt ? map.effectiveHeightAt(tx, ty) : map.heightAt(tx, ty);
-      return Math.abs(targetH - h) > maxStep;
+      return map.isSolid(tx, ty) && map.floorAt(tx, ty) !== 'water' && !climbable;
     };
-    return (
-      blocked(Math.floor(x - RADIUS), Math.floor(y - RADIUS)) ||
-      blocked(Math.floor(x + RADIUS), Math.floor(y - RADIUS)) ||
-      blocked(Math.floor(x - RADIUS), Math.floor(y + RADIUS)) ||
-      blocked(Math.floor(x + RADIUS), Math.floor(y + RADIUS))
-    );
+    if (solidCorner(Math.floor(x - RADIUS), Math.floor(y - RADIUS))
+      || solidCorner(Math.floor(x + RADIUS), Math.floor(y - RADIUS))
+      || solidCorner(Math.floor(x - RADIUS), Math.floor(y + RADIUS))
+      || solidCorner(Math.floor(x + RADIUS), Math.floor(y + RADIUS))) return true;
+
+    // The height step is judged on the destination's CENTRE tile, not the
+    // four corners. Cornerwise height checks make a tall thin wall miserable
+    // to stand on: near any edge one corner overhangs the drop and blocks
+    // you, fencing you into the middle of the block and snagging you at the
+    // base when you step off. Centre-tile keeps walking on, along, and off a
+    // block smooth; a wall you approach from the ground still blocks because
+    // its centre is a +2.5 step (out of reach on foot), and you only overlap
+    // its base by the footprint radius, which reads as standing against it.
+    if (!map.heightAt) return false;
+    const targetH = map.effectiveHeightAt ? map.effectiveHeightAt(Math.floor(x), Math.floor(y))
+      : map.heightAt(Math.floor(x), Math.floor(y));
+    const dh = targetH - h;
+    if (dh > maxStep) return true;              // too high to step up
+    if (dh < -maxStep && !onLedge) return true; // too far to drop, unless walking off a ledge
+    return false;
   }
 }

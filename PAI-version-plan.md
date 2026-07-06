@@ -17,7 +17,16 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.68)
+## Where we are (v0.69)
+
+### v0.69 — double-jump onto blocks, textured box lids, graffiti fix, idle sway
+
+- **Double jump to climb onto wall blocks.** Walls are now `climbable` (tiles.js) with `climbHeight` 2.5 (= WALL_H 40px / ELEV 16px, so standing on top lines up with the drawn height). On foot the step allowance is 1, so a 2.5 wall still blocks — buildings and town walls remain real boundaries. A normal jump reaches 2; a **double jump** (press jump again in mid-air — `player.doubleJumped`, a fresh upward kick, resets on landing) reaches 3, enough to mount the wall. None of this lets a jump skip terrain, which is Lipschitz-bounded to one level between adjacent tiles.
+- **Smooth movement on and off block tops.** The height-step test in `Player.collides` now judges the destination's **centre** tile, not the four footprint corners. Cornerwise checks made a tall thin wall miserable: near any edge a corner overhangs the drop and blocks you, fencing you into the middle and snagging you at the base on the way off. Centre-tile keeps walking on/along/off a block smooth. Stepping *down* is still capped (no strolling off cliffs or into dug pits) EXCEPT when you're standing on a climbable ledge, where you can drop off any edge freely. Non-climbable solids (obelisk, box, car, factory) keep the strict four-corner block so the body can't clip into them.
+- **BUG FIX (rendering): a player standing on a block was drawn buried in it.** Objects sort at depth `x+y+1` so a wall occludes what's behind it, which wrongly painted the wall over the legs of a player on top. The player's sort depth is now lifted by how high they stand on a climbable object (`effectiveHeightAt - heightAt`, i.e. 2.5 on a wall) so they read as on top. Relatedly, an object's own draw lift uses terrain `heightAt`, not `effectiveHeightAt` — otherwise a climbable wall floated up off the ground by its own climb height.
+- **Textured box lids.** A closed cache crate's top was a flat fill; it now warps the wooden-boards texture onto the lid rhombus with `drawTexturedQuad` (a warm multiply tint keeps it crate-coloured). Opened crates keep the dark hole.
+- **BUG FIX: wall graffiti was rendering rotated/mirrored.** The text band's affine mapping had the wrong u and v orientation for the SE face, so tags read upside down, then mirrored. Both axes are now set so the text reads left-to-right and upright (verified in-game against "THE WIRES LIE").
+- **Gentle idle sway.** Standing still on the ground, the character sprite now rocks by a couple of degrees around its feet (two out-of-phase sines) so it reads as alive rather than a frozen cutout. Suppressed while walking (the walk frames carry their own motion) and mid-jump.
 
 ### v0.68 — machine gallery robots drawn larger
 
