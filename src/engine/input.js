@@ -182,7 +182,13 @@ export class Input {
     return this.consumePress('KeyI');
   }
 
+  // Moved off P (v0.56) so P can pause the game instead; M was reserved for
+  // a not-yet-built phone feature and was otherwise unused.
   musicTogglePressed() {
+    return this.consumePress('KeyM');
+  }
+
+  pausePressed() {
     return this.consumePress('KeyP');
   }
 

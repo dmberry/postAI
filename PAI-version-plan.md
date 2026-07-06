@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.55)
+## Where we are (v0.56)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -69,6 +69,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Certificate of Death**: on death a modal shows name, cause, score, skills, deaths, and an amusing rank (COMPOST → NOOB → SCRAPPER → SURVIVOR → VETERAN → L33T). Freezes the world until clicked. `player.deathCert` snapshot; `deathRank()` in renderer.
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
+
+### v0.56 — pause, and an open-ended SKYLINK purge
+
+- **Pause (P)**: freezes movement, AI, clocks, timers, New Game, and crafting; help/backpack/skills/weapons panels and unpausing itself still work while paused. A dimmed "PAUSED — press P to resume" overlay draws over everything. Blocked while the death-cert modal is open (already its own frozen state) to avoid a confusing double-freeze.
+- **Music toggle moved to M** (from P, to free P up for pause) — `M` was reserved for a not-yet-built phone feature and was otherwise unused. `input.musicTogglePressed()` now reads `KeyM`.
+- **SKYLINK's purge no longer has a 30-second cutoff.** Once it comes online, the W-factory keeps dispatching W4s indefinitely (2-4 every ~1.2s, capped at 50 concurrent so a long purge can't tank the frame rate) — there's no timer to survive to. `player.skylinkActive` stays on and the run only ends via `dieToSkylink()` when the player actually dies, exactly as the ending was originally designed to work, just without an artificial deadline. The banner now counts up ("hunted for M:SS") instead of down.
+- Verified live: pausing genuinely freezes the day/night clock (`dayNight.elapsed` provably unchanged across a real-time wait) and un-pausing resumes it; help still opens while paused; SKYLINK's W4 swarm kept building (30 concurrent in one run) with no forced end, and dying during it produced the correct SKYLINK certificate.
+- Docs: help modal's key table and win/lose paragraph updated to match.
 
 ### v0.55 — 12-hour deadline
 

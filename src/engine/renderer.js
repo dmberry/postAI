@@ -239,6 +239,7 @@ export class Renderer {
     if (hud.detail) this.drawDetail(hud.detail);
     if (hud.drag) this.drawDragGhost(hud.drag, player);
     if (hud.deathCert) this.drawDeathCert(hud.deathCert);
+    if (hud.paused) this.drawPausedOverlay();
   }
 
   // The weapon chart (V): every weapon in the game, with a power rating.
@@ -1083,11 +1084,14 @@ export class Renderer {
     ctx.restore();
   }
 
-  // The 30-second countdown banner shown once SKYLINK comes online.
-  drawSkylinkBanner(timer) {
+  // The banner shown once SKYLINK comes online. There's no timer to beat —
+  // it counts up, not down, since the purge doesn't stop until it catches
+  // the player.
+  drawSkylinkBanner(elapsed) {
     const ctx = this.ctx;
-    const t = Math.max(0, timer || 0);
-    const msg = `SKYLINK-9000 ONLINE — ${t.toFixed(1)}s`;
+    const t = Math.max(0, elapsed || 0);
+    const m = Math.floor(t / 60), s = Math.floor(t % 60);
+    const msg = `SKYLINK-9000 ONLINE — hunted for ${m}:${String(s).padStart(2, '0')}`;
     ctx.font = 'bold 22px Georgia, serif';
     const w = ctx.measureText(msg).width + 40;
     const x = (this.w - w) / 2, y = 44;
@@ -1100,6 +1104,21 @@ export class Renderer {
     ctx.fillStyle = '#eaf6ff';
     ctx.textAlign = 'center';
     ctx.fillText(msg, this.w / 2, y + 27);
+    ctx.textAlign = 'left';
+  }
+
+  // A simple dimming overlay + centred label while paused (P).
+  drawPausedOverlay() {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(4,6,3,0.55)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#e8e0d0';
+    ctx.font = 'bold 28px Georgia, serif';
+    ctx.fillText('PAUSED', this.w / 2, this.h / 2 - 8);
+    ctx.font = '13px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.75)';
+    ctx.fillText('Press P to resume', this.w / 2, this.h / 2 + 18);
     ctx.textAlign = 'left';
   }
 

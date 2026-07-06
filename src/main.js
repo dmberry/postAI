@@ -30,7 +30,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.55';
+const VERSION = '0.56';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -375,6 +375,7 @@ let playTime = 0;
 let showBackpack = false;
 let showSkills = false;
 let showWeapons = false;
+let paused = false;  // P: freezes movement, AI, clocks, and timers
 let detail = null;   // right-click inspection tooltip {text, x, y, ttl}
 let drag = null;     // in-progress pointer drag {from: slotDescriptor}
 const PROJECTILE_SPEED = 16; // tiles/sec for gun tracers
@@ -471,9 +472,10 @@ let wFactoryW1Clock = 0, wFactoryW1Next = 100 + Math.random() * 80;
 let lastW4GameHour = dayNight.totalHours; // ticks a W4 every 30 game-minutes, not real time
 
 // SKYLINK's final purge: once the clock runs out, every obelisk lights up
-// and the AI throws everything it has left at you for 30 real seconds
-// before the ending plays regardless of whether you're still standing.
-let skylinkTimer = 0;
+// and the AI throws everything it has left at you, without end — you keep
+// playing until it finally hunts you down (or forever, if you're good).
+const SKYLINK_MAX_W4 = 50; // concurrent cap, so a long purge can't melt the frame rate
+let skylinkTimer = 0; // seconds survived under the purge, once active
 let skylinkW4Clock = 0;
 function dispatchSkylinkW4s(n) {
   const towers = obeliskObjs.filter((o) => !o.destroyed);
@@ -489,6 +491,14 @@ function update(dt) {
   if (input.inventoryPressed()) showBackpack = !showBackpack;
   if (input.skillsPressed()) showSkills = !showSkills;
   if (input.weaponChartPressed()) showWeapons = !showWeapons;
+  if (input.pausePressed() && !player.deathCert) {
+    paused = !paused;
+    player.say(paused ? 'Paused. Press P to resume.' : 'Back in it.');
+  }
+  // Everything else — movement, AI, clocks, timers, New Game, crafting —
+  // freezes while paused. Help/backpack/skills/weapons and unpausing itself
+  // still work above this line.
+  if (paused) return;
   if (input.newGamePressed()) {
     if (window.confirm('Start a new game? This erases your saved progress.')) {
       resettingGame = true; // block the beforeunload/hidden autosave from undoing this
@@ -689,26 +699,23 @@ function update(dt) {
   dayNight.update(dt);
   // Time's up: SKYLINK-9000 comes online. Every obelisk lights up and links
   // to every other in a web of lasers, and the factory throws wave after
-  // wave of W4s at you for 30 seconds before the ending plays regardless.
+  // wave of W4s at you — indefinitely. There's no timer to survive to; it
+  // simply doesn't stop, and the run ends only when it finally catches you
+  // (see dieToSkylink in player.js).
   if (dayNight.hoursLeft() <= 0 && !player.skylinkActive && !player.deathCert && !player._ended) {
     player.skylinkActive = true;
-    skylinkTimer = 30;
+    skylinkTimer = 0; // now counts up: seconds survived under the purge
     skylinkW4Clock = 0;
     player.say('SKYLINK-9000 comes online. Every obelisk blazes and turns on you at once.');
     dispatchSkylinkW4s(6); // the opening salvo
   }
   if (player.skylinkActive && !player._ended) {
-    skylinkTimer -= dt;
+    skylinkTimer += dt;
     skylinkW4Clock += dt;
     if (skylinkW4Clock > 1.2) {
       skylinkW4Clock = 0;
-      dispatchSkylinkW4s(2 + Math.floor(Math.random() * 3));
-    }
-    if (skylinkTimer <= 0) {
-      player._ended = true;
-      player.deaths = (player.deaths || 0) + 1;
-      player.deathCert = { name: player.name, cause: 'SKYLINK-9000 coming online', score: player.score, skills: [...player.skills], deaths: player.deaths, skylink: true };
-      persist();
+      const liveW4 = robots.filter((r) => r.type === 'w4' && !r.dead).length;
+      if (liveW4 < SKYLINK_MAX_W4) dispatchSkylinkW4s(2 + Math.floor(Math.random() * 3));
     }
   }
   camera.follow(player.x, player.y, dt);
@@ -857,6 +864,7 @@ function frame(now) {
     skylinkActive: player.skylinkActive && !player._ended,
     skylinkTimer,
     obeliskObjs,
+    paused,
   });
 
   frameCount += 1;
