@@ -16,6 +16,7 @@ import { makeRng } from './rng.js';
 // ---- Tuning ---------------------------------------------------------------
 
 const RADIUS = 0.3;             // collision radius in tiles (both classes)
+const SLOPE_SPEED_MULT = 0.55;  // effort penalty crossing a height step, either way
 
 const T1_HP = 10;
 const T1_PATROL_SPEED = 1.4;    // tiles per second
@@ -360,6 +361,18 @@ function moveToward(r, tx, ty, speed, dt, map) {
   const dy = ty - r.y;
   const len = Math.hypot(dx, dy);
   if (len < 1e-6) return 0;
+  const dirX = dx / len, dirY = dy / len;
+  // A height difference between here and the next tile over is a slope —
+  // climbing or descending it costs effort, same as it costs the player
+  // stamina, so movement slows crossing it either way. T1's own collision
+  // rule already refuses to climb at all, so this only ever bites T1 going
+  // downhill; every other type can cross a one-level step in either
+  // direction and slows for it.
+  if (map.heightAt) {
+    const h0 = map.heightAt(Math.floor(r.x), Math.floor(r.y));
+    const h1 = map.heightAt(Math.floor(r.x + dirX), Math.floor(r.y + dirY));
+    if (h1 !== h0) speed *= SLOPE_SPEED_MULT;
+  }
   const step = Math.min(speed * dt, len);
   const ox = r.x, oy = r.y;
   moveAxis(r, (dx / len) * step, 0, map);

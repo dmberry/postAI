@@ -17,7 +17,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.65)
+## Where we are (v0.66)
+
+### v0.66 — robots feel a slope too, README pruned
+
+- **Robots now slow down on a slope, either direction.** `moveToward()` in `robots.js` (the single shared step function every robot type routes through) compares the current tile's height to the next tile over in the direction of travel; a difference either way — up or down — applies a `SLOPE_SPEED_MULT` (0.55) multiplier to that step's speed, same as climbing costs the player stamina. T1's own collision rule already refuses to climb uphill at all, so in practice this only ever slows a T1 going downhill; every other type (T2, W1-4) can cross a one-level step in either direction and now pays for it both ways.
+- **README pruned.** The per-version prose (v0.32 through v0.65, one growing paragraph each) is replaced with a current-state summary (what the game actually does now, organised by system) plus a one-line-per-version history table. Full technical detail stays here, in this file.
 
 - Player character is now a directional 3D-rendered sprite (Kenney "Animated Characters Retro", CC0): 8 screen-facing directions x a 4-frame walk cycle, pre-rendered offline via `tools/sprite-render.html`. Faces the cursor, strides when moving. Adam/Eve have distinct looks; Neve reuses Adam's. Hurt/sprint tint affects only the sprite, not the ground. Render capped at 60fps. The old procedural body + face-photo system and the retired top-down-shooter art were removed.
 
@@ -71,6 +76,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Certificate of Death**: on death a modal shows name, cause, score, skills, deaths, and an amusing rank (COMPOST → NOOB → SCRAPPER → SURVIVOR → VETERAN → L33T). Freezes the world until clicked. `player.deathCert` snapshot; `deathRank()` in renderer.
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
+
+### v0.65 — directional character sprites with a walk cycle
+
+- **Player character replaced with a pre-rendered directional sprite** (Kenney CC0 "Animated Characters Retro"): 8 screen-facing directions x a 4-frame walk cycle, baked offline via `tools/sprite-render.html` from the source rig (kept in a gitignored `_tmp/`, build-time only). Turns to face the cursor and strides when moving, rather than one flat icon rotated in place (what read wrong in the v0.63 attempt). Adam/Eve have distinct looks; Neve reuses Adam's for now.
+- Hurt/sprint tint now composites onto the sprite only, not the ground square under it. Rendering capped at 60fps so high-refresh displays don't repaint faster than the game needs.
+- Removed: the old procedural body, the face-photo system (`FACE_TEXTURES`/`drawFaceCircle`), and the retired top-down-shooter art from v0.63/v0.64.
 
 ### v0.64 — revert the sprite, fix walls climbable by mistake
 
