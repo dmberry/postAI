@@ -70,6 +70,8 @@ export const TREE_SPRITES = [
   { sx: 454, sy: 121, sw: 51, sh: 95 }, // variant 0: big leafy round
   { sx: 454, sy: 13, sw: 51, sh: 91 },  // variant 1: big bushy
   { sx: 392, sy: 145, sw: 46, sh: 71 }, // variant 2: medium
+  { sx: 355, sy: 176, sw: 25, sh: 35 }, // variant 3: small (used rarely)
+  { sx: 139, sy: 147, sw: 42, sh: 69 }, // variant 4: bare/dead (used rarely)
 ];
 
 // Directional character renders for Adam/Eve/Neve, used by

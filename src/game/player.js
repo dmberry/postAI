@@ -12,6 +12,7 @@ const WOUNDED_SPRINT_DRAIN = 2.5; // wounded sprinting burns stamina this much f
 const RADIUS = 0.28;      // collision radius in tiles
 const REACH = 0.9;        // how far ahead the player can use a tool
 const TREE_HP = 4;        // penknife swings to fell a tree
+const TREE_CHOP_SPEEDUP = 0.55; // chop cooldown vs a normal swing: faster axe work
 const WOOD_PER_TREE = 2;
 const PICKUP_RANGE = 0.55;
 
@@ -764,12 +765,15 @@ export class Player {
       return;
     }
 
-    this.swingTimer = tool.swingCooldown;
+    // Chopping swings noticeably faster than a normal attack cooldown, so
+    // felling a tree feels brisk rather than a slow plod.
+    this.swingTimer = tool.swingCooldown * TREE_CHOP_SPEEDUP;
     this.stamina -= tool.staminaCost;
     sfx.play('chop');
     const treeDmg = this.skills.has('woodcraft') ? tool.treeDamage * 2 : tool.treeDamage;
+    obj.maxHp = obj.maxHp ?? TREE_HP;   // for the damage bar drawn above it
     obj.hp = (obj.hp ?? TREE_HP) - treeDmg;
-    obj.shake = 0.3;
+    obj.shake = 0.25;
     map.shaking.add(obj);
 
     if (obj.hp <= 0) {

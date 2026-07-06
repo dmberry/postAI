@@ -9,6 +9,7 @@ import { makeRng } from './rng.js';
 
 const RADIUS = 0.25;            // collision radius in tiles (all animals)
 const WANDER_RANGE = 2.5;       // how far wander targets stray from home
+const ANIMAL_ACTIVE_RANGE = 40; // tiles: beyond this from the player, an animal's AI is skipped (CPU)
 
 const DOG_HP = 12;
 const DOG_WANDER_SPEED = 1.2;   // tiles per second
@@ -284,6 +285,10 @@ export function updateAnimals(dt, animals, player, map) {
 
   for (const a of animals) {
     if (a.dead) continue;
+    // CPU: animals well off-screen skip their AI and just wait — the player
+    // can't see or reach them, so freezing them until they're near again
+    // keeps a big map cheap (only nearby wildlife thinks each frame).
+    if (distTo(a, player) > ANIMAL_ACTIVE_RANGE) continue;
     a.animT += dt;
     if (a.type === 'dog') updateDog(a, dt, player, map, hurtPacks, aggroPacks);
     else if (a.type === 'boar') updateBoar(a, dt, player, map);

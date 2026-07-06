@@ -42,6 +42,7 @@ function tintScratch(w, h) {
 // means replacing the draw* methods only.
 
 const WALL_H = 40;
+const EDGE_ROCK_H = 52;  // height of the impassable rock blocks ringing the map edge
 const DASH_H = 78; // dashboard panel height
 const ELEV = 16;   // pixels of lift per height level
 const MINIMAP_SIZE = 160;
@@ -122,6 +123,18 @@ export class Renderer {
     camera.applyTransform(ctx, this.w, this.h);
 
     const range = this.visibleRange(camera, map);
+
+    // Pass 0: the world beyond the map edge is a wall of impassable grey rock,
+    // not a black void. Fill every visible out-of-bounds tile (the unclamped
+    // range minus the in-bounds range) with a raised rock block, row-major so
+    // they stack correctly. Only the strip actually on screen near an edge is
+    // drawn, so it stays cheap; in the middle of a large map there are none.
+    const raw = this.rawVisibleRange(camera);
+    for (let y = raw.minY; y <= raw.maxY; y++) {
+      for (let x = raw.minX; x <= raw.maxX; x++) {
+        if (!map.inBounds(x, y)) this.drawEdgeRock(x, y);
+      }
+    }
 
     // Pass 1: floors, row-major so lifted (hill) tiles paint over the
     // tiles behind them correctly.
@@ -811,6 +824,45 @@ export class Renderer {
     };
   }
 
+  // The same visible window, but NOT clamped to the map — so the out-of-bounds
+  // border (drawn as rock) can extend to the screen edge. A tile cap keeps a
+  // pathological zoom-out from trying to fill an enormous area.
+  rawVisibleRange(camera) {
+    const c = worldToScreen(camera.x, camera.y);
+    const z = camera.zoom || 1;
+    const hw = this.w / (2 * z), hh = this.h / (2 * z);
+    const corners = [
+      screenToWorld(c.x - hw, c.y - hh), screenToWorld(c.x + hw, c.y - hh),
+      screenToWorld(c.x - hw, c.y + hh), screenToWorld(c.x + hw, c.y + hh),
+    ];
+    const xs = corners.map((p) => p.x), ys = corners.map((p) => p.y);
+    return {
+      minX: Math.floor(Math.min(...xs)) - 2, maxX: Math.ceil(Math.max(...xs)) + 4,
+      minY: Math.floor(Math.min(...ys)) - 2, maxY: Math.ceil(Math.max(...ys)) + 4,
+    };
+  }
+
+  // A block of impassable grey rock filling one out-of-bounds tile at the map
+  // edge — an extruded diamond prism like a wall, but stone-grey with a hint
+  // of per-tile shade variation so the border doesn't read as one flat slab.
+  drawEdgeRock(tx, ty) {
+    const ctx = this.ctx;
+    const H = EDGE_ROCK_H;
+    const shade = 0.9 + tileHash(tx * 7 + 3, ty * 5 + 1) * 0.2; // subtle mottling
+    const base = [96 * shade, 100 * shade, 108 * shade];
+    const [t0, t1, t2, t3] = this.tileCorners(tx, ty, H);
+    const [, b1, b2, b3] = this.tileCorners(tx, ty);
+    ctx.beginPath(); // south-west face
+    ctx.moveTo(b3.x, b3.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(t2.x, t2.y); ctx.lineTo(t3.x, t3.y);
+    ctx.closePath(); ctx.fillStyle = rgbScale(base, 0.7); ctx.fill();
+    ctx.beginPath(); // south-east face
+    ctx.moveTo(b1.x, b1.y); ctx.lineTo(b2.x, b2.y); ctx.lineTo(t2.x, t2.y); ctx.lineTo(t1.x, t1.y);
+    ctx.closePath(); ctx.fillStyle = rgbScale(base, 0.52); ctx.fill();
+    this.diamondPath([t0, t1, t2, t3]); // top
+    ctx.fillStyle = rgbScale(base, 1); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
   tileCorners(tx, ty, lift = 0) {
     const top = worldToScreen(tx, ty);
     const right = worldToScreen(tx + 1, ty);
@@ -1168,6 +1220,7 @@ export class Renderer {
       if (wob) ctx.rotate(wob * 0.012);
       ctx.drawImage(TREE_SHEET, spr.sx, spr.sy, spr.sw, spr.sh, -dw / 2, -dh, dw, dh);
       ctx.restore();
+      this.treeDamageBar(obj, c.x, c.y + 3 - dh - 4);
       return;
     }
 
@@ -1209,6 +1262,22 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(cx - 5 * g, cy - 5 * g, 9 * g, 0, Math.PI * 2);
     ctx.fill();
+    this.treeDamageBar(obj, c.x, c.y - trunkH - 30 * g);
+  }
+
+  // A small green/red chop-progress bar floating over a tree, shown only once
+  // it's taken a hit and until it's felled — so you can see how many swings a
+  // tree has left. maxHp is stamped on first chop (Player.useHands).
+  treeDamageBar(obj, x, y) {
+    if (obj.hp == null || obj.maxHp == null || obj.hp >= obj.maxHp || obj.hp <= 0) return;
+    const ctx = this.ctx;
+    const w = 22, h = 3.5, frac = Math.max(0, Math.min(1, obj.hp / obj.maxHp));
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = '#3a3f46';
+    ctx.fillRect(x - w / 2, y, w, h);
+    ctx.fillStyle = frac > 0.5 ? '#6cc24a' : frac > 0.25 ? '#e0b53a' : '#e05548';
+    ctx.fillRect(x - w / 2, y, w * frac, h);
   }
 
   // SKYLINK online: every surviving tower's crown-light position, linked to

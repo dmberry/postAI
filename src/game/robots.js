@@ -86,6 +86,17 @@ const W4_HEAD = '#2c0c05';
 const ROBOT_MIN_SEP = 0.62;
 const BUMP_DAMAGE = 2;     // a collision between two machines chips both of them
 const BUMP_COOLDOWN = 1.5; // seconds before the same machine can be bump-hurt again
+// CPU budget: robots this far (in tiles) from the player skip their AI and the
+// pairwise separation entirely — they're well off-screen, can't affect the
+// player, and simply freeze until the player comes near again. This is what
+// keeps a large map cheap: only the handful of machines around the player
+// think each frame, not every machine everywhere. Squared to avoid a sqrt.
+const ACTIVE_RANGE = 42;
+const ACTIVE_RANGE_SQ = ACTIVE_RANGE * ACTIVE_RANGE;
+function nearPlayer(e, player) {
+  const dx = e.x - player.x, dy = e.y - player.y;
+  return dx * dx + dy * dy <= ACTIVE_RANGE_SQ;
+}
 
 // W3s: unarmed repair drones fielded by the W-factory. They walk straight to
 // the nearest obelisk that's been damaged but not yet destroyed and mend it
@@ -503,6 +514,12 @@ export function updateRobots(dt, robots, player, map) {
       continue;
     }
 
+    // Off-screen and far from the player: skip all thinking until they come
+    // back near. Friendlies follow the player so are never far; they're left
+    // to update normally. (Placed after the death check above so a machine
+    // killed at range still drops its scrap.)
+    if (!r.friendly && !nearPlayer(r, player)) continue;
+
     // Stunned: frozen in place, battery preserved. Only the timer and the
     // amber flicker phase advance; on expiry normal AI resumes next frame
     // (and aggros at once if the player is still in range).
@@ -566,7 +583,7 @@ export function updateRobots(dt, robots, player, map) {
     else if (r.type === 'w4') updateW4(r, dt, player, map);
     else updateT2(r, dt, player, map);
   }
-  separateRobots(robots, map, dt);
+  separateRobots(robots, map, dt, player);
 }
 
 // No two live machines may occupy (near enough) the same tile: after every
@@ -579,17 +596,22 @@ export function updateRobots(dt, robots, player, map) {
 // and the AI's own pull each frame would otherwise out-muscle it. A handful
 // of cheap iterations converges to a clean spread instead.
 const SEPARATION_PASSES = 4;
-function separateRobots(robots, map, dt) {
+function separateRobots(robots, map, dt, player) {
   for (const r of robots) {
     if (r.bumpCooldown > 0) r.bumpCooldown = Math.max(0, r.bumpCooldown - dt);
   }
+  // Only robots near the player can overlap in a way that matters (and only
+  // they moved this frame — the rest were culled). Resolving separation over
+  // just this subset turns the O(n^2) pass from all-machines-on-the-map into
+  // a handful, which is the whole point of the culling.
+  const active = robots.filter((r) => !r.dead && !r.fused && (!player || nearPlayer(r, player)));
   for (let pass = 0; pass < SEPARATION_PASSES; pass++) {
     let moved = false;
-    for (let i = 0; i < robots.length; i++) {
-      const a = robots[i];
+    for (let i = 0; i < active.length; i++) {
+      const a = active[i];
       if (a.dead || a.fused) continue;
-      for (let j = i + 1; j < robots.length; j++) {
-        const b = robots[j];
+      for (let j = i + 1; j < active.length; j++) {
+        const b = active[j];
         if (b.dead || b.fused) continue;
         const dx = b.x - a.x, dy = b.y - a.y;
         const d = Math.hypot(dx, dy);
@@ -740,12 +762,18 @@ function updateW1(r, dt, player, map) {
 // A W3 repair drone: unarmed, never aggros, walks to the nearest obelisk
 // with obDamage > 0 (hit by an OB-gun but not yet toppled) and heals it back
 // to zero over a few seconds, then disperses — its job done.
+// A repairable obelisk is either damaged-but-standing (hit by an OB-gun) or
+// one felled during the SKYLINK purge and flagged `needsRebuild` — the drone
+// raises that one from its heap back into a working tower.
+function w3Repairable(o) {
+  return o.type === 'obelisk' && ((!o.destroyed && o.obDamage > 0) || (o.destroyed && o.needsRebuild));
+}
 function updateW3(r, dt, map) {
   r.aggro = false;
-  if (!r.repairTarget || r.repairTarget.destroyed || !(r.repairTarget.obDamage > 0)) {
+  if (!r.repairTarget || !w3Repairable(r.repairTarget)) {
     let best = null, bestD = Infinity;
     for (const o of map.objects) {
-      if (o.type !== 'obelisk' || o.destroyed || !(o.obDamage > 0)) continue;
+      if (!w3Repairable(o)) continue;
       const d = Math.hypot(o.x + 0.5 - r.x, o.y + 0.5 - r.y);
       if (d < bestD) { bestD = d; best = o; }
     }
@@ -760,9 +788,22 @@ function updateW3(r, dt, map) {
     moveToward(r, ob.x + 0.5, ob.y + 0.5, W3_SPEED, dt, map);
     return;
   }
+  // A felled tower starts its rebuild from full damage; a merely-scorched one
+  // from wherever its obDamage sits. Either way, healing obDamage to zero
+  // finishes the job.
+  if (ob.destroyed && ob.needsRebuild && !(ob.obDamage > 0)) ob.obDamage = 5;
   ob.obDamage = Math.max(0, ob.obDamage - W3_REPAIR_RATE * dt);
   ob.burning = 0;
-  if (ob.obDamage <= 0) { r.repairTarget = null; r.dead = true; }
+  if (ob.obDamage <= 0) {
+    if (ob.destroyed && ob.needsRebuild) {
+      // Raise it: standing and solid again, so the SKYLINK web can relight.
+      ob.destroyed = false;
+      ob.needsRebuild = false;
+      map.objectGrid[ob.y * map.w + ob.x] = ob;
+    }
+    r.repairTarget = null;
+    r.dead = true;
+  }
 }
 
 // A W4 laser hunter-killer: holds at range and fires rather than closing to

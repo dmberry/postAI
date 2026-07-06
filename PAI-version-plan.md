@@ -17,7 +17,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.70)
+## Where we are (v0.71)
+
+### v0.71 — SKYLINK reprieve, rock map edges, tree variety + chop feedback, CPU culling
+
+- **Felling a tower during the SKYLINK purge shuts it down.** SKYLINK was unwinnable once it started. Now, if `player.skylinkActive` and you topple an obelisk that isn't the winning blow, the laser web collapses (`skylinkActive = false`) and the tower is flagged `needsRebuild`; the factory rushes a W3 to it (`updateW3` now also targets destroyed+`needsRebuild` towers and, on reaching one, raises it: `destroyed=false`, re-solidifies the tile). SKYLINK only re-lights once nothing is flagged (the activation guard gained `&& !obeliskObjs.some(o => o.needsRebuild)`). Topple towers faster than they're rebuilt and you can still win outright mid-purge.
+- **The map edge is a wall of grey rock, not black void.** A new unclamped `rawVisibleRange` + `drawEdgeRock` fill every on-screen out-of-bounds tile with a raised stone block (`EDGE_ROCK_H` 52). Only the visible strip near an edge is drawn, so mid-map it costs nothing.
+- **CPU: distance culling for a bigger map.** Robots and animals more than ~40 tiles from the player now skip their AI entirely (they're off-screen and can't affect the player) and resume when the player returns. Crucially the robots' O(n²) `separateRobots` pass now runs only over the near-player subset, so hundreds of machines on a large map cost the same as a handful. Friendlies (which follow you) are never culled. This is the groundwork that makes the planned 4× map affordable.
+- **Tree variety + chop feedback.** `TREE_SPRITES` gained a small (variant 3) and a bare/dead (variant 4) cut-out; `worldgen`'s new `treeVariant()` sprinkles them in rarely (≈9% small, ≈6% dead) among the full trees. A chopped tree shows a green→red damage bar above it (`treeDamageBar`, `maxHp` stamped on first chop). Chopping swings faster now (`TREE_CHOP_SPEEDUP` 0.55 of the normal cooldown).
 
 ### v0.70 — hand-drawn trees, block-top movement polish
 

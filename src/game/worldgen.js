@@ -506,7 +506,7 @@ function plantForests(map, rng, keepClear) {
       const y = r.y + Math.floor(rng() * r.h);
       if (map.floorAt(x, y) !== 'grass' || map.objectAt(x, y)) continue;
       if (inKeepClear(x, y, keepClear)) continue;
-      if (rng() < 0.7) map.addObject('tree', x, y, { variant: Math.floor(rng() * 3) });
+      if (rng() < 0.7) map.addObject('tree', x, y, { variant: treeVariant(rng) });
     }
   }
 }
@@ -531,6 +531,16 @@ function layMeadows(map, rng, keepClear) {
   }
 }
 
+// Which tree art to use (index into TREE_SPRITES): mostly the three full,
+// leafy trees (variants 0-2), with the occasional small one (3) and the rarer
+// bare/dead one (4) sprinkled in for variety.
+function treeVariant(rng) {
+  const r = rng();
+  if (r < 0.06) return 4;             // bare/dead: rarest
+  if (r < 0.15) return 3;             // small: uncommon
+  return Math.floor(rng() * 3);       // full trees: the common case
+}
+
 // Lone trees and rocks scattered across remaining open grass.
 function scatterLoners(map, rng, keepClear) {
   for (let i = 0; i < 260; i++) {
@@ -538,7 +548,7 @@ function scatterLoners(map, rng, keepClear) {
     const y = Math.floor(rng() * map.h);
     if (map.floorAt(x, y) !== 'grass' || map.objectAt(x, y)) continue;
     if (inKeepClear(x, y, keepClear)) continue;
-    if (rng() < 0.75) map.addObject('tree', x, y, { variant: Math.floor(rng() * 3) });
+    if (rng() < 0.75) map.addObject('tree', x, y, { variant: treeVariant(rng) });
     else map.addObject('rock', x, y);
   }
 }

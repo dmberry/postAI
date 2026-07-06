@@ -31,7 +31,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.70';
+const VERSION = '0.71';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -458,12 +458,28 @@ player.onObeliskDestroyed = (ob) => {
       player.say(`The W-factory dispatches a revenge squad: ${squad.length} W1 hunter${squad.length > 1 ? 's' : ''}, already coming for you.`);
     }
   }
-  // Victory: every obelisk toppled before the deadline.
+  // Victory: every obelisk toppled at once.
   if (obeliskObjs.every((o) => o.destroyed) && !player._ended) {
     player._ended = true;
     player.addScore(100);
     player.deathCert = { name: player.name, cause: 'nothing — you won', score: player.score, skills: [...player.skills], deaths: player.deaths || 0, victory: true };
     persist();
+    return;
+  }
+  // Not the winning blow, but if SKYLINK is already blazing, felling a tower
+  // breaks the laser web and shuts the purge down — a hard-won reprieve. The
+  // obelisk is flagged for rebuild; the factory rushes a repair drone to it,
+  // and only once it's raised again (nothing left flagged) does SKYLINK come
+  // back online (see the activation guard below). Knock towers down faster
+  // than they can be rebuilt and you can still win outright during the purge.
+  if (player.skylinkActive && ob) {
+    player.skylinkActive = false;
+    ob.needsRebuild = true;
+    player.say('The tower comes down and the SKYLINK web collapses — dark, for now. A repair drone is already inbound to raise it.');
+    if (wfactory && !robots.some((r) => r.type === 'w3' && !r.dead)) {
+      const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), wfactory.x + 0.5, wfactory.y + 0.5);
+      if (drone) robots.push(drone);
+    }
   }
 };
 
@@ -738,7 +754,7 @@ function update(dt) {
     if (wFactoryClock > wFactoryNext) {
       wFactoryClock = 0;
       wFactoryNext = 60 + Math.random() * 60;
-      const anyDamaged = obeliskObjs.some((o) => !o.destroyed && o.obDamage > 0);
+      const anyDamaged = obeliskObjs.some((o) => (!o.destroyed && o.obDamage > 0) || o.needsRebuild);
       const w3Active = robots.some((r) => r.type === 'w3' && !r.dead);
       if (anyDamaged && !w3Active) {
         const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), wfactory.x + 0.5, wfactory.y + 0.5);
@@ -800,7 +816,11 @@ function update(dt) {
   // wave of W4s at you — indefinitely. There's no timer to survive to; it
   // simply doesn't stop, and the run ends only when it finally catches you
   // (see dieToSkylink in player.js).
-  if (dayNight.hoursLeft() <= 0 && !player.skylinkActive && !player.deathCert && !player._ended) {
+  // ...but not while a tower it needs is still down and being rebuilt — that
+  // suspension is the player's reprieve, and SKYLINK only (re)lights once the
+  // repair drone has raised every flagged tower back up.
+  if (dayNight.hoursLeft() <= 0 && !player.skylinkActive && !player.deathCert && !player._ended
+    && !obeliskObjs.some((o) => o.needsRebuild)) {
     player.skylinkActive = true;
     skylinkTimer = 0; // now counts up: seconds survived under the purge
     skylinkW4Clock = 0;

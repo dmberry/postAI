@@ -1,6 +1,6 @@
 # postAI
 
-**Version:** 0.70 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 0.71 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 *(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
@@ -8,9 +8,9 @@ An isometric 2D survival game set in a world devastated by an AI takeover. Civil
 
 Inspired by Project Zomboid: knowledge is the real progression, scarcity drives movement, every fight is optional and risky, and the world tells the story.
 
-## Current build (v0.70)
+## Current build (v0.71)
 
-**The world:** a seeded 128x128 isometric map — a river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, and roads. Away from the towns the terrain gets properly rugged: steep hills and deep hollows, always climbable one step at a time. Rubble and rocks are low enough to step straight over; a **wall block** is taller, so it takes a **double jump** (press jump again in mid-air) to get on top — once up there you move a little slower for control, can roam the block tops, and just walk off any edge to drop back down and carry on. Building walls still stop you on foot, so a town or house is a real boundary until you deliberately climb it. The forests are drawn with proper hand-drawn tree art. Streams can be waded; the river can be swum, slowly and at a cost. Day and night cycle, with genuinely dark nights and torches to push them back.
+**The world:** a seeded 128x128 isometric map — a river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, and roads. Away from the towns the terrain gets properly rugged: steep hills and deep hollows, always climbable one step at a time. Rubble and rocks are low enough to step straight over; a **wall block** is taller, so it takes a **double jump** (press jump again in mid-air) to get on top — once up there you move a little slower for control, can roam the block tops, and just walk off any edge to drop back down and carry on. Building walls still stop you on foot, so a town or house is a real boundary until you deliberately climb it. The forests are drawn with proper hand-drawn tree art — mostly full leafy trees, with the odd small or bare/dead one — and a chopped tree shows a damage bar so you can see how many swings it has left. The map is ringed by impassable grey rock cliffs at its edge. Streams can be waded; the river can be swum, slowly and at a cost. Day and night cycle, with genuinely dark nights and torches to push them back.
 
 **Survival:** food, health, stamina, and venom all need managing. Health only recovers when fed and unpoisoned — slowly on its own, or press **B** to rest 10 game-minutes for a much faster recovery, if you're hurt, off cooldown, and nothing's hunting you. Dying wipes score, skills, and kills and restarts the run from scratch, same as starting a New Game (**N**) yourself.
 
@@ -22,7 +22,7 @@ Inspired by Project Zomboid: knowledge is the real progression, scarcity drives 
 
 **Character & UI:** play as Adam, Eve, or Neve (or a custom name), now rendered as a directional pixel-art sprite with a real walk cycle that turns to face wherever you aim. Backpack (**I**), skills (**K**), Armoury (**V**), and Archive (**J**) all close on **H** — or by clicking away from the panel, same as the help modal. Dying (or winning) shows a shareable Certificate of Death.
 
-**Win condition:** a countdown runs to SKYLINK's completion. Destroy every obelisk before it finishes and you win; run out the clock instead and every surviving tower links up for an escalating, unending W4 onslaught.
+**Win condition:** a countdown runs to SKYLINK's completion. Destroy every obelisk before it finishes and you win; run out the clock instead and every surviving tower links up for an escalating W4 onslaught. Even then it isn't hopeless: felling a tower mid-purge collapses the SKYLINK web and shuts it down for a reprieve, until a repair drone reaches the wreck and raises the tower again. Knock them down faster than they can be rebuilt and you can still win outright during the purge.
 
 **Still queued (large systems):** a mobile phone + RON text tips.
 
@@ -34,6 +34,7 @@ Full technical detail (root causes, exact numbers) lives in [PAI-version-plan.md
 
 | Version | Summary |
 |---|---|
+| v0.71 | Fell a tower mid-SKYLINK to shut it down (repair drone rebuilds it); rock-block map edges; small/dead trees + tree damage bar + faster chop; far-away robots/animals skip their AI to save CPU |
 | v0.70 | Hand-drawn tree art; slower, steadier walk on block tops; walk off a block edge to drop down and keep going |
 | v0.69 | Double-jump onto wall blocks and roam their tops; textured box lids; graffiti orientation fixed; gentle idle sway on the player |
 | v0.68 | Machine gallery robots drawn larger inside their help-modal boxes |
