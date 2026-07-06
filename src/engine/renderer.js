@@ -5,7 +5,7 @@ import { drawAnimal } from '../game/animals.js';
 import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
 import { drawWaterDroid } from '../game/waterdroids.js';
-import { FLOOR_TEXTURES, WALL_TEXTURES, CHARACTER_SPRITES, GRASS_PATCH_TEXTURE } from './textures.js';
+import { FLOOR_TEXTURES, WALL_TEXTURES, FACE_TEXTURES, GRASS_PATCH_TEXTURE } from './textures.js';
 
 // Canvas renderer. Two passes per frame: floor diamonds first, then all
 // "drawables" (objects + player) painter-sorted by world depth (x + y).
@@ -838,6 +838,21 @@ export class Renderer {
       }
     }
     ctx.restore();
+  }
+
+  // Clips a crop of `img` (source rect sx,sy,sw,sh) into a circle at
+  // (cx,cy,radius) — used for the player's face. Returns false (drawing
+  // nothing) if the image hasn't loaded yet, so the caller can fall back.
+  drawFaceCircle(cx, cy, radius, img, sx, sy, sw, sh) {
+    if (!img || !img.complete || !img.naturalWidth) return false;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(img, sx, sy, sw, sh, cx - radius, cy - radius, radius * 2, radius * 2);
+    ctx.restore();
+    return true;
   }
 
   drawFloor(map, tx, ty, type, shade) {
@@ -1897,43 +1912,75 @@ export class Renderer {
     const by = c.y - lift;
     const bob = Math.abs(Math.sin(player.walkPhase)) * 1.8;
 
-    // A small top-down pixel-art body (Kenney's CC0 "Topdown Shooter" pack,
-    // assets/textures/player-*.png), rotated to face the same direction the
-    // player already always faces (the mouse cursor) — replaces the old
-    // hand-drawn legs/torso/head with real character art. No walk-cycle
-    // frames exist in the pack, so it just bobs with the same walk phase
-    // the old sprite used. Falls back to a plain silhouette for the brief
-    // window before the image finishes loading.
+    // Gait: legs scissor and the body bobs while walking.
+    const swing = Math.sin(player.walkPhase) * 3;
+    ctx.fillStyle = '#4a3a2a';
+    ctx.fillRect(c.x - 4 + swing, by - 9 - Math.max(0, Math.sin(player.walkPhase)) * 2.5, 3, 9);
+    ctx.fillRect(c.x + 1 - swing, by - 9 - Math.max(0, -Math.sin(player.walkPhase)) * 2.5, 3, 9);
+    // Torso, flashing red briefly when hurt.
+    ctx.fillStyle = player.hurtTimer > 0 ? '#c94a3a' : player.sprinting ? '#c97f3e' : '#b0703c';
+    ctx.beginPath();
+    ctx.ellipse(c.x, by - 16 - bob, 7, 9.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Head. The face follows the direction of travel: eyes and mouth when
+    // facing the camera, back-of-the-head hair when walking away, eyes
+    // slid to the side in profile.
+    const horiz = (player.facing.x - player.facing.y) * 0.7071;  // screen-right component
+    const toward = (player.facing.x + player.facing.y) * 0.7071; // toward-camera component
+    const hb = by - bob; // head bobs with the torso
+    // Persona: Adam short brown mop, Eve longer auburn hair that falls to
+    // the shoulders, Neve a close dark crop.
     const gender = player.gender || 'm';
-    const sprite = CHARACTER_SPRITES[gender];
-    const cy = by - 14 - bob;
-    if (sprite && sprite.complete && sprite.naturalWidth) {
-      const scale = 1.15;
-      const dw = sprite.naturalWidth * scale, dh = sprite.naturalHeight * scale;
-      const angle = Math.atan2(player.facing.y, player.facing.x) + Math.PI / 2;
-      ctx.save();
-      ctx.translate(c.x, cy);
-      ctx.rotate(angle);
-      ctx.drawImage(sprite, -dw / 2, -dh / 2, dw, dh);
-      // A tint layered on with source-atop only colours the sprite's own
-      // opaque pixels, not the transparent square around it.
-      if (player.hurtTimer > 0) {
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = 'rgba(220,60,50,0.55)';
-        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
-        ctx.globalCompositeOperation = 'source-over';
-      } else if (player.sprinting) {
-        ctx.globalCompositeOperation = 'source-atop';
-        ctx.fillStyle = 'rgba(255,190,110,0.18)';
-        ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
-        ctx.globalCompositeOperation = 'source-over';
-      }
-      ctx.restore();
-    } else {
-      ctx.fillStyle = player.hurtTimer > 0 ? '#c94a3a' : '#b0703c';
+    const hairCol = gender === 'f' ? '#7a4520' : gender === 'u' ? '#26262c' : '#5a3d22';
+    // Facing the camera: try the persona's face photo first (clipped into
+    // the head circle); falls back to the flat skin tone + drawn eyes/mouth
+    // below if the texture hasn't loaded yet.
+    const face = FACE_TEXTURES[gender];
+    const usedFace = toward >= -0.15 && face
+      && this.drawFaceCircle(c.x, hb - 29, 6, face.img, face.sx, face.sy, face.sw, face.sh);
+    if (!usedFace) {
+      ctx.fillStyle = '#d9b48c';
       ctx.beginPath();
-      ctx.ellipse(c.x, cy, 7, 12, 0, 0, Math.PI * 2);
+      ctx.arc(c.x, hb - 29, 6, 0, Math.PI * 2);
       ctx.fill();
+    }
+    ctx.fillStyle = hairCol;
+    if (gender === 'f' && !usedFace) {
+      // Side falls, visible from every direction — only drawn for the flat
+      // fallback head; the face photo already has its own hair.
+      ctx.fillRect(c.x - 7.5, hb - 31, 3, 12);
+      ctx.fillRect(c.x + 4.5, hb - 31, 3, 12);
+    }
+    if (toward < -0.15) {
+      // Back to us: hair wraps the whole back of the head, a sliver of neck.
+      // No face is shown from behind either way, textured or not.
+      ctx.beginPath();
+      ctx.arc(c.x, hb - 29.5, 6, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (!usedFace) {
+      // Hair mop with a fringe, pushed slightly opposite the gaze. Skipped
+      // when a face photo is showing — it used to paint straight over the
+      // top half of the texture, hiding the eyes/forehead and leaving only
+      // an unflattering sliver of chin visible (the actual "weird, same for
+      // every persona" look reported — not a wrong-image bug, a covered one).
+      ctx.beginPath();
+      ctx.arc(c.x - horiz * 0.8, hb - 30.5, 6, Math.PI, Math.PI * 2);
+      ctx.closePath();
+      ctx.fill();
+      if (gender !== 'u') ctx.fillRect(c.x - 6 - horiz * 0.8, hb - 31.5, 12, 2.5);
+      // Eyes and mouth track the horizontal component of travel.
+      const ex = horiz * 2.4;
+      ctx.fillStyle = '#2c2119';
+      ctx.beginPath();
+      ctx.arc(c.x - 2.2 + ex, hb - 28, 1.1, 0, Math.PI * 2);
+      ctx.arc(c.x + 2.2 + ex, hb - 28, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(44,33,25,0.7)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(c.x - 1.5 + ex, hb - 25.2);
+      ctx.lineTo(c.x + 1.5 + ex, hb - 25.2);
+      ctx.stroke();
     }
     // The held tool/gun/gadget shown in hand, out toward the facing
     // direction. Using it animates clearly: a tool sweeps through an arc, a

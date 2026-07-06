@@ -59,16 +59,13 @@ export const WALL_TEXTURES = {
   brick: loadDownscaled(T + 'wall-brick.jpg'),
 };
 
-// Keyed by player gender (m/f/u): a small top-down pixel-art body (Kenney's
-// CC0 "Topdown Shooter" pack — assets/textures/kenney_top-down-shooter/),
-// drawn from directly above and designed to be freely rotated in code to
-// face any direction, which is exactly how the player already orients
-// (always facing the cursor) — see Renderer.drawPlayer. Loaded at native
-// resolution, not downscaled: these are small (~35x43) crisp pixel-art
-// sprites already, and JPEG re-encoding would blur their clean edges.
-// Robot 1 stands in for Neve — a fittingly uncanny "other".
-export const CHARACTER_SPRITES = {
-  m: load(T + 'player-male.png'),
-  f: load(T + 'player-female.png'),
-  u: load(T + 'player-other.png'),
+// Keyed by player gender (m/f/u). face-sheet-male-alien.png is a 128x64
+// sheet: the human face on the left (m), a green alien-ish head on the
+// right (u) — a fitting, slightly uncanny "other" for Neve.
+const headSheet = load(T + 'face-sheet-male-alien.png'); // 128x64 sheet
+const faceFemale = load(T + 'face-female.png'); // 512x512
+export const FACE_TEXTURES = {
+  m: { img: headSheet, sx: 0, sy: 0, sw: 64, sh: 64 },
+  f: { img: faceFemale, sx: 0, sy: 0, sw: 512, sh: 512 },
+  u: { img: headSheet, sx: 64, sy: 0, sw: 64, sh: 64 },
 };

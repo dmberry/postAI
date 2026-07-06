@@ -16,13 +16,17 @@ export const FLOORS = {
 
 export const OBJECTS = {
   tree:    { solid: true },
-  // Walls, rubble, and rock are "solid" for everything except the player's
-  // own climb check (Player.collides via GameMap.effectiveHeightAt), which
+  // Rubble and rock are "solid" for everything except the player's own
+  // climb check (Player.collides via GameMap.effectiveHeightAt), which
   // treats them as a +1 height step instead of an outright wall — so they
   // can be climbed (on foot, or jumped in one go) and stood on top of, same
-  // as any other terrain step. Obelisks/boxes/cars/the factory stay flatly
-  // solid; climbing onto those doesn't make sense.
-  wall:    { solid: true, climbable: true, climbHeight: 1 },
+  // as any other terrain step. Walls stay flatly solid: they're the same
+  // generic type used for building/town perimeter walls (worldgen.js), and
+  // making those climbable let the player walk straight over any building
+  // or town boundary, breaking the interiors/exteriors the game builds
+  // around them. Obelisks/boxes/cars/the factory stay flatly solid too;
+  // climbing onto those doesn't make sense.
+  wall:    { solid: true },
   rubble:  { solid: true, climbable: true, climbHeight: 1 },
   rock:    { solid: true, climbable: true, climbHeight: 1 },
   obelisk: { solid: true }, // AI signal tower; destructible in a later phase

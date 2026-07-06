@@ -17,7 +17,7 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.63)
+## Where we are (v0.64)
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.
@@ -69,6 +69,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Certificate of Death**: on death a modal shows name, cause, score, skills, deaths, and an amusing rank (COMPOST → NOOB → SCRAPPER → SURVIVOR → VETERAN → L33T). Freezes the world until clicked. `player.deathCert` snapshot; `deathRank()` in renderer.
 - **Lore notes styled**: Archive fragments render as their own note cards — paper colour + typeface per kind (handwritten note, newsprint, diary, poster, green-on-black disk/tape). `NOTE_STYLE` in lore.js.
 - **Autosave**: character + xp + score + deaths + a run-state snapshot (vitals, position, inventory) persist to localStorage; saved every 8s, on tab-hide, and on unload; restored on load. World regenerates from seed (so caches/cars reset — a known limitation; world-object persistence is a follow-up).
+
+### v0.64 — revert the sprite, fix walls climbable by mistake
+
+- **BUG FIX: v0.63's "climbable walls" made every building and town boundary walk-through-able.** `wall` is the same generic object type used for building/town perimeter walls (worldgen.js's `layWalls`), not just standalone obstacles — so marking it `climbable` let the player climb onto and walk across the top of *any* wall, including the ones that were supposed to enclose a building or town. That's what read as "block detection is broken": walls no longer reliably blocked anything. Fix: only `rubble` and `rock` (genuinely standalone terrain obstacles) stay `climbable` in `OBJECTS` (`tiles.js`); `wall` is flatly solid again, exactly as before v0.63.
+- **Reverted the Kenney sprite player character.** Went back to the procedurally-drawn head/torso/legs and face-photo system (`FACE_TEXTURES`, `drawFaceCircle`) from v0.62, per direct feedback that the new sprite looked wrong. `CHARACTER_SPRITES` and the rotated-sprite draw path in `renderer.js`'s `drawPlayer` are removed; the Kenney asset pack and derived `player-*.png` files are left on disk unused rather than deleted, in case they're wanted again later in a different form.
+- Everything else from v0.63 (terrain, the graffiti warp fix, fire-without-target, sleep, arrow stacking) is unaffected — only the two items above were touched.
 
 ### v0.63 — rugged terrain, warped graffiti, fire-without-target, sleep, walkable climbs, real character art
 
