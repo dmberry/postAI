@@ -635,10 +635,13 @@ export class Player {
     }
 
     // Nearest living creature or machine within reach and roughly in front.
-    // Fused wrecks stay targetable: hitting one mines it for parts.
+    // Fused wrecks stay targetable: hitting one mines it for parts. A
+    // drained (battery-flat) robot stays targetable too: R still offers a
+    // free reprogram at close range, but a player who'd rather just be rid
+    // of it can beat it down for scrap instead, same as any other kill.
     let target = null, best = Infinity, isRobot = false;
     const consider = (e, robot) => {
-      if (e.dead || e.drained || e.friendly) return;
+      if (e.dead || e.friendly) return;
       const dx = e.x - this.x, dy = e.y - this.y;
       const d = Math.hypot(dx, dy);
       if (d > 1.1 || d === 0) return;
@@ -1031,7 +1034,7 @@ export class Player {
     // Everything within a narrow corridor ahead, up to the beam's actual
     // (possibly wall-shortened) reach, gets hit.
     const hit = (e, robot) => {
-      if (e.dead || e.fused || e.drained || e.friendly) return;
+      if (e.dead || e.fused || e.friendly) return;
       const dx = e.x - this.x, dy = e.y - this.y;
       const along = dx * this.facing.x + dy * this.facing.y;
       if (along < 0 || along > maxAlong) return;
@@ -1078,7 +1081,7 @@ export class Player {
     const HALF = Math.cos(Math.PI / 5); // ~36° half-angle cone
     let hitCount = 0;
     const hit = (e, robot) => {
-      if (e.dead || e.fused || e.drained || e.friendly) return;
+      if (e.dead || e.fused || e.friendly) return;
       const dx = e.x - this.x, dy = e.y - this.y;
       const d = Math.hypot(dx, dy);
       if (d > rng || d === 0) return;
@@ -1122,7 +1125,7 @@ export class Player {
     if (tool.cone) { this.coneShot(tool, map, animals, robots, range); return; }
     let target = null, best = Infinity, isRobot = false;
     const consider = (e, robot) => {
-      if (e.dead || e.fused || e.drained || e.friendly) return;
+      if (e.dead || e.fused || e.friendly) return;
       const dx = e.x - this.x, dy = e.y - this.y;
       const d = Math.hypot(dx, dy);
       if (d > range || d === 0) return;

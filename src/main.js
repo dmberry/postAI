@@ -31,7 +31,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.64';
+const VERSION = '0.65';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -393,6 +393,14 @@ let last = performance.now();
 let acc = 0;
 let fps = 0, frameCount = 0, fpsClock = 0;
 
+// Render cap: physics still steps every rAF tick (cheap, fixed timestep),
+// but the actual canvas redraw — the expensive part — is skipped past this
+// rate. On a 120Hz+ display rAF would otherwise fire (and fully repaint)
+// twice as often as the game needs, burning CPU/GPU for no visible gain.
+const RENDER_FPS_CAP = 60;
+const MIN_RENDER_MS = 1000 / RENDER_FPS_CAP;
+let lastRenderTime = 0;
+
 // Help modal: H toggles, the ? button opens, clicking the backdrop closes.
 const helpEl = document.getElementById('help');
 const toggleHelp = (force) => {
@@ -626,6 +634,23 @@ function update(dt) {
     detail = { text: describeAt(Math.floor(w.x), Math.floor(w.y)), x: right.x, y: right.y, ttl: 6 };
   }
   if (detail) { detail.ttl -= dt; if (detail.ttl <= 0) detail = null; }
+
+  // Click away from an open canvas panel (backpack/skills/armoury) closes
+  // it, same as the help modal's backdrop-click dismissal — these are drawn
+  // straight to canvas rather than as DOM elements with their own backdrop,
+  // so the "outside" test is a plain rect check against the panel the
+  // renderer last drew. A click that lands inside the panel falls through
+  // unconsumed to the slot/drag handling right below.
+  if (showBackpack || showSkills || showWeapons) {
+    const modalClick = input.clickPos();
+    const outside = (r) => !r || modalClick.x < r.x || modalClick.x > r.x + r.w
+      || modalClick.y < r.y || modalClick.y > r.y + r.h;
+    if (modalClick) {
+      if (showBackpack && outside(renderer._backpackRect)) { input.consumeClick(); showBackpack = false; }
+      else if (showSkills && outside(renderer._skillsRect)) { input.consumeClick(); showSkills = false; }
+      else if (showWeapons && outside(renderer._weaponsRect)) { input.consumeClick(); showWeapons = false; }
+    }
+  }
 
   // Pointer over the dashboard/backpack slots: press begins a drag (or, on a
   // same-slot release, a click-equip); release drops onto the target slot.
@@ -910,32 +935,35 @@ function frame(now) {
     acc -= STEP;
   }
 
-  renderer.draw(camera, map, player, animals, {
-    fps,
-    version: VERSION,
-    light: dayNight.light(),
-    timeLabel: dayNight.countdownLabel,
-    minimap,
-    birds,
-    robots,
-    waterdroids,
-    lore,
-    torch: player.pockets.some((s) => s && s.item === 'torch'),
-    showBackpack,
-    detail,
-    drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
-    deathCert: player.deathCert,
-    showSkills,
-    showWeapons,
-    craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun'),
-    craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',
-    skylinkActive: player.skylinkActive && !player._ended,
-    skylinkTimer,
-    obeliskObjs,
-    paused,
-  });
+  if (now - lastRenderTime >= MIN_RENDER_MS) {
+    lastRenderTime = now;
+    renderer.draw(camera, map, player, animals, {
+      fps,
+      version: VERSION,
+      light: dayNight.light(),
+      timeLabel: dayNight.countdownLabel,
+      minimap,
+      birds,
+      robots,
+      waterdroids,
+      lore,
+      torch: player.pockets.some((s) => s && s.item === 'torch'),
+      showBackpack,
+      detail,
+      drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
+      deathCert: player.deathCert,
+      showSkills,
+      showWeapons,
+      craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun'),
+      craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',
+      skylinkActive: player.skylinkActive && !player._ended,
+      skylinkTimer,
+      obeliskObjs,
+      paused,
+    });
+    frameCount += 1;
+  }
 
-  frameCount += 1;
   fpsClock += elapsed;
   if (fpsClock >= 1) {
     fps = frameCount;

@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>postAI — Kenney retro character sprite render tool</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #202018; color: #ddd; font: 13px system-ui, sans-serif; }
+  #wrap { display: flex; height: 100%; }
+  #panel { width: 300px; padding: 14px; box-sizing: border-box; overflow-y: auto; background: #16160f; border-right: 1px solid #333; }
+  #panel h1 { font-size: 14px; margin: 0 0 12px; }
+  #panel label { display: block; margin: 10px 0 2px; color: #9db284; }
+  #panel input[type=range] { width: 100%; }
+  #panel select { width: 100%; }
+  #panel button { width: 100%; margin-top: 8px; padding: 8px; background: #3a4a2e; color: #eee; border: 1px solid #5a6e46; border-radius: 4px; cursor: pointer; }
+  #panel button:hover { background: #4a5e3a; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; background:
+    repeating-conic-gradient(#2a2a22 0% 25%, #222218 0% 50%) 50% / 20px 20px; }
+  #glcanvas { display: block; }
+  .val { color: #cfd8c3; font-size: 11px; }
+  #log { white-space: pre-wrap; font-size: 11px; color: #8a9878; margin-top: 10px; max-height: 160px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="panel">
+    <h1>Kenney retro-character &rarr; sprite render</h1>
+
+    <label>Skin</label>
+    <select id="skinSel">
+      <option value="humanMaleA">humanMaleA</option>
+      <option value="humanFemaleA">humanFemaleA</option>
+      <option value="zombieMaleA">zombieMaleA</option>
+      <option value="zombieFemaleA">zombieFemaleA</option>
+    </select>
+
+    <label>Pose (animation)</label>
+    <select id="animSel">
+      <option value="idle">idle</option>
+      <option value="run">run</option>
+      <option value="jump">jump</option>
+    </select>
+
+    <label>Pose time <span class="val" id="tVal"></span></label>
+    <input type="range" id="tSlider" min="0" max="100" value="0">
+
+    <label>Camera elevation <span class="val" id="elevVal"></span></label>
+    <input type="range" id="elev" min="0" max="90" value="62">
+
+    <label>Camera azimuth <span class="val" id="aziVal"></span></label>
+    <input type="range" id="azi" min="0" max="360" value="0">
+
+    <label>Framing margin <span class="val" id="marginVal"></span></label>
+    <input type="range" id="margin" min="0" max="60" value="8">
+
+    <label>Output size (px)</label>
+    <select id="size">
+      <option value="64">64</option>
+      <option value="96">96</option>
+      <option value="128" selected>128</option>
+      <option value="192">192</option>
+    </select>
+
+    <button id="downloadOne">Download current PNG</button>
+    <button id="downloadAllSkins">Render &amp; download all 4 skins (current pose)</button>
+
+    <div id="log"></div>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+// Source FBX rig lives in the gitignored _tmp/ (not committed — see
+// .gitignore). Download the CC0 "Animated Characters Retro" pack from
+// kenney.nl and unzip it to _tmp/kenney_animated-characters-retro/ to re-run.
+const BASE = '../_tmp/kenney_animated-characters-retro/';
+const SKINS = ['humanMaleA', 'humanFemaleA', 'zombieMaleA', 'zombieFemaleA'];
+const ANIMS = ['idle', 'run', 'jump'];
+
+const skinSel = document.getElementById('skinSel');
+const animSel = document.getElementById('animSel');
+const tSlider = document.getElementById('tSlider');
+const elevInput = document.getElementById('elev');
+const aziInput = document.getElementById('azi');
+const marginInput = document.getElementById('margin');
+const sizeSel = document.getElementById('size');
+const elevVal = document.getElementById('elevVal');
+const aziVal = document.getElementById('aziVal');
+const marginVal = document.getElementById('marginVal');
+const tVal = document.getElementById('tVal');
+const logEl = document.getElementById('log');
+function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+const stage = document.getElementById('stage');
+let W = 128, H = 128;
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.setClearColor(0x000000, 0);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+dir1.position.set(1, 2, 1);
+scene.add(dir1);
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.4);
+dir2.position.set(-1, 1, -1);
+scene.add(dir2);
+
+const fbxLoader = new FBXLoader();
+const textureLoader = new THREE.TextureLoader();
+
+let baseModel = null;      // the rigged mesh, loaded once
+let mixer = null;
+let currentAction = null;
+const animClips = {};      // name -> AnimationClip
+const skinTextures = {};   // name -> Texture
+let modelRoot = null;      // object added to scene
+
+function loadBaseModel() {
+  return new Promise((resolve, reject) => {
+    fbxLoader.load(BASE + 'Model/characterMedium.fbx', obj => resolve(obj), undefined, reject);
+  });
+}
+
+function loadAnim(name) {
+  if (animClips[name]) return Promise.resolve(animClips[name]);
+  return new Promise((resolve, reject) => {
+    fbxLoader.load(BASE + 'Animations/' + name + '.fbx', obj => {
+      window.__lastAnims = window.__lastAnims || {};
+      window.__lastAnims[name] = obj.animations.map(c => ({ name: c.name, duration: c.duration, tracks: c.tracks.length }));
+      // Prefer the longest clip — some exports bundle a 1-frame "reference
+      // pose" take alongside the real cycle at index 0.
+      const clip = obj.animations.reduce((a, b) => (b.duration > a.duration ? b : a), obj.animations[0]);
+      animClips[name] = clip;
+      resolve(clip);
+    }, undefined, reject);
+  });
+}
+
+function loadSkin(name) {
+  if (skinTextures[name]) return Promise.resolve(skinTextures[name]);
+  return new Promise((resolve, reject) => {
+    textureLoader.load(BASE + 'Skins/' + name + '.png', tex => {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      skinTextures[name] = tex;
+      resolve(tex);
+    }, undefined, reject);
+  });
+}
+
+async function init() {
+  baseModel = await loadBaseModel();
+  modelRoot = baseModel;
+  scene.add(modelRoot);
+  mixer = new THREE.AnimationMixer(modelRoot);
+  await applySkin(skinSel.value);
+  await applyAnim(animSel.value);
+  render();
+}
+
+async function applySkin(name) {
+  const tex = await loadSkin(name);
+  modelRoot.traverse(child => {
+    if (child.isMesh) {
+      child.material = new THREE.MeshLambertMaterial({ map: tex, transparent: false });
+    }
+  });
+}
+
+async function applyAnim(name) {
+  const clip = await loadAnim(name);
+  if (currentAction) currentAction.stop();
+  currentAction = mixer.clipAction(clip);
+  currentAction.play();
+  currentAction.paused = true;
+  setPoseTime(parseFloat(tSlider.value) / 100);
+}
+
+function setPoseTime(frac) {
+  if (!currentAction) return;
+  const clip = currentAction.getClip();
+  currentAction.time = clip.duration * frac;
+  mixer.update(0);
+  window.__lastPose = { clip: clip.name, duration: clip.duration, tracks: clip.tracks.length, time: currentAction.time };
+}
+
+function frameCamera(obj, marginPct, forcedRadius) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const size = new THREE.Vector3();
+  box.getSize(size);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+  const radius = forcedRadius || (Math.max(size.x, size.y, size.z) / 2 * (1 + marginPct / 100));
+
+  const elev = THREE.MathUtils.degToRad(parseFloat(elevInput.value));
+  const azi = THREE.MathUtils.degToRad(parseFloat(aziInput.value));
+  const dist = Math.max(radius * 4, 10);
+  const cx = Math.cos(elev) * Math.sin(azi) * dist;
+  const cy = Math.sin(elev) * dist;
+  const cz = Math.cos(elev) * Math.cos(azi) * dist;
+  camera.position.set(center.x + cx, center.y + cy, center.z + cz);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(center);
+
+  camera.left = -radius; camera.right = radius;
+  camera.top = radius; camera.bottom = -radius;
+  camera.near = 0.01; camera.far = dist + radius * 2;
+  camera.updateProjectionMatrix();
+}
+
+function render(forcedRadius) {
+  if (!modelRoot) return;
+  frameCamera(modelRoot, parseFloat(marginInput.value), forcedRadius);
+  renderer.render(scene, camera);
+}
+
+// Widest stance across the three clips, so idle/walk/jump frames of the same
+// skin all share one zoom level instead of the camera dollying in and out
+// frame-to-frame as limbs extend.
+async function computeMaxRadius(skin, marginPct) {
+  const sampleFracs = { idle: [0, 0.5], run: [0, 0.15, 0.3, 0.45, 0.6, 0.75, 0.9], jump: [0, 0.3, 0.5, 0.7] };
+  let maxRadius = 0;
+  for (const [anim, fracs] of Object.entries(sampleFracs)) {
+    await applyAnim(anim);
+    for (const f of fracs) {
+      setPoseTime(f);
+      const box = new THREE.Box3().setFromObject(modelRoot);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      const r = Math.max(size.x, size.y, size.z) / 2 * (1 + marginPct / 100);
+      if (r > maxRadius) maxRadius = r;
+    }
+  }
+  return maxRadius;
+}
+
+function updateLabels() {
+  elevVal.textContent = elevInput.value + '°';
+  aziVal.textContent = aziInput.value + '°';
+  marginVal.textContent = marginInput.value + '%';
+  tVal.textContent = tSlider.value + '%';
+}
+
+[elevInput, aziInput, marginInput].forEach(el => el.addEventListener('input', () => { updateLabels(); render(); }));
+tSlider.addEventListener('input', () => { updateLabels(); setPoseTime(parseFloat(tSlider.value) / 100); render(); });
+sizeSel.addEventListener('change', () => {
+  W = H = parseInt(sizeSel.value, 10);
+  renderer.setSize(W, H);
+  render();
+});
+skinSel.addEventListener('change', () => applySkin(skinSel.value).then(render));
+animSel.addEventListener('change', () => applyAnim(animSel.value).then(render));
+
+function downloadCanvas(name) {
+  const a = document.createElement('a');
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.download = name + '.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+document.getElementById('downloadOne').addEventListener('click', () => {
+  render();
+  downloadCanvas(skinSel.value + '-' + animSel.value + '-' + tSlider.value);
+});
+
+document.getElementById('downloadAllSkins').addEventListener('click', async () => {
+  log('Rendering all skins at current pose...');
+  for (const name of SKINS) {
+    await applySkin(name);
+    setPoseTime(parseFloat(tSlider.value) / 100);
+    render();
+    downloadCanvas(name);
+    log('  -> ' + name + '.png');
+    await new Promise(r => setTimeout(r, 120));
+  }
+  skinSel.value = skinSel.value; // no-op, keep selection
+  await applySkin(skinSel.value);
+  render();
+  log('Done. Check your Downloads folder.');
+});
+
+updateLabels();
+init().catch(e => log('ERROR: ' + e.message));
+
+// 8-direction export, driven externally (e.g. via preview_eval) and posted
+// to a local receiver rather than relying on browser downloads.
+// Screen-compass angle theta (0=E,45=SE,90=S,135=SW,180=W,225=NW,270=N,315=NE)
+// maps to camera azimuth via azimuth = (270 - theta) mod 360 — derived by
+// matching known cases: azi180 shows the front (South, facing viewer),
+// azi90 shows facing West (left), azi270 facing East (right), azi0 the back (North).
+const DIRS = [
+  { name: 'E', theta: 0 }, { name: 'SE', theta: 45 }, { name: 'S', theta: 90 }, { name: 'SW', theta: 135 },
+  { name: 'W', theta: 180 }, { name: 'NW', theta: 225 }, { name: 'N', theta: 270 }, { name: 'NE', theta: 315 },
+];
+
+// Full animation set for one skin: idle (1 frame), walk (N frames sampled
+// from the run clip), jump (M frames sampled from the jump clip) — each
+// times 8 directions. All frames share one camera radius (computeMaxRadius)
+// so the character doesn't visibly zoom between poses in-game.
+window.__exportAnimSet = async function (skin, opts = {}) {
+  const endpoint = opts.endpoint || 'http://127.0.0.1:8799/';
+  const elevDeg = opts.elev ?? 26.57;
+  const marginPct = opts.margin ?? 8;
+  const walkFracs = opts.walkFracs ?? [0, 0.25, 0.5, 0.75];
+  const jumpFracs = opts.jumpFracs ?? [0.15, 0.45];
+
+  await applySkin(skin);
+  elevInput.value = elevDeg; updateLabels();
+  marginInput.value = marginPct; updateLabels();
+  const radius = await computeMaxRadius(skin, marginPct);
+
+  // The jump clip's pose is nearly indistinguishable from idle on this rig
+  // (checked visually across its whole timeline), so it's dropped — the
+  // game reuses the idle frame while airborne, same as it always has.
+  const states = [
+    { state: 'idle', anim: 'idle', fracs: [0] },
+    { state: 'walk', anim: 'run', fracs: walkFracs },
+  ];
+
+  const out = [];
+  for (const s of states) {
+    await applyAnim(s.anim);
+    for (let i = 0; i < s.fracs.length; i++) {
+      setPoseTime(s.fracs[i]);
+      for (const d of DIRS) {
+        const azimuth = (270 - d.theta + 360) % 360;
+        aziInput.value = azimuth; updateLabels();
+        render(radius);
+        const canvas = document.querySelector('#stage canvas');
+        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+        const filename = `${skin}_${s.state}${i}_${d.name}.png`;
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'X-Filename': filename, 'Content-Type': 'application/octet-stream' },
+          body: blob,
+        });
+        out.push(filename + ':' + resp.status);
+      }
+    }
+  }
+  return out.join(', ');
+};
+</script>
+</body>
+</html>

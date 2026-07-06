@@ -774,6 +774,19 @@ export class Lore {
       if (this.archiveOpen) this.archiveScroll = 0; // start at the top
     }
 
+    // Click away from the panel closes it, same as the help modal's
+    // backdrop-click dismissal (this._archiveRect is set by drawOverlay).
+    if (this.archiveOpen) {
+      const click = input.clickPos();
+      if (click) {
+        const r = this._archiveRect;
+        if (!r || click.x < r.x || click.x > r.x + r.w || click.y < r.y || click.y > r.y + r.h) {
+          input.consumeClick();
+          this.archiveOpen = false;
+        }
+      }
+    }
+
     // Scroll the open Archive with the mouse wheel or up/down keys.
     if (this.archiveOpen) {
       const dw = input.consumeWheel ? input.consumeWheel() : 0;
@@ -838,6 +851,7 @@ export class Lore {
     const panelW = Math.min(560, w - 60);
     const panelH = Math.min(h - 80, 560);
     const px = Math.round((w - panelW) / 2), py = Math.round((h - panelH) / 2);
+    this._archiveRect = { x: px, y: py, w: panelW, h: panelH }; // click-away-to-close hit test (update())
     ctx.fillStyle = '#12160e';
     ctx.fillRect(px, py, panelW, panelH);
     ctx.strokeStyle = 'rgba(207,216,195,0.4)';

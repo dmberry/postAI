@@ -5,7 +5,36 @@ import { drawAnimal } from '../game/animals.js';
 import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
 import { drawWaterDroid } from '../game/waterdroids.js';
-import { FLOOR_TEXTURES, WALL_TEXTURES, FACE_TEXTURES, GRASS_PATCH_TEXTURE } from './textures.js';
+import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS } from './textures.js';
+
+// Maps a facing vector to one of 8 pre-rendered screen-compass directions
+// for CHARACTER_SPRITE_SETS (see textures.js) — replaces the old trick of
+// rotating one flat top-down icon, which read wrong for a humanoid with a
+// visible front/back (facing away would show an upside-down face).
+const CHAR_DIR_THETA = { E: 0, SE: 45, S: 90, SW: 135, W: 180, NW: 225, N: 270, NE: 315 };
+function facingToCompassDir(facing) {
+  const sx = facing.y - facing.x, sy = facing.x + facing.y; // screen-space projection (iso.js worldToScreen); sx negated so screen-left maps to W, not E
+  let theta = Math.atan2(sy, sx) * 180 / Math.PI;
+  if (theta < 0) theta += 360;
+  let best = 'S', bestDiff = Infinity;
+  for (const dir of CHAR_COMPASS_DIRS) {
+    const diff = Math.min(Math.abs(theta - CHAR_DIR_THETA[dir]), 360 - Math.abs(theta - CHAR_DIR_THETA[dir]));
+    if (diff < bestDiff) { bestDiff = diff; best = dir; }
+  }
+  return best;
+}
+
+// One reusable offscreen canvas for compositing a hurt/sprint tint onto a
+// sprite before it's drawn to the main canvas — see drawPlayerSprite.
+let _tintCanvas = null;
+function tintScratch(w, h) {
+  if (!_tintCanvas) _tintCanvas = document.createElement('canvas');
+  if (_tintCanvas.width !== w || _tintCanvas.height !== h) {
+    _tintCanvas.width = w;
+    _tintCanvas.height = h;
+  }
+  return { canvas: _tintCanvas, ctx: _tintCanvas.getContext('2d') };
+}
 
 // Canvas renderer. Two passes per frame: floor diamonds first, then all
 // "drawables" (objects + player) painter-sorted by world depth (x + y).
@@ -257,6 +286,7 @@ export class Renderer {
     const pw = Math.min(480, this.w - 50), rowH = 30;
     const ph = Math.min(this.h - 60, 90 + WEAPON_ORDER.length * rowH);
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._weaponsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
     ctx.fillStyle = '#12160e';
     ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = 'rgba(207,216,195,0.4)';
@@ -305,6 +335,7 @@ export class Renderer {
     ctx.fillRect(0, 0, this.w, this.h);
     const pw = Math.min(420, this.w - 60), ph = 380;
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._skillsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
     ctx.fillStyle = '#12160e';
     ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = 'rgba(207,216,195,0.4)';
@@ -545,6 +576,7 @@ export class Renderer {
     const panelH = 420;
     const px = Math.round((this.w - panelW) / 2);
     const py = Math.round((this.h - panelH) / 2);
+    this._backpackRect = { x: px, y: py, w: panelW, h: panelH }; // click-away-to-close hit test (main.js)
 
     ctx.fillStyle = 'rgba(10,12,8,0.94)';
     ctx.fillRect(px, py, panelW, panelH);
@@ -838,21 +870,6 @@ export class Renderer {
       }
     }
     ctx.restore();
-  }
-
-  // Clips a crop of `img` (source rect sx,sy,sw,sh) into a circle at
-  // (cx,cy,radius) — used for the player's face. Returns false (drawing
-  // nothing) if the image hasn't loaded yet, so the caller can fall back.
-  drawFaceCircle(cx, cy, radius, img, sx, sy, sw, sh) {
-    if (!img || !img.complete || !img.naturalWidth) return false;
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.drawImage(img, sx, sy, sw, sh, cx - radius, cy - radius, radius * 2, radius * 2);
-    ctx.restore();
-    return true;
   }
 
   drawFloor(map, tx, ty, type, shade) {
@@ -1910,78 +1927,9 @@ export class Renderer {
     ctx.ellipse(c.x, c.y, 10 * sh, 5 * sh, 0, 0, Math.PI * 2);
     ctx.fill();
     const by = c.y - lift;
-    const bob = Math.abs(Math.sin(player.walkPhase)) * 1.8;
 
-    // Gait: legs scissor and the body bobs while walking.
-    const swing = Math.sin(player.walkPhase) * 3;
-    ctx.fillStyle = '#4a3a2a';
-    ctx.fillRect(c.x - 4 + swing, by - 9 - Math.max(0, Math.sin(player.walkPhase)) * 2.5, 3, 9);
-    ctx.fillRect(c.x + 1 - swing, by - 9 - Math.max(0, -Math.sin(player.walkPhase)) * 2.5, 3, 9);
-    // Torso, flashing red briefly when hurt.
-    ctx.fillStyle = player.hurtTimer > 0 ? '#c94a3a' : player.sprinting ? '#c97f3e' : '#b0703c';
-    ctx.beginPath();
-    ctx.ellipse(c.x, by - 16 - bob, 7, 9.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    // Head. The face follows the direction of travel: eyes and mouth when
-    // facing the camera, back-of-the-head hair when walking away, eyes
-    // slid to the side in profile.
-    const horiz = (player.facing.x - player.facing.y) * 0.7071;  // screen-right component
-    const toward = (player.facing.x + player.facing.y) * 0.7071; // toward-camera component
-    const hb = by - bob; // head bobs with the torso
-    // Persona: Adam short brown mop, Eve longer auburn hair that falls to
-    // the shoulders, Neve a close dark crop.
-    const gender = player.gender || 'm';
-    const hairCol = gender === 'f' ? '#7a4520' : gender === 'u' ? '#26262c' : '#5a3d22';
-    // Facing the camera: try the persona's face photo first (clipped into
-    // the head circle); falls back to the flat skin tone + drawn eyes/mouth
-    // below if the texture hasn't loaded yet.
-    const face = FACE_TEXTURES[gender];
-    const usedFace = toward >= -0.15 && face
-      && this.drawFaceCircle(c.x, hb - 29, 6, face.img, face.sx, face.sy, face.sw, face.sh);
-    if (!usedFace) {
-      ctx.fillStyle = '#d9b48c';
-      ctx.beginPath();
-      ctx.arc(c.x, hb - 29, 6, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.fillStyle = hairCol;
-    if (gender === 'f' && !usedFace) {
-      // Side falls, visible from every direction — only drawn for the flat
-      // fallback head; the face photo already has its own hair.
-      ctx.fillRect(c.x - 7.5, hb - 31, 3, 12);
-      ctx.fillRect(c.x + 4.5, hb - 31, 3, 12);
-    }
-    if (toward < -0.15) {
-      // Back to us: hair wraps the whole back of the head, a sliver of neck.
-      // No face is shown from behind either way, textured or not.
-      ctx.beginPath();
-      ctx.arc(c.x, hb - 29.5, 6, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (!usedFace) {
-      // Hair mop with a fringe, pushed slightly opposite the gaze. Skipped
-      // when a face photo is showing — it used to paint straight over the
-      // top half of the texture, hiding the eyes/forehead and leaving only
-      // an unflattering sliver of chin visible (the actual "weird, same for
-      // every persona" look reported — not a wrong-image bug, a covered one).
-      ctx.beginPath();
-      ctx.arc(c.x - horiz * 0.8, hb - 30.5, 6, Math.PI, Math.PI * 2);
-      ctx.closePath();
-      ctx.fill();
-      if (gender !== 'u') ctx.fillRect(c.x - 6 - horiz * 0.8, hb - 31.5, 12, 2.5);
-      // Eyes and mouth track the horizontal component of travel.
-      const ex = horiz * 2.4;
-      ctx.fillStyle = '#2c2119';
-      ctx.beginPath();
-      ctx.arc(c.x - 2.2 + ex, hb - 28, 1.1, 0, Math.PI * 2);
-      ctx.arc(c.x + 2.2 + ex, hb - 28, 1.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(44,33,25,0.7)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(c.x - 1.5 + ex, hb - 25.2);
-      ctx.lineTo(c.x + 1.5 + ex, hb - 25.2);
-      ctx.stroke();
-    }
+    this.drawPlayerSprite(player, c, by);
+
     // The held tool/gun/gadget shown in hand, out toward the facing
     // direction. Using it animates clearly: a tool sweeps through an arc, a
     // gun or gadget kicks back with recoil — so a swing or a shot always
@@ -2003,8 +1951,8 @@ export class Renderer {
         reach = 0.42 + pulse * 0.55; // swing: thrust out
         extraAng = p >= 0 ? (-1.0 + p * 1.7) : 0; // sweep through an arc
       }
-      const hx = c.x + player.facing.x * 15 * reach / 0.42;
-      const hy = by - 12 + player.facing.y * 8 * reach / 0.42;
+      const hx = c.x + 4 + player.facing.x * 13 * reach / 0.42;
+      const hy = by - 18 + player.facing.y * 8 * reach / 0.42;
       ctx.save();
       ctx.translate(hx, hy);
       ctx.rotate(baseAng + extraAng);
@@ -2027,6 +1975,44 @@ export class Renderer {
     ctx.beginPath();
     ctx.arc(f.x, f.y - 10, 2.5, 0, Math.PI * 2);
     ctx.fill();
+  }
+
+  // Draws the Kenney directional character set (m/f personas) in place of
+  // the procedural body/head — see the CHARACTER_SPRITE_SETS branch above.
+  drawPlayerSprite(player, c, by) {
+    const ctx = this.ctx;
+    const set = CHARACTER_SPRITE_SETS[player.gender];
+    const dir = facingToCompassDir(player.facing);
+    let sprite;
+    if (player.moving) {
+      const frames = set.walk[dir];
+      const idx = Math.floor((player.walkPhase / (Math.PI * 2)) * frames.length) % frames.length;
+      sprite = frames[idx];
+    } else {
+      sprite = set.idle[dir];
+    }
+    if (!sprite || !sprite.complete || !sprite.naturalWidth) return;
+    const scale = 0.9;
+    const dw = sprite.naturalWidth * scale, dh = sprite.naturalHeight * scale;
+    const cy = by - dh / 2 + 6;
+    const tint = player.hurtTimer > 0 ? 'rgba(220,60,50,0.55)'
+      : player.sprinting ? 'rgba(255,190,110,0.18)' : null;
+    if (tint) {
+      // Composited off-canvas first: 'source-atop' respects only the alpha
+      // already on the SAME canvas, so applying it straight to the main
+      // canvas would also tint the ground showing through the sprite's own
+      // transparent margin, not just the character.
+      const off = tintScratch(sprite.naturalWidth, sprite.naturalHeight);
+      off.ctx.clearRect(0, 0, off.canvas.width, off.canvas.height);
+      off.ctx.drawImage(sprite, 0, 0);
+      off.ctx.globalCompositeOperation = 'source-atop';
+      off.ctx.fillStyle = tint;
+      off.ctx.fillRect(0, 0, off.canvas.width, off.canvas.height);
+      off.ctx.globalCompositeOperation = 'source-over';
+      ctx.drawImage(off.canvas, c.x - dw / 2, cy - dh / 2, dw, dh);
+    } else {
+      ctx.drawImage(sprite, c.x - dw / 2, cy - dh / 2, dw, dh);
+    }
   }
 
   // ---- Dashboard ----------------------------------------------------------

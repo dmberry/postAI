@@ -78,6 +78,8 @@ Inspired by Project Zomboid: knowledge is the real progression, scarcity drives 
 
 **Two fixes (v0.64):** walls were wrongly made climbable in v0.63 — since building and town walls are the same object type as standalone obstacles, that let you climb straight over any building or town boundary. Walls are flatly solid again; only rubble and rocks stay climbable. Also reverted the new Kenney sprite player character back to the original procedurally-drawn look, per feedback that it looked wrong.
 
+**Directional character sprites, done right this time (v0.65):** the player is now a proper 3D-rendered character (Kenney's CC0 "Animated Characters Retro" pack) instead of the procedurally-drawn head/torso — but pre-rendered offline into eight screen-facing directions with a four-frame walk cycle, so the character genuinely turns to face wherever you aim and strides when moving, rather than a flat icon rotated in place (the thing that read wrong before). Adam and Eve have their own look; Neve reuses Adam's for now. The old procedural body, the face-photo system, and the retired top-down-shooter art are all gone. The hurt/sprint red flash now tints only the character, not the ground square around it. Rendering is capped at 60fps to stop high-refresh displays from repainting twice as often as the game needs. A reusable offline render tool (`tools/sprite-render.html`) can regenerate the sprite sheets from any Kenney rig.
+
 **Still queued (large systems):** a mobile phone + RON text tips.
 
 Created by David and Henrik.

@@ -1,1 +1,7 @@
 .DS_Store
+
+# Scratch / build-time junk that must never be committed: source art packs
+# (e.g. the Kenney FBX rig that tools/sprite-render.html bakes into
+# assets/textures/characters/), one-off scripts, local experiments. The game
+# ships only its baked outputs, so nothing here is needed at runtime.
+_tmp/

@@ -17,7 +17,9 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.64)
+## Where we are (v0.65)
+
+- Player character is now a directional 3D-rendered sprite (Kenney "Animated Characters Retro", CC0): 8 screen-facing directions x a 4-frame walk cycle, pre-rendered offline via `tools/sprite-render.html`. Faces the cursor, strides when moving. Adam/Eve have distinct looks; Neve reuses Adam's. Hurt/sprint tint affects only the sprite, not the ground. Render capped at 60fps. The old procedural body + face-photo system and the retired top-down-shooter art were removed.
 
 - Isometric world, seeded 128x128: river, two bridges, ten-building town, hamlet, forests, tall grass, hills and hollows, wadeable streams.
 - Survival: food/hunger, health, stamina, venom, day/night (dark nights), torches, minimap with fog of war (grey, not black), permadeath that drops your loot where you fell.

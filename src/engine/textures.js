@@ -59,13 +59,28 @@ export const WALL_TEXTURES = {
   brick: loadDownscaled(T + 'wall-brick.jpg'),
 };
 
-// Keyed by player gender (m/f/u). face-sheet-male-alien.png is a 128x64
-// sheet: the human face on the left (m), a green alien-ish head on the
-// right (u) — a fitting, slightly uncanny "other" for Neve.
-const headSheet = load(T + 'face-sheet-male-alien.png'); // 128x64 sheet
-const faceFemale = load(T + 'face-female.png'); // 512x512
-export const FACE_TEXTURES = {
-  m: { img: headSheet, sx: 0, sy: 0, sw: 64, sh: 64 },
-  f: { img: faceFemale, sx: 0, sy: 0, sw: 512, sh: 512 },
-  u: { img: headSheet, sx: 64, sy: 0, sw: 64, sh: 64 },
+// Directional character renders for Adam/Eve/Neve, used by
+// Renderer.drawPlayer/drawPlayerSprite. Sourced from Kenney's CC0
+// "Animated Characters Retro" pack
+// (assets/textures/kenney_animated-characters-retro/), pre-rendered offline
+// via tools/sprite-render.html into 8 screen-facing directions x a 4-frame
+// walk cycle, so the game can pick the right frame instead of rotating one
+// flat icon. Keyed by gender, then state ('idle' | 'walk'), then compass
+// direction.
+const CHAR_DIRS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+const C = T + 'characters/';
+function loadCharacterSet(prefix) {
+  const set = { idle: {}, walk: {} };
+  for (const dir of CHAR_DIRS) {
+    set.idle[dir] = load(`${C}${prefix}_idle0_${dir}.png`);
+    set.walk[dir] = [0, 1, 2, 3].map(i => load(`${C}${prefix}_walk${i}_${dir}.png`));
+  }
+  return set;
+}
+const maleSet = loadCharacterSet('humanMaleA');
+export const CHARACTER_SPRITE_SETS = {
+  m: maleSet,
+  f: loadCharacterSet('humanFemaleA'),
+  u: maleSet, // Neve reuses Adam's set — no distinct "other" skin rendered yet.
 };
+export const CHAR_COMPASS_DIRS = CHAR_DIRS;

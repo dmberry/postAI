@@ -34,6 +34,9 @@
   #help h1 { font-size: 18px; margin: 0 0 4px; }
   #help h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em;
     color: #9db284; margin: 18px 0 6px; }
+  #help h3 { font-size: 11px; letter-spacing: 0.04em;
+    color: #8a9878; margin: 14px 0 4px; }
+  #help h3:first-of-type { margin-top: 4px; }
   #help .meta { color: #8a9878; font-size: 12px; }
   #help table { border-collapse: collapse; width: 100%; }
   #help td { padding: 3px 10px 3px 0; vertical-align: top; }
@@ -83,26 +86,52 @@
     </p>
 
     <h2>Keys</h2>
+
+    <h3>Movement &amp; camera</h3>
     <table>
       <tr><td><kbd>W A S D</kbd> / arrows</td><td>Move</td></tr>
       <tr><td>Mouse</td><td>Aim — you always face the cursor</td></tr>
       <tr><td><kbd>Shift</kbd></td><td>Sprint (drains stamina, burns food faster)</td></tr>
-      <tr><td><kbd>Space</kbd></td><td>Jump</td></tr>
-      <tr><td><kbd>E</kbd> / <kbd>/</kbd> / left click</td><td>Use the held tool: chop trees, fend off animals</td></tr>
-      <tr><td><kbd>Q</kbd></td><td>Eat the first edible thing in your pockets</td></tr>
-      <tr><td><kbd>R</kbd></td><td>Read the first book in your pockets</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>Jump — clears a two-level height step instead of one</td></tr>
+      <tr><td>Scroll wheel</td><td>Zoom in / out</td></tr>
+      <tr><td><kbd>Z</kbd></td><td>Toggle zoom (close over-the-shoulder / old wide view)</td></tr>
+      <tr><td>Right click</td><td>Inspect a tile — car, wall material and age, or terrain height</td></tr>
+    </table>
+
+    <h3>Combat &amp; tools</h3>
+    <table>
+      <tr><td><kbd>E</kbd> / <kbd>/</kbd> / left click</td><td>Use the held tool: swing, fire, dig, chop, throw a bomb</td></tr>
       <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd></td><td>Select a pocket slot</td></tr>
       <tr><td><kbd>5</kbd></td><td>Select the backpack's spare-weapon slot (if you have one)</td></tr>
       <tr><td><kbd>G</kbd></td><td>Swap the held weapon with the selected pocket</td></tr>
       <tr><td><kbd>F</kbd></td><td>Drop the selected pocket's contents (or the held tool)</td></tr>
-      <tr><td><kbd>I</kbd></td><td>View your backpack</td></tr>
+      <tr><td>Click a slot</td><td>Equip it straight away (click the hands slot to stow whatever's held)</td></tr>
+      <tr><td>Drag a slot</td><td>Move or swap items between pockets, hands, and backpack storage</td></tr>
+      <tr><td><kbd>R</kbd></td><td>Reprogram a drained (battery-flat) robot standing next to you — costs a battery; otherwise reads the first book in your pockets</td></tr>
       <tr><td><kbd>C</kbd></td><td>Craft (OB-gun, or a wave gun once you have eight circuit boards)</td></tr>
-      <tr><td><kbd>J</kbd></td><td>Open the Archive (scroll with the wheel or up/down keys)</td></tr>
-      <tr><td><kbd>Z</kbd></td><td>Toggle zoom (close / wide)</td></tr>
+    </table>
+
+    <h3>Survival</h3>
+    <table>
+      <tr><td><kbd>Q</kbd></td><td>Eat the first edible thing in your pockets</td></tr>
+      <tr><td><kbd>B</kbd></td><td>Rest ten minutes, restoring health (not while hurt-free, on cooldown, or something's hunting you)</td></tr>
+    </table>
+
+    <h3>Menus &amp; info</h3>
+    <table>
+      <tr><td><kbd>I</kbd></td><td>Backpack</td></tr>
+      <tr><td><kbd>K</kbd></td><td>Skills &amp; knowledge</td></tr>
+      <tr><td><kbd>V</kbd></td><td>Armoury — every weapon found so far, with a power rating</td></tr>
+      <tr><td><kbd>J</kbd></td><td>Archive (scroll with the wheel or up/down keys)</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Toggle this help</td></tr>
+      <tr><td>Click away</td><td>Closes whichever of the above is open, same as clicking outside this panel</td></tr>
+    </table>
+
+    <h3>System</h3>
+    <table>
       <tr><td><kbd>P</kbd></td><td>Pause the game</td></tr>
       <tr><td><kbd>M</kbd></td><td>Toggle the ambient music</td></tr>
-      <tr><td><kbd>B</kbd></td><td>Rest for ten minutes, restoring some health (not while something's hunting you)</td></tr>
-      <tr><td><kbd>H</kbd></td><td>Toggle this help</td></tr>
+      <tr><td><kbd>N</kbd></td><td>Start a new game (asks first — wipes saved progress)</td></tr>
       <tr><td><kbd>S</kbd></td><td>On the Certificate of Death: copy it to the clipboard as an image (or click the Copy button)</td></tr>
     </table>
 
@@ -143,7 +172,7 @@
     </table>
     <p>Every hunting machine — T1, T2, W1, W4 — genuinely needs to <b>see</b> you: break its line of sight behind a wall or a hill for a few seconds straight and it gives up the chase and wanders off, only re-noticing you later if you wander back within range. Hiding is a real tactic, not just running far enough.</p>
     <p>Whatever is in your hand can be swung at them, even nothing at all — bare fists land a weak hit, a proper tool or blade lands a much harder one. Your penknife barely scratches them. <b>RON</b> — a resistance calling itself Reality or Nothing, whether or not it's still out there — hid weapons in crates inside the buildings: search them (<kbd>E</kbd>) for crowbars, bats, machetes, and if you are lucky the guns: a <b>stun-gun</b> (drops a machine cold for a while), an <b>electro-gun</b> (fuses one into a wreck you can mine for scrap), a <b>pistol</b> or a <b>shotgun</b> (holes in anything, but gunfire ruins the salvage). Guns are dead weight without <b>batteries, ammo, or shells</b>, hidden in the same crates. None of them shoot through a wall — a solid object blocks a shot exactly like it blocks a step. Pulling the trigger with nothing in your sights still fires — and still spends the round.</p>
-    <p>Every machine runs on a battery: hunting drains it and they crawl home to their obelisk to recharge. One that gets stuck runs flat where it stands, and a flat machine can be <b>reprogrammed</b> (<kbd>R</kbd>, costs a battery). It turns friendly, follows you, and a friendly T2 fells trees for you.</p>
+    <p>Every machine runs on a battery: hunting drains it and they crawl home to their obelisk to recharge. One that gets stuck runs flat where it stands. A flat machine can be <b>reprogrammed</b> (<kbd>R</kbd>, costs a battery) — it turns friendly, follows you, and a friendly T2 fells trees for you — or, if you'd rather just be rid of it, it can be <b>destroyed</b> like any other kill: it can't fight back while flat, and it still drops scrap.</p>
     <p>The obelisks <b>can</b> be brought down. Carry a stun-gun, an electro-gun and a Wi-Fi block together and you're prompted to build an <b>OB-gun</b> (<kbd>C</kbd>): five burns topple a tower into a heap of circuit boards, batteries and scrap. A rare <b>insane bomb</b> can level one on its own. Every tower is assigned one of eight circuit numbers when the world is built, so toppling every obelisk always gets you a complete set of one to eight — collect them and you can build a <b>wave gun</b> (<kbd>C</kbd>), which fans laser fire through a whole crowd at once. <b>Bring down every obelisk on the map and you win</b> — the AI is defeated before SKYLINK ever wakes. Run out the countdown first and it wakes instead: every surviving tower lights up and links to its neighbours in a web of bright blue lasers, and the factory throws wave after wave of W4s at you — for good. There's no timer to survive to; play on for as long as you can, until it finally hunts you down.</p>
     <p>Careful with the OB-gun's beam, though: fired at a robot rather than a tower, it doesn't kill — it corrupts the machine into a <b>zombie</b>, marked by a sickly green glow. A zombie shrugs off every weapon in the game except the <b>bow</b> and the <b>wave gun</b>; anything else just bounces off. W1 hunters (below) are already the AI's own revenge squad and can't be corrupted this way — the beam just damages them like anything else.</p>
     <p>Somewhere on the map sits a <b>W-factory</b>: everything mechanical that isn't an obelisk-side T1/T2 is actually built there, not at the towers. Topple a tower and the factory dispatches a <b>revenge squad of W1 hunters</b>, tougher and faster than a T2, but strictly melee — a hit needs one standing right on top of you, not just nearby. W1s attack in real waves — each one closes in and strikes, then falls back to regroup, then closes in again — and a squad spreads out to surround you rather than piling onto one spot. They track a position <b>triangulated from the obelisk network</b>, refreshed every few seconds rather than live, so even a jammed Wi-Fi block only slows them down, not stops them. The factory also fields fresh W1 waves on its own clock, an unarmed <b>W3 repair drone</b> whenever a damaged tower is left standing, and a <b>W4 laser hunter-killer</b> — unlike a W1 it never closes to melee, holding its range and firing on you instead, both the instant you attack an obelisk and, independently, every half hour of game time.</p>
@@ -154,7 +183,7 @@
     <p>Scavenged <b>timed bombs</b> come in four sizes — small, medium, large, and a rare <b>insane</b> one. Hold a bomb and use it (<kbd>/</kbd> or left click) to <b>throw</b> it, ticking, a good distance out — thrown in an arc, so it clears a wall or a low block between you and the target instead of stopping dead at the first one, useful for reaching a W4 that's holed up behind cover. Then get clear. When the fuse runs out it goes off in a cloud of fire that hurts <b>everything</b> nearby — animals, machines, droids, and you. The insane bomb is fierce enough to bring down an obelisk.</p>
 
     <h2>The world</h2>
-    <p>A river divides the map; the bridges are the only crossings. Streams can be waded, slowly. Away from the towns the ground gets properly rugged — steep, tall hills and deep hollows, not just gentle rises — and high ground costs stamina to climb. Walls, rubble, and rocks can be climbed too, one step up like any other rise, and walked across the top of once you're up there. Somewhere in the ruins, the story of what happened here is waiting to be found. Sprayed slogans turn up here and there on the walls — some anti-machine, some signed by RON — and abandoned cars sit dead on the roads where the grid failed them.</p>
+    <p>A river divides the map; the bridges are the only crossings. Streams can be waded, slowly. Away from the towns the ground gets properly rugged — steep, tall hills and deep hollows, not just gentle rises — and high ground costs stamina to climb. Rubble and rocks can be climbed too, one step up like any other rise, and walked across the top of once you're up there — building walls stay solid, so a town or a house is still a real boundary, not just another slope. Somewhere in the ruins, the story of what happened here is waiting to be found. Sprayed slogans turn up here and there on the walls — some anti-machine, some signed by RON — and abandoned cars sit dead on the roads where the grid failed them.</p>
 
     <p class="meta">Press <kbd>H</kbd> or click anywhere outside this panel to close.</p>
   </div>
