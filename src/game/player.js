@@ -11,6 +11,7 @@ const WOUNDED_AT = 20;     // health threshold for the hobble
 const WOUNDED_SPRINT_DRAIN = 2.5; // wounded sprinting burns stamina this much faster
 const RADIUS = 0.28;      // collision radius in tiles
 const REACH = 0.9;        // how far ahead the player can use a tool
+const CHIP_FRAGMENTS_PER_CHIP = 8; // fragments shed by machines to craft one chip
 const KNOCKBACK_DIST = 0.5; // tiles a melee hit shoves an animal/robot back
 const KNOCKBACK_STUN = 0.4; // seconds it's frozen (no move, no attack) after
 const TREE_HP = 4;        // penknife swings to fell a tree
@@ -189,9 +190,41 @@ export class Player {
     return false;
   }
 
+  // Total count of a named item across hand, pockets, and backpack.
+  countItem(key) {
+    let n = 0;
+    if (this.hands === key) n += 1;
+    for (const s of this.pockets) if (s && s.item === key) n += s.qty;
+    if (this.backpack) {
+      if (this.backpack.weapon === key) n += 1;
+      for (const s of this.backpack.slots) if (s && s.item === key) n += s.qty;
+    }
+    return n;
+  }
+
   // Can the OB-gun be crafted right now? (Stun-gun + electro-gun + Wi-Fi block.)
   canCraftObGun() {
     return this.hasItem('stungun') && this.hasItem('electrogun') && this.hasItem('wifiblock');
+  }
+
+  // Eight chip fragments (shed by destroyed machines) assemble into a whole
+  // access chip.
+  canCraftChip() {
+    return this.countItem('chip_fragment') >= CHIP_FRAGMENTS_PER_CHIP;
+  }
+
+  craftChip() {
+    if (!this.canCraftChip()) { this.say(`You need ${CHIP_FRAGMENTS_PER_CHIP} chip fragments; you have ${this.countItem('chip_fragment')}.`); return false; }
+    for (let n = 0; n < CHIP_FRAGMENTS_PER_CHIP; n++) this.removeItem('chip_fragment');
+    const stored = this.stow('chip', 1);
+    if (stored <= 0) { this.say('No room to assemble the chip — free a slot first.');
+      // put the fragments back so the craft isn't a silent loss
+      for (let n = 0; n < CHIP_FRAGMENTS_PER_CHIP; n++) this.stow('chip_fragment', 1);
+      return false;
+    }
+    sfx.play('zap');
+    this.say('Eight fragments lock together into a working access chip.');
+    return true;
   }
 
   // Eight distinct numbered circuit boards (from destroyed obelisks) build a
@@ -1152,7 +1185,14 @@ export class Player {
     slots[i].qty -= 1; if (slots[i].qty <= 0) slots[i] = null;
     this.swingTimer = tool.swingCooldown;
     sfx.play('zap');
-    ob.obDamage = (ob.obDamage || 0) + 1;
+    this.damageObelisk(ob, map, 1);
+  }
+
+  // Land `amount` burns on an obelisk: scorch/shrink it, report the attack up
+  // the network (a W4 is dispatched), and fell it once it reaches five. Shared
+  // by the OB-gun (`burnObelisk`) and the electro-gun's arc.
+  damageObelisk(ob, map, amount = 1) {
+    ob.obDamage = (ob.obDamage || 0) + amount;
     ob.burning = 3; // seconds of visible flame, ticked by the renderer/main
     // Every attack on an obelisk is reported up the network: the W-factory
     // answers by dispatching a W4 hunter-killer after you (main throttles
@@ -1343,6 +1383,18 @@ export class Player {
     if (tool.animalDamage != null) for (const a of animals) consider(a, false);
     for (const r of robots) consider(r, true);
 
+    // The electro-gun's arc bites obelisks too — a slower way to fell a tower
+    // than the OB-gun, but it works. If one's in front and no closer than any
+    // machine, it takes the shot instead.
+    let obTarget = null;
+    if (tool.effect === 'fuse') {
+      const ob = this.obeliskInFront(map, range);
+      if (ob) {
+        const od = Math.hypot(ob.x + 0.5 - this.x, ob.y + 0.5 - this.y);
+        if (od <= best) obTarget = ob;
+      }
+    }
+
     // The electro-gun runs off its own self-charging cell — no pocket ammo.
     // When the cell's too low it just needs a moment to trickle back up.
     if (tool.selfCharge) {
@@ -1374,6 +1426,21 @@ export class Player {
     this.swingTimer = tool.swingCooldown;
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
 
+    // Obelisk in the arc's path (electro-gun only): the bolt flies to it and
+    // scorches it, same as an OB-gun burn but from the electro-gun's cell.
+    if (obTarget) {
+      const bx = obTarget.x + 0.5, by = obTarget.y + 0.5;
+      map.projectiles = map.projectiles || [];
+      map.projectiles.push({
+        x0: this.x + this.facing.x * 0.4, y0: this.y + this.facing.y * 0.4,
+        x1: bx, y1: by, prog: 0, kind: 'fuse',
+      });
+      sfx.play('zap');
+      this.sparkBurst(map, bx, by);
+      this.damageObelisk(obTarget, map, 1);
+      return;
+    }
+
     // A visible round travels from the muzzle to the target (cosmetic; the
     // hit itself is instant). Electric guns fire a cyan/violet bolt. With no
     // target it still flies out to the shot's real reach (a wall or a hill
@@ -1403,11 +1470,15 @@ export class Player {
       this.say('The stun bolt drops the machine cold. It will not stay down forever.');
     } else if (tool.effect === 'fuse') {
       sfx.play('zap');
-      target.fused = true;
-      target.mineCharges = 3;
-      target.disabledT = 0;
+      // A full charge destroys the machine outright — a clean kill (no scrap
+      // penalty), so it drops its full salvage on the robots module's next
+      // tick, chip fragment and all.
+      target.hp = 0;
+      target.hurt = true;
+      target.scrapPenalty = false;
       this.sparkBurst(map, target.x, target.y);
-      this.say('The machine fries solid in a shower of sparks: blackened, dead, and full of parts.');
+      this.addScore(SCORE.robot);
+      this.say('The machine convulses in a storm of sparks and dies where it stands.');
     } else if (isRobot) {
       sfx.play('shot');
       target.scrapPenalty = true; // gunfire mangles the salvage

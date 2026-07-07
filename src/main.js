@@ -32,7 +32,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.85';
+const VERSION = '0.86';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -821,6 +821,7 @@ function update(dt) {
   if (input.craftPressed()) {
     if (player.canCraftWaveGun()) player.craftWaveGun(map);
     else if (player.canCraftObGun()) player.craftObGun(map);
+    else if (player.canCraftChip()) player.craftChip();
   }
   if (input.zoomTogglePressed()) camera.toggleZoom();
   lore.update(dt, player, input);
@@ -1234,8 +1235,9 @@ function frame(now) {
       deathCert: player.deathCert,
       showSkills,
       showWeapons,
-      craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun'),
+      craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun') || player.canCraftChip(),
       craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',
+      craftChip: player.canCraftChip() && !player.canCraftWaveGun() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       skylinkActive: player.skylinkActive && !player._ended,
       skylinkTimer,
       obeliskObjs,

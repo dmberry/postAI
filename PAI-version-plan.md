@@ -17,7 +17,13 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.85)
+## Where we are (v0.86)
+
+### v0.86 — electro-gun destroys bots + damages obelisks, robot chip fragments, craft-a-chip
+
+- **The electro-gun now destroys a machine outright** instead of fusing it into a mineable wreck. Its `fuse` effect branch in `Player.fire` sets `target.hp = 0` (a clean kill — `scrapPenalty = false`, so full salvage) plus the spark burst and score, letting the robots module handle death/scrap on its next tick. The old `fused`/`mineCharges` wreck path is now unreachable (nothing sets `fused` anymore) but left in place as harmless dead code.
+- **The electro-gun's arc also scorches obelisks.** `fire` now checks for an obelisk in front within range (for `effect: 'fuse'` guns) and, if it's no further than any machine target, damages it via a new shared `Player.damageObelisk(ob, map, amount)` helper (extracted from `burnObelisk`). A slower way to fell a tower than the OB-gun, but it works — and it makes the **obelisk damage bar appear** (the damage bar itself was never broken; the player just had no way to raise `obDamage` short of the OB-gun/insane bomb, which is what the "obs not showing damage bar" report was really about).
+- **Every destroyed machine sheds a chip fragment** (`chip_fragment`, new `material` item, stack 64). Added to the robot death-loot block in `updateRobots`. Collect **eight** and press **C** to assemble a whole access chip (`Player.canCraftChip`/`craftChip`, gated behind the existing OB-gun/wave-gun craft checks; new `Player.countItem` helper; craft-prompt HUD banner + a distinct green colour). So there's always a route to a terminal even without felling a tower. Distinct chip / chip-fragment item icons added to the renderer.
 
 ### v0.85 — felling an obelisk always drops an access chip
 

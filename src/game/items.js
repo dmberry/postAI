@@ -234,6 +234,15 @@ export const ITEMS = {
     stack: 1,
     color: '#6ad0a0',
   },
+  // Chip fragment: a shard of circuitry every destroyed machine sheds.
+  // Collect eight and you can craft a whole access chip (press C), so there's
+  // always a route to a terminal even without felling a tower.
+  chip_fragment: {
+    name: 'Chip fragment',
+    kind: 'material',
+    stack: 64,
+    color: '#8fe0c0',
+  },
   // Electro-compass: click it (in hand, pocket, or pack) to arm it — once
   // armed and carried, your facing chevron becomes a cluster of homing
   // pointers, one per notable thing nearby, colour-coded (see

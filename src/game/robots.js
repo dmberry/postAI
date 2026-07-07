@@ -504,6 +504,10 @@ export function updateRobots(dt, robots, player, map) {
       r.stuck = false;
       const qty = r.scrapPenalty ? 1 : scrapQty(r.x, r.y);
       (map.groundItems ??= []).push({ item: 'scrap', qty, x: r.x, y: r.y });
+      // Every destroyed machine sheds a chip fragment — collect eight and you
+      // can craft a whole access chip. Offset a touch so it doesn't stack
+      // exactly on the scrap heap.
+      map.groundItems.push({ item: 'chip_fragment', qty: 1, x: r.x + 0.25, y: r.y - 0.2 });
       // A T1 very rarely carries an OB-gun — a prize find (deterministic from
       // its wreck position so it isn't reload-farmable).
       if (r.type === 't1' && (scrapQty(r.x * 1.7 + 3, r.y * 2.3 + 1) & 7) === 0

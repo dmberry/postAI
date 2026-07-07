@@ -305,11 +305,13 @@ export class Renderer {
     if (hud.craftPrompt) {
       const msg = hud.craftWaveGun
         ? 'You have all eight circuit boards — press C to build a wave gun'
-        : 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
+        : hud.craftChip
+          ? 'You have eight chip fragments — press C to assemble an access chip'
+          : 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
       ctx.font = 'bold 13px system-ui, sans-serif';
       const w = ctx.measureText(msg).width + 24;
       const x = (this.w - w) / 2, y = this.h - DASH_H - 40;
-      ctx.fillStyle = hud.craftWaveGun ? 'rgba(64,224,208,0.92)' : 'rgba(224,100,47,0.9)';
+      ctx.fillStyle = hud.craftWaveGun ? 'rgba(64,224,208,0.92)' : hud.craftChip ? 'rgba(106,208,160,0.92)' : 'rgba(224,100,47,0.9)';
       ctx.fillRect(x, y, w, 26);
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
@@ -2260,6 +2262,30 @@ export class Renderer {
         ctx.fill();
         break;
       }
+      case 'chip': {
+        // A little IC: dark body, gold contact pins down the sides, a notch.
+        ctx.fillStyle = '#1c2a24';
+        ctx.fillRect(-6, -5, 12, 10);
+        ctx.strokeStyle = itemDef.color; ctx.lineWidth = 1.2; ctx.strokeRect(-6, -5, 12, 10);
+        ctx.strokeStyle = '#d8b24a'; ctx.lineWidth = 1;
+        for (let p = -3; p <= 3; p += 3) {
+          ctx.beginPath(); ctx.moveTo(-8, p); ctx.lineTo(-6, p); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(6, p); ctx.lineTo(8, p); ctx.stroke();
+        }
+        ctx.fillStyle = itemDef.color;
+        ctx.beginPath(); ctx.arc(-3.5, -2.5, 1, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
+      case 'chip_fragment':
+        // A broken shard of a chip: a torn triangle with a gold edge.
+        ctx.fillStyle = '#1c2a24';
+        ctx.beginPath();
+        ctx.moveTo(-6, 5); ctx.lineTo(-3, -6); ctx.lineTo(5, -2); ctx.lineTo(2, 6);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = itemDef.color; ctx.lineWidth = 1.2; ctx.stroke();
+        ctx.strokeStyle = '#d8b24a'; ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.moveTo(-3, -6); ctx.lineTo(0, 0); ctx.lineTo(2, 6); ctx.stroke();
+        break;
       default:
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-6, -6, 12, 12);
