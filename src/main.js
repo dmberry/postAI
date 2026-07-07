@@ -16,6 +16,7 @@ import { ITEMS } from './game/items.js';
 import { sfx } from './engine/sound.js';
 import { worldToScreen } from './engine/iso.js';
 import { runRonml } from './game/ronml.js';
+import { createFortress } from './game/fortress.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
 // Note onsets split into four pitch registers, so each singing machine can be
@@ -46,7 +47,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.96';
+const VERSION = '0.97';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -288,22 +289,13 @@ for (const ob of obeliskObjs) {
   obeliskObjs.forEach((ob, i) => { ob.circuitNum = nums[i]; });
 }
 
-// The AI's mainframe: the thing you're ultimately hunting for. It has no
-// interaction yet — for now it's a fixed, seed-derived location, far from
-// where you start, that the RON-ML `map` command reveals so you have a
-// heading to strike out toward. (Full mainframe mechanics are future work.)
-const mainframe = (() => {
-  const rng = makeRng(WORLD_SEED ^ 0x4a1f);
-  let best = { x: map.w * 0.75, y: map.h * 0.75 }, bestD = -1;
-  for (let tries = 0; tries < 400; tries++) {
-    const x = 6 + Math.floor(rng() * (map.w - 12));
-    const y = 6 + Math.floor(rng() * (map.h - 12));
-    if (map.isSolid(x, y) || map.heightAt(x, y) < 0) continue;
-    const d = Math.hypot(x - spawn.x, y - spawn.y);
-    if (d > bestD) { bestD = d; best = { x: x + 0.5, y: y + 0.5 }; }
-  }
-  return best;
-})();
+// Adamantine's fortress — the first of the four AIs. Grown as a sealed annex
+// onto the south edge of the map (all overworld spawning above has already
+// happened on the 128x128 grid, so the annex stays clean). Reached only by
+// hacking the boundary gate terminal in RON-ML. `mainframe` points at the core
+// so the existing map overlay marks it; `fortress` owns the gate/door logic.
+const fortress = createFortress(map, WORLD_SEED, spawn);
+const mainframe = fortress.core; // { x, y } of the core, for the RON-ML map star
 
 // Character persona and learned skills persist across sessions and deaths.
 const SAVE_KEY = 'postai-character';
@@ -607,8 +599,19 @@ function ronmlCtx() {
       player.say('Targeting flips. Anything nearby turns tail and runs.');
     },
     sing: () => {
-      const targets = robots.filter((r) => nearby(r) && !r.drained);
-      if (!targets.length) { player.say('Nothing nearby to sing to.'); return; }
+      const eligible = (r) => !r.dead && !r.drained && !r.friendly && !r.fused;
+      const targets = robots.filter((r) => nearby(r) && eligible(r));
+      if (!targets.length && !robots.some(eligible)) { player.say('Nothing anywhere to sing to.'); return; }
+      // A choir wants a full section — if too few are in earshot, summon the
+      // nearest others from across the map to come and join (they walk in to
+      // the formation), so the piece is never a lonely solo.
+      const CHOIR_TARGET = 6;
+      if (targets.length < CHOIR_TARGET) {
+        const more = robots.filter((r) => eligible(r) && !targets.includes(r))
+          .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
+          .slice(0, CHOIR_TARGET - targets.length);
+        for (const r of more) targets.push(r);
+      }
       const perp = { x: -player.facing.y, y: player.facing.x };
       targets.forEach((r, i) => {
         const spread = (i - (targets.length - 1) / 2) * 1.6;
@@ -621,7 +624,7 @@ function ronmlCtx() {
         r.choirY = player.y + player.facing.y * 4 + perp.y * spread;
       });
       sfx.playChoir(); // Dowland's "Flow My Tears", the machines' voices
-      player.say('Every machine in earshot stops dead, turns, and lines up. Then, impossibly, they begin to sing.');
+      player.say('Machines stop dead, turn, and line up — and more come marching in from across the fields to join them. Then, impossibly, they begin to sing.');
       closeObTerminal(); // drop out of the terminal so you can actually watch it
     },
     showMap: () => { openRonMap(); },
@@ -630,6 +633,11 @@ function ronmlCtx() {
       // carried — a map you can unfold later, away from any terminal.
       map.groundItems.push({ item: 'printed_map', qty: 1, x: player.x, y: player.y + 0.3 });
       player.say('The terminal chatters and spits out a printed map. It lands at your feet.');
+    },
+    unlockGate: () => {
+      // RON-ML `unlock`, run at the fortress gate terminal: the fortress vets
+      // proximity + AI key and drops the fortress key on success.
+      player.say(fortress.hack(player).msg);
     },
   };
 }
@@ -1330,13 +1338,19 @@ function update(dt) {
   // blinks out of step like a choir. (r.choirFlash is read by sensorStyle.)
   const choirT = sfx.choirElapsed();
   if (choirT >= 0) {
+    let nearestSinger = Infinity;
     for (const r of robots) {
       if (!r.singing) continue;
       const band = CHOIR_REGISTERS[(r.choirVoice || 0) % 4];
       let last = -1;
       for (let i = band.length - 1; i >= 0; i--) { if (band[i] <= choirT) { last = band[i]; break; } }
       r.choirFlash = last >= 0 ? Math.max(0, 1 - (choirT - last) / 0.4) : 0;
+      nearestSinger = Math.min(nearestSinger, Math.hypot(r.x - player.x, r.y - player.y));
     }
+    // Walk away and the singing quietens: full within ~6 tiles, fading to a
+    // faint distant hush by ~22 tiles.
+    const vol = nearestSinger === Infinity ? 0 : Math.max(0.05, Math.min(1, 1 - (nearestSinger - 6) / 16));
+    sfx.setChoirVolume(vol);
   }
   resolveBodyOverlaps(player, animals, robots);
   map.updateShakes(dt);

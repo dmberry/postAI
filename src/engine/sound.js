@@ -438,10 +438,14 @@ class Sound {
       const ctx = this.ctx;
       const t0 = ctx.currentTime + 0.2;
       this._choirStart = t0;
-      // A dedicated bus so the choir sits above the ambient bed.
+      // A dedicated bus so the choir sits above the ambient bed. Kept on the
+      // instance so setChoirVolume can fade it with the player's distance from
+      // the singers — walk away and the singing quietens.
       const bus = ctx.createGain();
       bus.gain.value = 0.85;
       bus.connect(this.master);
+      this._choirBus = bus;
+      this._choirLevel = 0.85;
       for (const [t, d, m] of CHOIR_NOTES) {
         const when = t0 + t;
         const freq = 440 * Math.pow(2, (m - 69) / 12);
@@ -461,6 +465,19 @@ class Sound {
     if (!this._choirWall) return -1;
     const e = (now() - this._choirWall) / 1000;
     return (e >= 0 && e <= CHOIR_DURATION + 0.5) ? e : -1;
+  }
+
+  // Fade the choir toward `level` (0..1) — main calls this each frame with a
+  // distance falloff so the singing gets quieter as you walk away from it.
+  setChoirVolume(level) {
+    try {
+      if (!this.ctx || !this._choirBus) return;
+      const target = 0.85 * Math.max(0, Math.min(1, level));
+      // Only ramp when it's actually moved, so we don't spam the param.
+      if (Math.abs(target - (this._choirLevel ?? target)) < 0.01) return;
+      this._choirLevel = target;
+      this._choirBus.gain.setTargetAtTime(target, this.ctx.currentTime, 0.15);
+    } catch (e) { /* audio is optional */ }
   }
 
   // Shared output stage: gain envelope into the given bus (master by

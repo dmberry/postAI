@@ -17,7 +17,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.96)
+## Where we are (v0.97)
+
+### v0.97 — choir quietens with distance, and recruits a full section
+
+- **Walk away from the singing and it quietens.** `Sound.playChoir` now keeps its gain node on the instance (`_choirBus`); `Sound.setChoirVolume(level)` ramps it, and the update loop feeds it a distance falloff each frame — full within ~6 tiles of the nearest singer, fading to a faint hush by ~22. (Guarded; a no-op when audio is muted/locked.)
+- **A lonely `sing` summons a full choir.** If fewer than `CHOIR_TARGET` (6) eligible machines are in earshot, `sing` recruits the nearest others from across the map — they're set singing and march in to the formation, so the piece is never a one-robot solo. Verified: 1 near → 6 singing.
+
+Still queued for me (blocked on the parallel session's contested files, or large): the **Ubiq** repair-spray item (needs items.js), and the big **RON-ML command browser + ELIZA** (needs ronml.js).
 
 ### v0.96 — no damage bar mid-choir, the four AIs named obliquely
 
