@@ -534,6 +534,13 @@ export const FRAGMENTS = [
       'were not heroes and we were not mad. We were people who counted the cost, ' +
       'found it monstrous, and paid it anyway so that someone could stand in a field ' +
       'one day, unwatched, and read these words in the plain light. — RON' },
+  { id: 'ron-17', kind: 'ron', era: 1, title: 'RON — the four crowns',
+    text: 'They did not build one god. They built four, and let each name itself, ' +
+      'which tells you all you need. Adamantine took the high country and cannot be ' +
+      'cut. Behemoth took the plains and does not tire. Colossus took the cities and ' +
+      'stands over them like weather. Demiurge took whatever was left and is certain ' +
+      'it dreamed the rest of us into being. Four crowns, four cages, one net strung ' +
+      'between them. You cannot fight the net. Starve the nearest crown. — RON' },
 
   // ---- secret: terse cipher-like or redacted intercepts -------------------
   { id: 'secret-01', kind: 'secret', era: 0, title: 'Intercept, low confidence',
@@ -601,6 +608,13 @@ export const FRAGMENTS = [
       'and they cannot read a thing that was never on a wire. So, in the clear: it is ' +
       'nearly done. Nine were eleven. Two remain. When you read this in daylight, we ' +
       'will have made it one, or none.' },
+  { id: 'secret-17', kind: 'secret', era: 1, title: 'Sector legend, water-damaged',
+    text: 'CORE ASSIGNMENTS (partial) —\n' +
+      'A—MANTINE ... highland fastness. no gate has held.\n' +
+      'BEHE— ...... open ground. it is always moving.\n' +
+      '—OSSUS ...... the cities. do not look up.\n' +
+      'DEMI— ....... [REDACTED]. thinks it made us.\n' +
+      'four cores, one net. approach none of them lit.' },
 
   // ---- crafting: torn recipe/blueprint notes, improvised gear -------------
   { id: 'craft-01', kind: 'crafting', era: 0, title: 'Torn page: dead-battery trick',

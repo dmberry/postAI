@@ -891,7 +891,7 @@ export class Renderer {
   // standing near, so you can read how damaged it is. Hidden for the dead,
   // fused wrecks, and drained/friendly machines.
   creatureHealthBar(e, player, headH) {
-    if (e.dead || e.fused || e.drained) return;
+    if (e.dead || e.fused || e.drained || e.singing) return; // no damage bar mid-choir
     if (Math.hypot(e.x - player.x, e.y - player.y) > 6.5) return;
     const max = e.maxHp || e.hp || 1;
     const frac = Math.max(0, Math.min(1, (e.hp ?? max) / max));

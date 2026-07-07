@@ -17,7 +17,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.95)
+## Where we are (v0.96)
+
+### v0.96 — no damage bar mid-choir, the four AIs named obliquely
+
+- **A singing machine shows no damage bar.** `creatureHealthBar` now early-returns for `e.singing`, so the choir formation isn't cluttered with floating health bars — it reads as a performance, not a fight.
+- **The four AI minds named obliquely in lore.** Two new fragments: `ron-17` ("the four crowns") frames **Adamantine / Behemoth / Colossus / Demiurge** as the four self-named minds that carved up the world (Adamantine — the highland core being built in the parallel session — first), and `secret-17` a water-damaged "sector legend" with the names half-redacted (A—MANTINE, BEHE—, —OSSUS, DEMI—). Woven in, never a bald list.
+
+**Concurrent:** the Adamantine mainframe/fortress is still in a parallel session (fortress.js, `unlock` verb, panel/quad/sanctum textures, tiles/items). Untouched here; this stages only renderer.js, lore.js, main.js (version) and the docs.
 
 ### v0.95 — the robot choir actually sings (Dowland, MIDI), Flow My Tears note
 
