@@ -35,8 +35,7 @@ function loadDownscaled(path, size = 64) {
 const T = 'assets/textures/';
 
 // Keyed by FLOORS type (tiles.js). Types not listed here keep their flat
-// colour fill (sand, tallgrass2) — no matching photo texture was worth
-// forcing.
+// colour fill (tallgrass2) — no matching photo texture was worth forcing.
 export const FLOOR_TEXTURES = {
   grass: loadDownscaled(T + 'floor-grass.jpg'),
   tallgrass: loadDownscaled(T + 'floor-grass.jpg'),
@@ -46,6 +45,7 @@ export const FLOOR_TEXTURES = {
   road: loadDownscaled(T + 'floor-road.jpg'),
   boards: loadDownscaled(T + 'floor-boards.png'),
   bridge: loadDownscaled(T + 'floor-boards.png'),
+  sand: loadDownscaled(T + 'wall-pebbledash.png'),
 };
 
 // A sparse dirt-patch variant scattered thinly through grass tiles for

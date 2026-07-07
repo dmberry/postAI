@@ -50,7 +50,7 @@ const SWIM_HEALTH_DRAIN = 1.2; // health/sec: swimming a river is exhausting
 const SCORE = { tree: 1, animal: 3, robot: 10, wreck: 2, cache: 2, book: 5, fragment: 5 };
 
 // Item kinds that can occupy the hands slot.
-const HOLDABLE = new Set(['tool', 'gun', 'gadget', 'bomb']);
+const HOLDABLE = new Set(['tool', 'gun', 'gadget', 'bomb', 'map']);
 
 // Empty-handed is still a weapon, just a bad one: a stand-in "tool" so bare
 // fists flow through the exact same melee path as a real one (target
@@ -377,6 +377,12 @@ export class Player {
     if (held && held.item === 'compass') {
       this.compassArmed = !this.compassArmed;
       this.say(this.compassArmed ? 'Compass armed — the chevrons will home on anything notable nearby.' : 'Compass disarmed.');
+      return;
+    }
+    // Clicking a printed map (in any slot) just unfolds it — no need to move
+    // it to the hand first.
+    if (held && held.item === 'printed_map') {
+      if (this.onReadMap) this.onReadMap(); else this.say('You unfold the map.');
       return;
     }
     if (slot.kind === 'pocket') { this.selectedPocket = slot.i; this.swapHands(); return; }
@@ -810,10 +816,11 @@ export class Player {
     // Defensive gear is passive — a shield blocks by being held and facing the
     // shot, a forcefield by simply being up. Using it just searches a cache
     // ahead if there is one, otherwise does nothing.
-    if (tool.kind === 'shield' || tool.kind === 'forcefield' || tool.kind === 'compass') {
+    if (tool.kind === 'shield' || tool.kind === 'forcefield' || tool.kind === 'compass' || tool.kind === 'map') {
       if (facingBox) this.openBox(obj, map);
       else if (tool.kind === 'compass') this.say('The compass needle swings, seeking.');
       else if (tool.kind === 'shield') this.say('You raise the shield.');
+      else if (tool.kind === 'map') { if (this.onReadMap) this.onReadMap(); else this.say('You unfold the map.'); }
       return;
     }
 

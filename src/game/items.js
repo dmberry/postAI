@@ -256,6 +256,15 @@ export const ITEMS = {
     stack: 64,
     color: '#8fe0c0',
   },
+  // Printed map: the RON-ML `print` command runs one off at a terminal and it
+  // drops as a physical object you can pick up. Hold it and use it (E / click)
+  // to unfold the SKYLINK territory map anywhere, away from a terminal.
+  printed_map: {
+    name: 'Printed map',
+    kind: 'map',
+    stack: 1,
+    color: '#d8cfa8',
+  },
   // Electro-compass: click it (in hand, pocket, or pack) to arm it — once
   // armed and carried, your facing chevron becomes a cluster of homing
   // pointers, one per notable thing nearby, colour-coded (see

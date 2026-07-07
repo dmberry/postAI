@@ -32,7 +32,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.89';
+const VERSION = '0.90';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -589,6 +589,12 @@ function ronmlCtx() {
       closeObTerminal(); // drop out of the terminal so you can actually watch it
     },
     showMap: () => { openRonMap(); },
+    printMap: () => {
+      // Run off a physical copy that drops at your feet to be picked up and
+      // carried — a map you can unfold later, away from any terminal.
+      map.groundItems.push({ item: 'printed_map', qty: 1, x: player.x, y: player.y + 0.3 });
+      player.say('The terminal chatters and spits out a printed map. It lands at your feet.');
+    },
   };
 }
 
@@ -659,6 +665,8 @@ function openRonMap() {
 }
 function closeRonMap() { ronmapEl.style.display = 'none'; }
 ronmapEl.addEventListener('click', (e) => { if (e.target === ronmapEl) closeRonMap(); });
+// Using a held printed map (kind 'map') unfolds the same overlay anywhere.
+player.onReadMap = openRonMap;
 
 function replRun(line) {
   replPrint(`> ${line}`);

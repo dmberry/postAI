@@ -17,7 +17,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.89)
+## Where we are (v0.90)
+
+### v0.90 — printable map, pebbledash sand texture
+
+- **RON-ML `print` — a physical, carryable map.** New `print` primitive (`ronml.js`) → `ctx.printMap()` drops a `printed_map` item (new `kind: 'map'` item, folded-paper icon) at the player's feet to be picked up. Opens the same `#ronmap` overlay anywhere, away from a terminal, two ways: **click it in any inventory slot** (an `equipSlot` intercept, like the forcefield/compass — it just unfolds, never moves to hand), or hold it and use it (`E`/click in-world, via the passive-kind branch in `useHands`). Both routed through a new `player.onReadMap` hook wired to `openRonMap`; `'map'` added to the `HOLDABLE` set.
+- **Pebbledash texture on the sand (yellow) tiles** — `assets/textures/wall-pebbledash.png` added to `FLOOR_TEXTURES.sand` (the pond/river-bank rims), at a **reduced 0.32 alpha** (vs the general 0.55) so it reads as a soft sandy speckle rather than a heavy stone finish.
 
 ### v0.89 — RON-ML `map`, robot sword, tweaks batch (sight cone parked)
 

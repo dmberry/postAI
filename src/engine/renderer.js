@@ -1093,7 +1093,7 @@ export class Renderer {
       // detail) and reads as noisy even at the general texture alpha —
       // toned down further, on top of the grass-blade strokes already
       // drawn over it. The dirt patch variant can hold a bit more strength.
-      const alpha = patchy ? 0.4 : (type === 'grass' || type === 'tallgrass') ? 0.28 : 0.55;
+      const alpha = patchy ? 0.4 : (type === 'grass' || type === 'tallgrass') ? 0.28 : type === 'sand' ? 0.32 : 0.55;
       this.drawTexturedQuad(corners, tex, shadeHex(def.color, shade), tintColor, tintMode, alpha);
     } else {
       this.diamondPath(corners);
@@ -2407,6 +2407,18 @@ export class Renderer {
         ctx.strokeStyle = itemDef.color; ctx.lineWidth = 1.2; ctx.stroke();
         ctx.strokeStyle = '#d8b24a'; ctx.lineWidth = 0.8;
         ctx.beginPath(); ctx.moveTo(-3, -6); ctx.lineTo(0, 0); ctx.lineTo(2, 6); ctx.stroke();
+        break;
+      case 'printed_map':
+        // A folded paper map: parchment rectangle with fold creases and a
+        // little green route marking.
+        ctx.fillStyle = itemDef.color;
+        ctx.fillRect(-8, -6, 16, 12);
+        ctx.strokeStyle = 'rgba(70,60,40,0.6)'; ctx.lineWidth = 1;
+        ctx.strokeRect(-8, -6, 16, 12);
+        ctx.beginPath(); ctx.moveTo(-2.7, -6); ctx.lineTo(-2.7, 6); ctx.moveTo(2.7, -6); ctx.lineTo(2.7, 6); ctx.stroke();
+        ctx.strokeStyle = 'rgba(80,180,110,0.9)'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-6, 3); ctx.lineTo(-1, -1); ctx.lineTo(4, 2); ctx.stroke();
+        ctx.fillStyle = '#e0552f'; ctx.beginPath(); ctx.arc(4, 2, 1.3, 0, Math.PI * 2); ctx.fill();
         break;
       default:
         ctx.fillStyle = itemDef.color;
