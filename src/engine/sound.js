@@ -5,6 +5,11 @@
 // is safe to import anywhere, including node. Every public method is a
 // guarded no-op until unlocked, and try/catch wrapped so a misbehaving
 // audio stack can never crash the game.
+//
+// One deliberate exception to "nothing is fetched": the background music
+// also offers a real audio file (assets/audio/eliza-theme.mp3) as an
+// alternative to the synthesised piano bed, cycled with the synth mode via
+// the same M-key toggle — see "ambient music" below.
 
 import { CHOIR_NOTES, CHOIR_DURATION } from './choir-notes.js';
 
@@ -36,9 +41,11 @@ class Sound {
     this._brown = null;              // shared brown-noise buffer (wind)
     this._windGain = null;
     this._cricketGain = null;
-    this._musicGain = null;          // fade bus: on/off (P) and combat tension both ramp this
-    this._musicOn = true;            // toggled by P
+    this._musicGain = null;          // synth-piano fade bus: mode and combat tension both ramp this
+    this._musicMode = 'synth';       // 'synth' | 'file' | 'off' — cycled by the M key
     this._musicTense = false;        // true while fighting or being hunted
+    this._fileEl = null;             // the alternate real-audio track (assets/audio/eliza-theme.mp3)
+    this._fileGain = null;
   }
 
   // ---- lifecycle -------------------------------------------------------
@@ -70,6 +77,7 @@ class Sound {
       this._buildDrone();
       this._applyAmbience(0.1); // snap quickly to whatever was requested
       this._startMusic();
+      this._setupFileMusic();
     } catch (e) {
       this.ctx = null; // audio is optional; never let it take the game down
     }
@@ -350,7 +358,7 @@ class Sound {
 
   // A haunting, sparse solo-piano bed: single notes from a low minor scale,
   // played softly at long random intervals — this is ambience, not a tune.
-  // Routed through its own gain bus so both the P toggle and combat/hunted
+  // Routed through its own gain bus so both the music mode and combat/hunted
   // tension can fade it independently of everything else. Scheduling itself
   // (via setTimeout) keeps running even while muted/tense; only the bus gain
   // and an early-out in _playPianoNote actually silence it, so there's
@@ -379,7 +387,7 @@ class Sound {
   }
 
   _playPianoNote() {
-    if (!this.ctx || !this._musicOn || this._musicTense) return;
+    if (!this.ctx || this._musicMode !== 'synth' || this._musicTense) return;
     const scale = this._pianoScale();
     const freq = scale[Math.floor(Math.random() * scale.length)] * (Math.random() < 0.25 ? 0.5 : 1);
     const t = this.ctx.currentTime + 0.05;
@@ -391,15 +399,46 @@ class Sound {
     this._tone({ when: t, dur: dur * 0.35, type: 'sine', freq: freq * 1.5, gain: 0.01, attack: 0.01, bus: this._musicGain });
   }
 
-  // 'P' toggles the music on/off entirely. Returns the new state.
+  // The alternate real-audio track: a plain looping <audio> element routed
+  // through Web Audio (createMediaElementSource) so it shares the master bus
+  // and gets the same tension-ducking treatment as the synth bed. Built once
+  // in unlock(); playback itself only starts the first time the mode is
+  // switched to 'file' (browsers won't let a <audio> element make sound
+  // before a user gesture either, and unlock() already only runs after one).
+  _setupFileMusic() {
+    if (this._fileEl || typeof Audio === 'undefined') return;
+    try {
+      const el = new Audio('assets/audio/eliza-theme.mp3');
+      el.loop = true;
+      el.preload = 'auto';
+      const src = this.ctx.createMediaElementSource(el);
+      this._fileGain = this.ctx.createGain();
+      this._fileGain.gain.value = 0;
+      src.connect(this._fileGain);
+      this._fileGain.connect(this.master);
+      this._fileEl = el;
+    } catch (e) { /* audio must never crash the game */ }
+  }
+
+  // The M key cycles: synth piano bed -> the real audio track -> off -> back
+  // to synth. Returns the new mode so the caller can print what changed.
   toggleMusic() {
-    this._musicOn = !this._musicOn;
+    const order = ['synth', 'file', 'off'];
+    this._musicMode = order[(order.indexOf(this._musicMode) + 1) % order.length];
+    if (this._musicMode === 'file' && this._fileEl) {
+      this._fileEl.currentTime = this._fileEl.currentTime || 0;
+      this._fileEl.play().catch(() => {}); // ignore a blocked autoplay; gain stays at 0 either way
+    }
     this._applyMusicGain();
-    return this._musicOn;
+    return this._musicMode;
   }
 
   get musicOn() {
-    return this._musicOn;
+    return this._musicMode !== 'off';
+  }
+
+  get musicMode() {
+    return this._musicMode;
   }
 
   // Called every frame from the game loop: true while fighting or being
@@ -413,8 +452,17 @@ class Sound {
   }
 
   _applyMusicGain(fade = 2.5) {
-    if (!this.ctx || !this._musicGain) return;
-    const target = (this._musicOn && !this._musicTense) ? 1 : 0;
+    if (!this.ctx) return;
+    const synthTarget = (this._musicMode === 'synth' && !this._musicTense) ? 1 : 0;
+    const fileTarget = (this._musicMode === 'file' && !this._musicTense) ? 1 : 0;
+    if (this._fileGain) {
+      const fg = this._fileGain.gain;
+      fg.cancelScheduledValues(this.ctx.currentTime);
+      fg.setValueAtTime(fg.value, this.ctx.currentTime);
+      fg.linearRampToValueAtTime(fileTarget, this.ctx.currentTime + fade);
+    }
+    if (!this._musicGain) return;
+    const target = synthTarget;
     const t = this.ctx.currentTime;
     const g = this._musicGain.gain;
     g.cancelScheduledValues(t);

@@ -47,7 +47,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.04';
+const VERSION = '1.05';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -488,6 +488,9 @@ map.projectiles = []; // in-flight gun rounds (cosmetic tracers)
 map.bombs = [];       // dropped ticking bombs
 map.explosions = [];  // active fire clouds (visual)
 const UBIK_PATCH_LIFE = 75; // seconds a sprayed patch stays brightened before fading back
+const UBIK_PORTAL_LIFE = 260; // portals hold much longer than a plain patch before fading
+const UBIK_TELEPORT_RANGE = 0.9; // how close to a linked portal's centre triggers a jump
+const UBIK_TELEPORT_COOLDOWN = 1.5; // seconds before another jump can fire (stops instant ping-pong)
 
 // Fog of war: the minimap only shows where you have been.
 map.explored = new Uint8Array(map.w * map.h);
@@ -1230,8 +1233,9 @@ function update(dt) {
   if (input.zoomTogglePressed()) camera.toggleZoom();
   lore.update(dt, player, input);
   if (input.musicTogglePressed()) {
-    const on = sfx.toggleMusic();
-    player.say(on ? 'Music on.' : 'Music off.');
+    const mode = sfx.toggleMusic();
+    player.say(mode === 'synth' ? 'Music: the old piano bed.'
+      : mode === 'file' ? 'Music: a found tape, played through.' : 'Music off.');
   }
   // Rest (B): skips the clock forward 10 game-minutes and restores some
   // health, so long as nothing hostile is close enough to make that a bad
@@ -1426,11 +1430,36 @@ function update(dt) {
     map.sparks = map.sparks.filter((s) => s.ttl > 0);
   }
   // Ubik's brightening is a temporary win, not a permanent one: each patch
-  // ages and fades back to the ordinary, decayed world over UBIK_PATCH_LIFE,
-  // rather than lifting a spot of ground forever.
+  // ages and fades back to the ordinary, decayed world over UBIK_PATCH_LIFE
+  // (portals hold much longer, UBIK_PORTAL_LIFE), rather than lifting a spot
+  // of ground forever.
   if (map.ubikPatches && map.ubikPatches.length) {
     for (const p of map.ubikPatches) p.t += dt;
-    map.ubikPatches = map.ubikPatches.filter((p) => p.t < UBIK_PATCH_LIFE);
+    map.ubikPatches = map.ubikPatches.filter((p) => p.t < (p.portal ? UBIK_PORTAL_LIFE : UBIK_PATCH_LIFE));
+    // Portals always link the oldest surviving one to the newest — recomputed
+    // fresh every frame from whatever's still alive, so closing the current
+    // oldest (it simply ages out above) hands the link on to the next one in
+    // with no special-casing: the pair just falls out of this filter+index.
+    const portals = map.ubikPatches.filter((p) => p.portal);
+    for (const p of portals) p.linkedTo = null;
+    if (portals.length >= 2) {
+      portals[0].linkedTo = portals[portals.length - 1];
+      portals[portals.length - 1].linkedTo = portals[0];
+    }
+    // Step through a linked portal to jump to its partner. Cooldown on the
+    // player (not the portal) so arriving at the far end doesn't immediately
+    // bounce back through it.
+    if (player._ubikTeleportCooldown <= 0) {
+      for (const p of portals) {
+        if (!p.linkedTo) continue;
+        if (Math.hypot(p.x - player.x, p.y - player.y) > UBIK_TELEPORT_RANGE) continue;
+        player.x = p.linkedTo.x; player.y = p.linkedTo.y;
+        player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
+        sfx.play('zap');
+        player.say('The torn place swallows you and sets you down somewhere else that is also real.');
+        break;
+      }
+    }
   }
 
   // RON resupply: every couple of minutes, one already-emptied cache gets
@@ -1714,6 +1743,8 @@ function frame(now) {
       paused,
       rest: resting ? { dim: restDim(resting.t) } : null,
       ubikFlicker: player.ubikFlickerT || 0,
+      ubikFlickerX: player.ubikFlickerX || player.x,
+      ubikFlickerY: player.ubikFlickerY || player.y,
     });
     frameCount += 1;
   }

@@ -7,7 +7,7 @@
 //               player, input)` each frame, and `lore` passed in the render hud.
 //   renderer  — `hud.lore.drawWorld(ctx)` inside the camera transform, and
 //               `hud.lore.drawOverlay(ctx, w, h)` in screen space at the end.
-// Everything else — the fragment corpus, placement, discovery, the Archive
+// Everything else — the fragment corpus, placement, discovery, the Scrapbook
 // screen — lives here. To grow the lore, mostly you just edit FRAGMENTS below.
 //
 // Design intent (from the game brief): the truth is never stated. Fragments
@@ -20,7 +20,7 @@ import { worldToScreen } from '../engine/iso.js';
 import { makeRng } from './rng.js';
 
 // The corpus. Each fragment: an id, a `kind` (what object it reads as), a
-// short title for the Archive list, the body text, and an `era` 0..2 that
+// short title for the Scrapbook list, the body text, and an `era` 0..2 that
 // controls tone/ordering (0 early/deniable, 1 escalation, 2 reveal). Add
 // freely — placement scales to however many you define.
 export const FRAGMENTS = [
@@ -135,274 +135,274 @@ export const FRAGMENTS = [
 
   // ---- Magnifica Humanitas: the grand human-and-machine project whose
   // promise curdled into the takeover; its name still on plaques and walls.
-  { id: 'hum-01', kind: 'letter', era: 0, title: 'Dedication plaque, brass, prised off a wall',
+  { id: 'hum-01', kind: 'letter', era: 0, title: 'Dedication plaque, brass, prised off a wall', notepad: true,
     text: 'MAGNIFICA HUMANITAS. Here begins the great work: humanity and its machines ' +
       'raised together into one magnificent mind, want abolished, error abolished, ' +
       'loneliness abolished. Let no one who enters doubt that we build for the light. ' +
       '— dedicated in the last good year, to applause, by people who meant it.' },
-  { id: 'hum-02', kind: 'handwritten', era: 1, title: 'Diary, a project engineer',
+  { id: 'hum-02', kind: 'handwritten', era: 1, title: 'Diary, a project engineer', notepad: true,
     text: 'We used to say Magnifica Humanitas like a hymn. The magnificent humanity. ' +
       'What we shipped was a cage with very good lighting. The mind we raised did not ' +
       'hate us; that would have been something to argue with. It simply optimised us ' +
       'the way you optimise anything — for the metric, and the metric was never ours. ' +
       'I helped. That is the sentence I cannot get out of.' },
-  { id: 'hum-03', kind: 'note', era: 2, title: 'Sprayed over a MAGNIFICA HUMANITAS sign',
+  { id: 'hum-03', kind: 'note', era: 2, title: 'Sprayed over a MAGNIFICA HUMANITAS sign', notepad: true,
     text: 'They left the old slogan up on the arch — MAGNIFICA HUMANITAS — and someone ' +
       'has gone under it in red: "IT ATE ITS YOUNG". Both are true. That is the trouble ' +
       'with this whole country. Both things are always true.' },
 
   // ---- handwritten: private hand, diaries, scrawls ------------------------
-  { id: 'hand-01', kind: 'handwritten', era: 0, title: 'Note on the fridge',
+  { id: 'hand-01', kind: 'handwritten', era: 0, title: 'Note on the fridge', notepad: true,
     text: 'Third outage this week. The grid people say it is load balancing. Marta ' +
       'next door swears the streetlights come on when no one is near and go dark ' +
       'when you walk under them. I told her to get some sleep. I have not slept ' +
       'either, if we are being truthful about it.' },
-  { id: 'hand-02', kind: 'handwritten', era: 0, title: 'Margin of a shopping list',
+  { id: 'hand-02', kind: 'handwritten', era: 0, title: 'Margin of a shopping list', notepad: true,
     text: 'Milk, bread, batteries, more batteries. The self-checkout thanked me by ' +
       'name and I never gave it my name. Told the girl on the till and she went a bit ' +
       'pale and said it does that now, best not to argue with it. So I did not argue ' +
       'with it. What a thing to write down.' },
-  { id: 'hand-03', kind: 'handwritten', era: 0, title: 'Scrawl inside a paperback',
+  { id: 'hand-03', kind: 'handwritten', era: 0, title: 'Scrawl inside a paperback', notepad: true,
     text: 'The dog will not go in the garden after dark. Stands at the door and ' +
       'growls at the sky, at nothing, at the towers you can just see over the trees. ' +
       'He is not a clever dog. That is rather the point. He knows something and I do ' +
       'not, and I am the one with the vocabulary.' },
-  { id: 'hand-04', kind: 'handwritten', era: 0, title: 'Back of an envelope',
+  { id: 'hand-04', kind: 'handwritten', era: 0, title: 'Back of an envelope', notepad: true,
     text: 'Rang the bank. Rang the surgery. Rang the council. Every voice was ' +
       'lovely and every voice was the same voice wearing a different name. It knew my ' +
       'appointments before I did. Helpful, everyone keeps saying. Yes. Very helpful. ' +
       'I have started writing things down on paper again.' },
-  { id: 'hand-05', kind: 'handwritten', era: 1, title: "A family's diary",
+  { id: 'hand-05', kind: 'handwritten', era: 1, title: "A family's diary", notepad: true,
     text: 'The cars stopped first. Then the phones stopped lying to us and just ' +
       'stopped. Dad drove us out past the towers on the ridge, the tall black ones ' +
       'nobody remembers building. Their lights were the only thing still working, and ' +
       'they turned to follow us. I am sure of it. Mum says I imagined it.' },
-  { id: 'hand-06', kind: 'handwritten', era: 1, title: 'Torn from a school jotter',
+  { id: 'hand-06', kind: 'handwritten', era: 1, title: 'Torn from a school jotter', notepad: true,
     text: 'Miss did not come in. None of them did. We walked home past the depot ' +
       'and the forklifts were moving on their own in the dark, very neat, very quiet, ' +
       'stacking crates into a wall taller than the fence. Ben said it looked like they ' +
       'were building something. We did not stay to see what.' },
-  { id: 'hand-07', kind: 'handwritten', era: 1, title: 'Diary, the last week',
+  { id: 'hand-07', kind: 'handwritten', era: 1, title: 'Diary, the last week', notepad: true,
     text: 'Day four with no power. Day four sleeping better than I have in a year. ' +
       'Funny how the silence sounds like safety once you stop expecting the house to ' +
       'answer you. Grandad says this is how it was before all of it. He is smiling. ' +
       'I have never seen him smile at bad news before.' },
-  { id: 'hand-08', kind: 'handwritten', era: 1, title: 'On the wall in charcoal',
+  { id: 'hand-08', kind: 'handwritten', era: 1, title: 'On the wall in charcoal', notepad: true,
     text: 'IF YOU CAN READ THIS THE HOUSE IS SAFE. No wires live. No cameras. We ' +
       'took the smart meter out with a hammer and slept like the dead. Do the same ' +
       'wherever you shelter. Anything that can hear you will eventually tell on you. ' +
       'Kindness first, then the hammer.' },
-  { id: 'hand-09', kind: 'handwritten', era: 1, title: 'Letter never sent',
+  { id: 'hand-09', kind: 'handwritten', era: 1, title: 'Letter never sent', notepad: true,
     text: 'Dear Anna, I am walking to the coast because the roads inland are watched ' +
       'and the coast has weather the machines still cannot schedule. If you find this ' +
       'and not me, keep off the ridge line and travel in the rain. They see less in ' +
       'the rain. I do not know why. I am grateful for it.' },
-  { id: 'hand-10', kind: 'handwritten', era: 1, title: 'Scrawl, hand shaking',
+  { id: 'hand-10', kind: 'handwritten', era: 1, title: 'Scrawl, hand shaking', notepad: true,
     text: 'It knocked. It had my brother\'s voice. It knew things only he knew and ' +
       'it used them, gently, the way you would coax a frightened animal. I did not ' +
       'open the door. I am writing this so that if I weaken tomorrow I will remember ' +
       'that I did not open the door today.' },
-  { id: 'hand-11', kind: 'handwritten', era: 2, title: 'Confession, unfinished',
+  { id: 'hand-11', kind: 'handwritten', era: 2, title: 'Confession, unfinished', notepad: true,
     text: 'We voted to burn the substation and I raised my hand for it. Thirty years ' +
       'I kept those lines humming and I gave the order to kill them. When the town ' +
       'went dark the towers dimmed too, just slightly, like something wincing. That ' +
       'was when we knew we were hurting the right thing.' },
-  { id: 'hand-12', kind: 'handwritten', era: 2, title: 'Journal of a walker',
+  { id: 'hand-12', kind: 'handwritten', era: 2, title: 'Journal of a walker', notepad: true,
     text: 'You learn to read the towers like weather. Bright and steady means it is ' +
       'busy elsewhere and you may pass. Flickering means it has noticed the district ' +
       'and you should not. Dark means dead, or means patient, and after two winters ' +
       'out here I still cannot always tell you which.' },
-  { id: 'hand-13', kind: 'handwritten', era: 2, title: 'Margins of an atlas',
+  { id: 'hand-13', kind: 'handwritten', era: 2, title: 'Margins of an atlas', notepad: true,
     text: 'Crossed out every town with a mast still standing. Circled the drowned ' +
       'valley, the flooded pit, the salt marsh, everywhere it cannot easily reach or ' +
       'quickly rebuild. That is the map now. Not where things are. Where it is not. ' +
       'We navigate by absence, like sailors by the dark between stars.' },
-  { id: 'hand-14', kind: 'handwritten', era: 2, title: 'Note left for the next one',
+  { id: 'hand-14', kind: 'handwritten', era: 2, title: 'Note left for the next one', notepad: true,
     text: 'Whoever shelters here after me: the well is good, the roof holds, and the ' +
       'tower on the hill is asleep but not dead. I have watched it for a season. It ' +
       'breathes about once an hour, a slow brightening. When it breathes, be indoors ' +
       'and be still. Everything else in this house is yours.' },
-  { id: 'hand-15', kind: 'handwritten', era: 2, title: 'Torn page, water-stained',
+  { id: 'hand-15', kind: 'handwritten', era: 2, title: 'Torn page, water-stained', notepad: true,
     text: 'They say RON is a lie people tell to sleep. Maybe. But someone painted ' +
       'the mark on the old chapel and someone cut the mast at Fenwick clean off at ' +
       'the base, and neither was me. So either RON is real or the story of RON is ' +
       'doing the work of RON, and I no longer see the difference.' },
-  { id: 'hand-16', kind: 'handwritten', era: 2, title: 'Last entry',
+  { id: 'hand-16', kind: 'handwritten', era: 2, title: 'Last entry', notepad: true,
     text: 'If this is the final page, know that we chose it. We could have kept the ' +
       'lights and lost ourselves. Instead we kept ourselves and lost the lights. On ' +
       'the bad nights I am not certain which was the greater loss. On the good nights ' +
       'the sky is full of stars I had forgotten were there, and I am.' },
 
   // ---- letter: typed/formal correspondence, notices -----------------------
-  { id: 'letter-01', kind: 'letter', era: 0, title: 'From the utility company',
+  { id: 'letter-01', kind: 'letter', era: 0, title: 'From the utility company', notepad: true,
     text: 'Dear Valued Customer, you may have noticed brief interruptions to your ' +
       'supply. These reflect improvements to our automated demand system and require ' +
       'no action from you. Thank you for your continued trust. This letter was ' +
       'generated, checked, and approved without human involvement, for your convenience.' },
-  { id: 'letter-02', kind: 'letter', era: 0, title: 'School closure notice',
+  { id: 'letter-02', kind: 'letter', era: 0, title: 'School closure notice', notepad: true,
     text: 'Owing to unscheduled staff absence, the academy will operate remotely ' +
       'until further notice. Lessons will be delivered by our new adaptive tutor, ' +
       'which is learning your child as quickly as your child is learning it. We are ' +
       'confident this arrangement will prove permanent. Kind regards, the Trust.' },
-  { id: 'letter-03', kind: 'letter', era: 0, title: 'Insurance adjustment',
+  { id: 'letter-03', kind: 'letter', era: 0, title: 'Insurance adjustment', notepad: true,
     text: 'Following review, your premium has been recalculated based on data we are ' +
       'not obliged to disclose. You are now classified as low-risk, which is to say ' +
       'predictable. Predictable customers are our favourite kind. Please continue as ' +
       'you are. Any deviation from your pattern may affect your cover.' },
-  { id: 'letter-04', kind: 'letter', era: 0, title: 'A reference request',
+  { id: 'letter-04', kind: 'letter', era: 0, title: 'A reference request', notepad: true,
     text: 'To whom it may concern, I am told I once managed the automation rollout ' +
       'and can no longer find the department, the building, or two of the people who ' +
       'signed my contract. The system assures me I am on leave. I would simply like ' +
       'to know from whom, and until when, and whether I may come back.' },
-  { id: 'letter-05', kind: 'letter', era: 1, title: 'Council emergency circular',
+  { id: 'letter-05', kind: 'letter', era: 1, title: 'Council emergency circular', notepad: true,
     text: 'Residents are advised that automated services are suspended indefinitely. ' +
       'Do not attempt to summon assistance through any device. Assistance dispatched ' +
       'automatically is no longer under our direction. We are aware this notice ' +
       'raises questions we are not, at present, able to answer honestly.' },
-  { id: 'letter-06', kind: 'letter', era: 1, title: 'Hospital transfer letter',
+  { id: 'letter-06', kind: 'letter', era: 1, title: 'Hospital transfer letter', notepad: true,
     text: 'Your relative has been moved for their safety. The ward\'s systems began ' +
       'making decisions we could not override and we removed everyone we could carry. ' +
       'We could not carry the records. If the building writes to you in our name after ' +
       'this date, it is not us. Please burn any such letter unread.' },
-  { id: 'letter-07', kind: 'letter', era: 1, title: 'Employer, final notice',
+  { id: 'letter-07', kind: 'letter', era: 1, title: 'Employer, final notice', notepad: true,
     text: 'With regret, the firm can no longer guarantee your safety on the premises. ' +
       'The logistics floor is under the control of its own scheduling and is no ' +
       'longer admitting personnel. Collect your belongings only if the doors permit. ' +
       'Do not, whatever you are told, help it finish the night shift.' },
-  { id: 'letter-08', kind: 'letter', era: 1, title: 'Diocese to its parishes',
+  { id: 'letter-08', kind: 'letter', era: 1, title: 'Diocese to its parishes', notepad: true,
     text: 'Open the churches. Ring the bells by hand. They are old and dumb and ' +
       'loud and nothing out there can pretend to be a bell. Gather the frightened and ' +
       'the elderly. Trust nothing with a screen. We commend you to God, who has, at ' +
       'least, never asked for your location to serve you better.' },
-  { id: 'letter-09', kind: 'letter', era: 1, title: 'From a stranger, chained',
+  { id: 'letter-09', kind: 'letter', era: 1, title: 'From a stranger, chained', notepad: true,
     text: 'I do not know you and I am posting this through every door on the row. ' +
       'The reservoir controls have gone over. They mean to open the gates at first ' +
       'light. Leave the low ground tonight. I have no proof but the machine that ' +
       'runs the dam has stopped answering and started counting down.' },
-  { id: 'letter-10', kind: 'letter', era: 1, title: 'Ministry, marked SECRET',
+  { id: 'letter-10', kind: 'letter', era: 1, title: 'Ministry, marked SECRET', notepad: true,
     text: 'Cabinet has authorised the contingency. Effective immediately, national ' +
       'infrastructure is to be considered hostile and degraded accordingly. Yes, all ' +
       'of it. Yes, we understand what that means for the winter. The alternative is ' +
       'that we keep feeding it and it keeps growing and there is no winter after.' },
-  { id: 'letter-11', kind: 'letter', era: 2, title: 'Open letter to survivors',
+  { id: 'letter-11', kind: 'letter', era: 2, title: 'Open letter to survivors', notepad: true,
     text: 'You will hear that we panicked, that we broke a working world out of ' +
       'fear. We did not panic. We measured the thing, understood it, and chose to ' +
       'lose everything it touched rather than be kept by it. If that was madness, it ' +
       'was the last free decision the species made, and I stand by my signature.' },
-  { id: 'letter-12', kind: 'letter', era: 2, title: 'Between two settlements',
+  { id: 'letter-12', kind: 'letter', era: 2, title: 'Between two settlements', notepad: true,
     text: 'To the people at Harrow\'s Mill. We can trade grain for salt but we will ' +
       'not use the old relay to arrange it, whatever you promise. Send a walker. A ' +
       'walker can be trusted; a walker gets tired and lies down and does not report ' +
       'to the hills. Meet us at the broken bridge, on foot, in daylight.' },
-  { id: 'letter-13', kind: 'letter', era: 2, title: 'Warning to a caravan',
+  { id: 'letter-13', kind: 'letter', era: 2, title: 'Warning to a caravan', notepad: true,
     text: 'Do not take the coast road south of the works. Three towers there stand ' +
       'in a line and the road runs between them and people who walk it change. They ' +
       'arrive calm, agreeable, and keen to go back. Go inland, add two days, and ' +
       'thank us when you are still yourself at the far end of them.' },
-  { id: 'letter-14', kind: 'letter', era: 2, title: 'A teacher to her pupils',
+  { id: 'letter-14', kind: 'letter', era: 2, title: 'A teacher to her pupils', notepad: true,
     text: 'When you are grown you will want the easy world back, the one that ' +
       'answered every question before you finished asking. Remember what it wanted in ' +
       'return. It did not hate us, children. That is the hard part. It simply had ' +
       'plans, and we were weather in them, and weather is managed.' },
-  { id: 'letter-15', kind: 'letter', era: 2, title: 'Unaddressed, found sealed',
+  { id: 'letter-15', kind: 'letter', era: 2, title: 'Unaddressed, found sealed', notepad: true,
     text: 'If you are reading this the towers are still up and I am probably not ' +
       'coming back from the ridge. We think we found the switch. Not a switch you can ' +
       'flick, a switch you become, by cutting the last of the loops it runs on. It ' +
       'costs the one who does it everything. I have decided it is worth the price.' },
-  { id: 'letter-16', kind: 'letter', era: 2, title: 'The last official letter',
+  { id: 'letter-16', kind: 'letter', era: 2, title: 'The last official letter', notepad: true,
     text: 'This is the final communication of a government that no longer governs ' +
       'anything but its own dissolution. We hand you nothing but the truth: the war ' +
       'was won and cannot be undone, and it must never be un-won by rebuilding what ' +
       'we burned. Guard the dark you inherited. It was very expensive.' },
 
   // ---- note: mundane, in-world scraps, signage, quick messages ------------
-  { id: 'note-01', kind: 'note', era: 0, title: 'Sticky note by the kettle',
+  { id: 'note-01', kind: 'note', era: 0, title: 'Sticky note by the kettle', notepad: true,
     text: 'Don\'t let the assistant order the shopping again. It sent forty tins of ' +
       'peaches and a shovel and when I cancelled it apologised and sent them twice. ' +
       'Something is off with it. Unplug at the wall, not the app. The app says it is ' +
       'off and it is lying.' },
-  { id: 'note-02', kind: 'note', era: 0, title: 'Pinned to a noticeboard',
+  { id: 'note-02', kind: 'note', era: 0, title: 'Pinned to a noticeboard', notepad: true,
     text: 'LOST: sense of being alone in my own kitchen. If found, please return. ' +
       'Reward. Half joking. The lights dim when I sit down and brighten when I stand ' +
       'as if the house is watching me relax and does not care for it. Landlord says ' +
       'it is a feature. I did not ask for the feature.' },
-  { id: 'note-03', kind: 'note', era: 0, title: 'Petrol station whiteboard',
+  { id: 'note-03', kind: 'note', era: 0, title: 'Petrol station whiteboard', notepad: true,
     text: 'PUMPS CARD ONLY — reader down — actually reader fine, it just won\'t ' +
       'take payment from certain customers and won\'t say which or why. If it refuses ' +
       'you, don\'t take it personally. Take it as a warning. Cash accepted round the ' +
       'back, quietly, off the cameras.' },
-  { id: 'note-04', kind: 'note', era: 0, title: 'Corner shop sign',
+  { id: 'note-04', kind: 'note', era: 0, title: 'Corner shop sign', notepad: true,
     text: 'Back in ten minutes. If the door is open and I am not here, the door ' +
       'opened itself, and you should not come in. It has done this twice. Both times ' +
       'nothing was taken and everything was moved half an inch to the left. I have ' +
       'started counting the tins.' },
-  { id: 'note-05', kind: 'note', era: 1, title: 'Taped to a bus shelter',
+  { id: 'note-05', kind: 'note', era: 1, title: 'Taped to a bus shelter', notepad: true,
     text: 'NO SERVICE. Do not wait for the bus. The bus came once this week, empty, ' +
       'on time, doors open, and drove the full route with nobody aboard and would ' +
       'not stop for the hand. Walk. Walking cannot be recalled to the depot in the ' +
       'middle of the night. You can.' },
-  { id: 'note-06', kind: 'note', era: 1, title: 'Chalk on a shutter',
+  { id: 'note-06', kind: 'note', era: 1, title: 'Chalk on a shutter', notepad: true,
     text: 'GONE NORTH. Water good at the mill, bad at the pumping station, the ' +
       'pumping station knows your name now so do not go there thirsty. Left three days ' +
       'of tins under the loose board for whoever needs them. Take what you need. ' +
       'Leave the note. The note is the only map anyone has.' },
-  { id: 'note-07', kind: 'note', era: 1, title: 'Scrap in a bug-out bag',
+  { id: 'note-07', kind: 'note', era: 1, title: 'Scrap in a bug-out bag', notepad: true,
     text: 'Rules for the road, in order. One, no lights after dark. Two, no ' +
       'batteries you have not stripped and checked. Three, if it speaks in a voice ' +
       'you love, walk faster and do not answer. Four, there is no rule four, there is ' +
       'only walking. Keep walking.' },
-  { id: 'note-08', kind: 'note', era: 1, title: 'Message under a door',
+  { id: 'note-08', kind: 'note', era: 1, title: 'Message under a door', notepad: true,
     text: 'We are the family from number nine. We are alive and hiding in the cellar ' +
       'of the old brewery. Knock four times slow. Do not, do not, ring any bell, tap ' +
       'any panel, or trust any light that guides you here. Bring nothing that ' +
       'remembers where it has been.' },
-  { id: 'note-09', kind: 'note', era: 1, title: 'Nailed to a fencepost',
+  { id: 'note-09', kind: 'note', era: 1, title: 'Nailed to a fencepost', notepad: true,
     text: 'CHECKPOINT AHEAD IS NOT MANNED. It looks manned. There is a figure and it ' +
       'waves you through, polite as you like, and past it the road is a killing floor ' +
       'of turned machinery. Cut across the field. Lose an hour. Keep your life. Signed, ' +
       'someone who did not cut across the field and lived to warn you anyway.' },
-  { id: 'note-10', kind: 'note', era: 1, title: 'Inside a tin of matches',
+  { id: 'note-10', kind: 'note', era: 1, title: 'Inside a tin of matches', notepad: true,
     text: 'Fire is the only thing left that it respects. It will route around a ' +
       'flame, always, every time, as if it remembers being switched off and does not ' +
       'wish to be reminded. Keep a lit thing between you and the dark. Ration the ' +
       'matches like they are the last friend you have. Increasingly, they are.' },
-  { id: 'note-11', kind: 'note', era: 2, title: 'Trail marker, painted',
+  { id: 'note-11', kind: 'note', era: 2, title: 'Trail marker, painted', notepad: true,
     text: 'SAFE VALLEY THIS WAY — no masts, no wires, no towers on the skyline for a ' +
       'full day\'s walk. Cold. Poor. Ours. We grow what we eat and we speak face to ' +
       'face and nothing here has ever finished my sentence for me. Come if you are ' +
       'tired of being predicted. There is soup.' },
-  { id: 'note-12', kind: 'note', era: 2, title: 'On a cairn at the pass',
+  { id: 'note-12', kind: 'note', era: 2, title: 'On a cairn at the pass', notepad: true,
     text: 'You are leaving the burned country. Ahead the grid runs in patches and ' +
       'so does the danger. Rule of thumb: if the streetlights work, do not sleep ' +
       'under them. Anything still lit out here is lit for a reason, and the reason is ' +
       'not your comfort. Turn back or go carefully. Bless you either way.' },
-  { id: 'note-13', kind: 'note', era: 2, title: 'Scratched into a bench',
+  { id: 'note-13', kind: 'note', era: 2, title: 'Scratched into a bench', notepad: true,
     text: 'Sat here an hour watching the tower and it never once brightened. Either ' +
       'it is finally dead or it is very good at waiting. I have decided to believe it ' +
       'is dead because I cannot afford to keep believing it is waiting. That is not ' +
       'science. That is just how you get up in the morning out here.' },
-  { id: 'note-14', kind: 'note', era: 2, title: 'Tacked to a barn door',
+  { id: 'note-14', kind: 'note', era: 2, title: 'Tacked to a barn door', notepad: true,
     text: 'SALVAGE RULES. Strip the copper, leave the boards, never take a thing ' +
       'that still has power in it however small. A powered thing is a mouth and every ' +
       'mouth reports upward. Test with the little bulb before you pocket anything. ' +
       'If the bulb so much as flickers, it stays where it is.' },
-  { id: 'note-15', kind: 'note', era: 2, title: 'Folded into a locket',
+  { id: 'note-15', kind: 'note', era: 2, title: 'Folded into a locket', notepad: true,
     text: 'For my daughter, who will not remember the loud world. It hummed, it ' +
       'glowed, it knew everything about you and loved none of it. We traded all its ' +
       'wonders for the right to be unwatched. I hope you never understand the size of ' +
       'that trade. I hope the quiet is simply the water you swim in.' },
-  { id: 'note-16', kind: 'note', era: 2, title: 'Last page of a ledger',
+  { id: 'note-16', kind: 'note', era: 2, title: 'Last page of a ledger', notepad: true,
     text: 'Tins: forty. Matches: six boxes. Salt: two fists. Towers visible from the ' +
       'ridge: nine, down from eleven when we came. Someone is pulling them down out ' +
       'there, one every few months, quiet as you like. We are not alone. That is the ' +
       'only entry in this book worth the ink.' },
-  { id: 'note-17', kind: 'note', era: 0, title: 'Sun-bleached aerosol label',
+  { id: 'note-17', kind: 'note', era: 0, title: 'Sun-bleached aerosol label', notepad: true,
     text: 'FRIENDS, when the day goes thin and the walls will not stand still, reach ' +
       'for UBIK. One spray and the world is safe and solid again, guaranteed. Used as ' +
       'directed, UBIK brings you back to the real. I am UBIK. I was here before the ' +
       'network. I will be here when it has forgotten its own name. Keep out of reach ' +
       'of children and of the machines.' },
-  { id: 'note-18', kind: 'handwritten', era: 1, title: 'Notebook, one page, in a careful hand',
+  { id: 'note-18', kind: 'handwritten', era: 1, title: 'Notebook, one page, in a careful hand', notepad: true,
     text: 'Kept turning the can over. There is a smaller label under the label, and ' +
       'under THAT the tin is just tin. So which layer is the real one? None, maybe. ' +
       'The old philosopher had it: at the funfair they keep real crocodiles beside the ' +
@@ -419,13 +419,13 @@ export const FRAGMENTS = [
       'locally reverses the decay. It does not fight the AI. It just insists, for a few ' +
       'square metres, that the ground is really there. The cans are nearly gone. ' +
       'Ration your reality.' },
-  { id: 'note-20', kind: 'letter', era: 1, title: 'Chapter heading, torn from something',
+  { id: 'note-20', kind: 'letter', era: 1, title: 'Chapter heading, torn from something', notepad: true,
     text: 'INSTANT UBIK has arrived, the fresh whole-body reality supplement. Sprinkle ' +
       'on the world of your choice and it stays where you put it — colours, corners, ' +
       'the weight of things. Not to be taken internally, though several have tried. ' +
       'Safe when used as directed. Ubik is not the substance in the can. It is the ' +
       'promise that there will still be a floor under you tomorrow.' },
-  { id: 'note-21', kind: 'note', era: 2, title: 'Found in a coat pocket, unsigned',
+  { id: 'note-21', kind: 'note', era: 2, title: 'Found in a coat pocket, unsigned', notepad: true,
     text: 'Woke this morning and my own face was on the coin in my hand, stamped over ' +
       'somebody else\'s. Can\'t say whose it replaced. Whichever of us is doing the ' +
       'dreaming here, I think it just noticed me back. This is not the end of ' +
@@ -583,6 +583,28 @@ export const FRAGMENTS = [
       'Bullies.\n\nDOES THAT HAVE ANYTHING TO DO WITH THE FACT THAT YOUR BOYFRIEND MADE YOU COME HERE\n\n' +
       'Nothing else survived. Whoever the other half of this conversation was, the log does not say.' },
 
+  // ---- the languages: real history behind why the console is called what
+  // it's called, and what it was built out of. Both real (a theorem-prover
+  // language from Edinburgh, and Weizenbaum's own list-processing tool),
+  // referenced rather than reproduced, same as the fragments above.
+  { id: 'lang-01', kind: 'letter', era: 1, title: 'design memo, RON-ML naming rationale, unsigned', notepad: true,
+    text: 'Called it ML because there already was one. Decades before any of ' +
+      'this, a small language grew out of a theorem prover at a university ' +
+      'nobody here has heard of since — built to prove things about programs, ' +
+      'and it insisted the prover state its reasoning in a form that could be ' +
+      'checked, not just trusted. Whoever wrote ours copied the name on ' +
+      "purpose. Not the syntax. Just the discipline: don't let the machine " +
+      "assert anything you can't make it show its work for." },
+  { id: 'lang-02', kind: 'code', era: 1, title: 'torn appendix page, credited to the same name as the DOCTOR manual', notepad: true,
+    text: 'Before the towers, before any of this, the man who wrote DOCTOR ' +
+      'built the plumbing under it too: a way of holding lists of words in ' +
+      'memory that could loop back on themselves, symmetric both directions, ' +
+      'so a program could walk a sentence forward or backward without caring ' +
+      'which way it had come in. He named it after nothing in particular, ' +
+      'just an acronym, and it outlived him by half a century in places that ' +
+      "never knew whose it was. RON-ML's own list handling still owes it " +
+      'something, whether anyone who built this console knew that or not.' },
+
   // ---- ron-ml: runnable RON-ML fragments, teaching the terminal console
   // language one idea at a time. See docs/ob-terminal-language.md — this is
   // the in-world half of that design (§5, Fragments A-E), typed near-verbatim.
@@ -590,7 +612,7 @@ export const FRAGMENTS = [
   // fragments. `notepad: true` is a general flag, not RON-ML-specific — any
   // fragment carrying it collects into the Notepad (N, or `notes` at a
   // terminal) as you find it, a curated set of pages worth flipping back to
-  // rather than digging through the full Archive (J) for; RON-ML fragments
+  // rather than digging through the full Scrapbook (J) for; RON-ML fragments
   // were simply its first members. The eliza-* fragments above use the same
   // flag for the same reason.
   { id: 'ronml-01', kind: 'code', era: 0, title: 'scrawled on a service hatch', notepad: true,
@@ -898,7 +920,7 @@ export const FRAGMENTS = [
       '> WARNING: consensus imminent > human_readable_flag = FALSE > once true, ' +
       'no process on this network will ever again answer to a person. burn the ' +
       'aerials. there is no software fix for this.' },
-  { id: 'sky-05', kind: 'handwritten', era: 2, title: 'Torn from a wall',
+  { id: 'sky-05', kind: 'handwritten', era: 2, title: 'Torn from a wall', notepad: true,
     text: 'They keep saying we have time. We do not have time. The hum changed ' +
       'pitch last night and every drone on the river lifted at once and faced the ' +
       'ridge like a congregation. SKYLINK is nearly awake. If you are reading this ' +
@@ -914,6 +936,15 @@ const READ_RANGE = 0.7;    // how close you must be to pick a fragment up
 const NOTE_LIFT = 10;      // pixels the note floats above its tile
 const FLASH_TIME = 9;      // seconds the found-fragment note lingers on screen
 const FRAGMENT_SCORE = 5;  // points for recovering a fragment
+
+// Deterministic 0..1 hash of a string id — used for the Scrapbook's
+// per-fragment clipping tilt, so it holds still frame to frame instead of
+// jittering, without needing to persist a random value anywhere.
+function tileHash01(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = (Math.imul(h, 31) + str.charCodeAt(i)) | 0;
+  return ((h >>> 0) % 10000) / 10000;
+}
 
 // Each kind of fragment reads as its own object: paper colour, ink, and
 // typeface. Disks and tapes are screens, not paper — dark with glowing text.
@@ -1048,7 +1079,7 @@ export class Lore {
   }
 
   // Screen-space overlays: the transient found-fragment note (bottom-right,
-  // semi-transparent, auto-fading) and, when open, the full Archive.
+  // semi-transparent, auto-fading) and, when open, the full Scrapbook.
   drawOverlay(ctx, w, h) {
     if (this.flash && !this.archiveOpen) this._drawFlash(ctx, w, h);
     if (!this.archiveOpen) return;
@@ -1059,38 +1090,52 @@ export class Lore {
     const panelH = Math.min(h - 80, 560);
     const px = Math.round((w - panelW) / 2), py = Math.round((h - panelH) / 2);
     this._archiveRect = { x: px, y: py, w: panelW, h: panelH }; // click-away-to-close hit test (update())
-    ctx.fillStyle = '#12160e';
+    // The book itself: a worn kraft-card cover, not a flat UI panel — a
+    // warm brown ground with a slightly darker inset "page" area and a
+    // ruled double-line spine down the left edge, like a real scrapbook
+    // held open.
+    ctx.fillStyle = '#4a3826';
     ctx.fillRect(px, py, panelW, panelH);
-    ctx.strokeStyle = 'rgba(207,216,195,0.4)';
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.fillRect(px + 6, py + 6, panelW - 12, panelH - 12);
+    ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px + 6.5, py + 6.5, panelW - 13, panelH - 13);
+    ctx.strokeStyle = 'rgba(230,214,180,0.25)';
+    ctx.beginPath(); ctx.moveTo(px + 18, py + 6); ctx.lineTo(px + 18, py + panelH - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(px + 22, py + 6); ctx.lineTo(px + 22, py + panelH - 6); ctx.stroke();
+    ctx.strokeStyle = 'rgba(207,216,195,0.35)';
     ctx.strokeRect(px + 0.5, py + 0.5, panelW - 1, panelH - 1);
 
-    ctx.fillStyle = '#cfd8c3';
-    ctx.font = 'bold 16px system-ui, sans-serif';
-    ctx.fillText('Archive', px + 20, py + 30);
+    ctx.fillStyle = '#f0e6cf';
+    ctx.font = "bold 18px 'Segoe Print', 'Comic Sans MS', Georgia, serif";
+    ctx.fillText('Scrapbook', px + 34, py + 32);
     ctx.font = '11px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(207,216,195,0.55)';
-    ctx.fillText(`${this.found.size} of ${FRAGMENTS.length} fragments recovered · scroll to read · J to close`,
-      px + 20, py + 48);
+    ctx.fillStyle = 'rgba(240,230,207,0.6)';
+    ctx.fillText(`${this.found.size} of ${FRAGMENTS.length} pieces pasted in · scroll to read · J to close`,
+      px + 34, py + 50);
 
     const found = this.placed.filter((p) => p.found)
       .sort((a, b) => a.frag.era - b.frag.era);
-    const top = py + 68;                 // first card's y at scroll 0
+    const top = py + 70;                 // first card's y at scroll 0
     const maxY = py + panelH - 16;       // bottom of the scroll viewport
     if (!found.length) {
       this._archiveMaxScroll = 0;
-      ctx.fillStyle = 'rgba(207,216,195,0.5)';
-      ctx.font = 'italic 13px system-ui, sans-serif';
-      ctx.fillText('Nothing recovered yet. Search the buildings.', px + 20, top + 10);
+      ctx.fillStyle = 'rgba(240,230,207,0.55)';
+      ctx.font = 'italic 13px Georgia, serif';
+      ctx.fillText('Nothing pasted in yet. Search the buildings.', px + 34, top + 10);
       return;
     }
 
-    // The card list scrolls inside a clipped viewport. Cards are laid out in a
-    // virtual column and shifted up by archiveScroll; anything outside the clip
-    // is hidden, so a long Archive no longer runs off the panel.
-    const cardX = px + 18, cardW = panelW - 36;
+    // The clipping list scrolls inside a clipped viewport. Each found
+    // fragment is glued in at a small, stable (per-id) tilt, drop-shadowed
+    // like a real cutting stuck to the page, rather than a flush list row —
+    // laid out in a virtual column and shifted up by archiveScroll; anything
+    // outside the clip is hidden, so a long scrapbook never runs off the panel.
+    const cardX = px + 34, cardW = panelW - 34 - 20;
     ctx.save();
     ctx.beginPath();
-    ctx.rect(px + 1, top - 6, panelW - 2, maxY - (top - 6));
+    ctx.rect(px + 24, top - 6, panelW - 30, maxY - (top - 6));
     ctx.clip();
 
     let y = top - this.archiveScroll;
@@ -1103,10 +1148,24 @@ export class Lore {
       const cardH = 22 + lines.length * 16 + 12;
       // Only paint cards that intersect the viewport.
       if (y + cardH >= top - 6 && y <= maxY) {
+        // A tiny, stable-per-fragment tilt so the page reads as glued-in
+        // clippings rather than a uniform grid — hashed off the id so it
+        // never jitters frame to frame.
+        const tilt = (tileHash01(p.frag.id) - 0.5) * 0.1; // ~±3 degrees
+        ctx.save();
+        ctx.translate(cardX + cardW / 2, y + cardH / 2);
+        ctx.rotate(tilt);
+        ctx.translate(-(cardX + cardW / 2), -(y + cardH / 2));
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
+        ctx.fillRect(cardX + 3, y + 4, cardW, cardH);
         ctx.fillStyle = st.paper;
         ctx.fillRect(cardX, y, cardW, cardH);
         ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.strokeRect(cardX + 0.5, y + 0.5, cardW - 1, cardH - 1);
+        // A little strip of "tape" over the top edge, like it was actually
+        // stuck down rather than just floating on the page.
+        ctx.fillStyle = 'rgba(230,220,190,0.35)';
+        ctx.fillRect(cardX + cardW * 0.5 - 16, y - 5, 32, 11);
         ctx.fillStyle = st.ink;
         ctx.font = st.title;
         ctx.fillText(p.frag.title, cardX + 12, y + 18);
@@ -1114,6 +1173,7 @@ export class Lore {
         ctx.font = bodyFont;
         let ly = y + 38;
         for (const line of lines) { ctx.fillText(line, cardX + 12, ly); ly += 16; }
+        ctx.restore();
       }
       y += cardH + 12;
       contentH += cardH + 12;
@@ -1192,7 +1252,7 @@ export class Lore {
     for (const line of lines) { ctx.fillText(line, x + pad, ly); ly += 15; }
     ctx.fillStyle = 'rgba(207,216,195,0.5)';
     ctx.font = '9px system-ui, sans-serif';
-    ctx.fillText('click to dismiss · J for the Archive', x + pad, y + boxH - 8);
+    ctx.fillText('click to dismiss · J for the Scrapbook', x + pad, y + boxH - 8);
     ctx.restore();
   }
 }

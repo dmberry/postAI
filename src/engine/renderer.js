@@ -101,8 +101,11 @@ function tileHash(x, y) {
 // UBIK_PATCH_LIFE, currently 75s) holds at full brightness, then spends its
 // last UBIK_PATCH_FADE_TIME seconds fading back to nothing — kept as sibling
 // constants here rather than imported, since main.js imports this module.
+// A portal (UBIK_PORTAL_LIFE, 260s in main.js) gets the same fade tail but
+// starting much later, since it lives so much longer than a plain patch.
 const UBIK_PATCH_FADE_TIME = 15;
 const UBIK_PATCH_FADE_START = 60;
+const UBIK_PORTAL_FADE_START = 245;
 
 function scaleRgbaAlpha(rgba, factor) {
   const m = rgba.match(/^rgba\(([^,]+),([^,]+),([^,]+),([^)]+)\)$/);
@@ -133,6 +136,7 @@ export class Renderer {
     this.uiSlots = []; // clickable dashboard/backpack slots, rebuilt each frame
     this.obeliskHits = []; // clickable obelisk towers (world-screen rects), rebuilt each frame
     this.hudPlayer = player; // referenced by drawWfactory for the near-by damage bar
+    this.hudMap = map; // referenced by drawPlayer for the Ubik-patch reality-hiccup check
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     ctx.fillStyle = '#0b0e0a';
     ctx.fillRect(0, 0, this.w, this.h);
@@ -277,29 +281,37 @@ export class Renderer {
     // Ubik: where the can has been sprayed the world is brighter, warmer, more
     // real — a soft-light bloom that lifts the tiles and everything on them.
     // Patches persist on the map. Drawn over the world, under night and HUD.
+    // A patch sprayed three times over tears into a portal instead — drawn
+    // separately below with its own swirling, more saturated treatment.
     if (map.ubikPatches && map.ubikPatches.length) {
       const z = camera.zoom || 1;
       const cw = worldToScreen(camera.x, camera.y);
-      const shimmer = 0.9 + 0.1 * Math.sin(performance.now() / 900);
+      // A slightly stronger breathing pulse than before — both opacity and
+      // radius swell and ease back, so a brightened patch visibly lives
+      // rather than just holding a flat glow.
+      const shimmer = 0.82 + 0.18 * Math.sin(performance.now() / 900);
+      const breathe = 0.94 + 0.06 * Math.sin(performance.now() / 900 + 1.1);
       // Each patch fades in quickly, holds, then fades back out to nothing
       // as it ages past UBIK_PATCH_LIFE (main.js ages and culls it) — Ubik's
       // win here is temporary, not a permanent lift on that patch of ground.
       const spots = [];
+      const portals = [];
       for (const p of map.ubikPatches) {
         const age = p.t || 0;
-        const fade = Math.min(1, age / 2) * Math.min(1, Math.max(0, (UBIK_PATCH_FADE_START - age) / UBIK_PATCH_FADE_TIME + 1));
+        const life = p.portal ? UBIK_PORTAL_FADE_START : UBIK_PATCH_FADE_START;
+        const fade = Math.min(1, age / 2) * Math.min(1, Math.max(0, (life - age) / UBIK_PATCH_FADE_TIME + 1));
         if (fade <= 0.01) continue;
         const pw = worldToScreen(p.x, p.y);
         const sx = (pw.x - cw.x) * z + this.w / 2;
         const sy = (pw.y - cw.y) * z + this.h / 2 - 8 * z;
-        const R = (p.r || 3) * 24 * z;
+        const R = (p.r || 3) * 24 * z * breathe;
         if (sx < -R - 40 || sx > this.w + R + 40 || sy < -R - 40 || sy > this.h + R + 40) continue;
-        spots.push([sx, sy, R, fade]);
+        (p.portal ? portals : spots).push([sx, sy, R, fade, p]);
       }
-      const paint = (op, stops) => {
+      const paint = (list, op, stops) => {
         ctx.save();
         ctx.globalCompositeOperation = op;
-        for (const [sx, sy, R, fade] of spots) {
+        for (const [sx, sy, R, fade] of list) {
           const g = ctx.createRadialGradient(sx, sy, R * 0.1, sx, sy, R);
           for (const [o, c] of stops) g.addColorStop(o, scaleRgbaAlpha(c, fade));
           ctx.fillStyle = g;
@@ -310,24 +322,128 @@ export class Renderer {
       // Pass 1 — 'overlay' deepens colour and contrast so the patch reads as
       // "more real", not merely lit. Pass 2 — 'screen' adds a warm glow that
       // lifts the brightness on top.
-      paint('overlay', [[0, `rgba(255,240,205,${(0.9 * shimmer).toFixed(3)})`], [0.6, 'rgba(255,235,195,0.5)'], [1, 'rgba(255,235,195,0)']]);
-      paint('screen', [[0, `rgba(255,246,214,${(0.28 * shimmer).toFixed(3)})`], [0.6, 'rgba(255,240,200,0.12)'], [1, 'rgba(255,240,200,0)']]);
+      paint(spots, 'overlay', [[0, `rgba(255,240,205,${(0.9 * shimmer).toFixed(3)})`], [0.6, 'rgba(255,235,195,0.5)'], [1, 'rgba(255,235,195,0)']]);
+      paint(spots, 'screen', [[0, `rgba(255,246,214,${(0.28 * shimmer).toFixed(3)})`], [0.6, 'rgba(255,240,200,0.12)'], [1, 'rgba(255,240,200,0)']]);
+      // Portals: Portal-style two-tone rims — orange for the odd ones out
+      // (1st, 3rd, ...), blue for the even ones (2nd, 4th, ...) in creation
+      // order, so the common case (exactly two, linked to each other) always
+      // reads as one orange end and one blue end. A third mid-chain portal
+      // just takes whichever colour its position gives it; the active link
+      // is still always oldest<->newest regardless of colour. Drawn as a
+      // tall standing oval (squash-scaled around each centre), not a plain
+      // circle, closer to a real doorway than a puddle of light.
+      if (portals.length) {
+        const OVAL_RX = 0.62, OVAL_RY = 1.35;
+        const paintOvals = (list, op, stops) => {
+          if (!list.length) return;
+          ctx.save();
+          ctx.globalCompositeOperation = op;
+          for (const [sx, sy, R, fade] of list) {
+            ctx.save();
+            ctx.translate(sx, sy);
+            ctx.scale(OVAL_RX, OVAL_RY);
+            const g = ctx.createRadialGradient(0, 0, R * 0.1, 0, 0, R);
+            for (const [o, c] of stops) g.addColorStop(o, scaleRgbaAlpha(c, fade));
+            ctx.fillStyle = g;
+            ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+            ctx.restore();
+          }
+          ctx.restore();
+        };
+        const orangeSet = portals.filter((_, i) => i % 2 === 0);
+        const blueSet = portals.filter((_, i) => i % 2 === 1);
+        const paintRim = (list, rgb) => {
+          paintOvals(list, 'overlay', [[0, `rgba(${rgb},${(0.85 * shimmer).toFixed(3)})`], [0.55, `rgba(${rgb},0.5)`], [1, `rgba(${rgb},0)`]]);
+          paintOvals(list, 'screen', [[0, `rgba(${rgb},${(0.32 * shimmer).toFixed(3)})`], [0.55, `rgba(${rgb},0.14)`], [1, `rgba(${rgb},0)`]]);
+        };
+        paintRim(orangeSet, '255,140,50');
+        paintRim(blueSet, '70,160,255');
+        // A dark charcoal void right at the core, punched into the middle of
+        // the coloured bloom — reads as an actual tear/hole rather than just
+        // another bright patch, with the corona glowing around its rim.
+        ctx.save();
+        for (const [sx, sy, R, fade] of portals) {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.scale(OVAL_RX, OVAL_RY);
+          const coreR = R * 0.55;
+          const core = ctx.createRadialGradient(0, 0, 0, 0, 0, coreR);
+          core.addColorStop(0, `rgba(8,6,12,${(0.92 * fade).toFixed(3)})`);
+          core.addColorStop(0.7, `rgba(14,10,20,${(0.75 * fade).toFixed(3)})`);
+          core.addColorStop(1, 'rgba(18,13,24,0)');
+          ctx.fillStyle = core;
+          ctx.beginPath(); ctx.arc(0, 0, coreR, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+        ctx.restore();
+        // Fiery rim: several flickering, unevenly-lengthed licks chasing
+        // round the oval rather than a few clean uniform arcs — each with
+        // its own speed/phase/radius jitter so they read as flame, not a
+        // spinning logo. Warm orange licks on the orange end, a "cold
+        // flame" cyan-white flicker on the blue end. A linked (usable)
+        // portal burns faster and brighter than a dormant one still
+        // waiting for a partner.
+        const t = performance.now() / 1000;
+        ctx.save();
+        ctx.lineCap = 'round';
+        portals.forEach(([sx, sy, R, fade, p], i) => {
+          const isOrange = i % 2 === 0;
+          const active = !!p.linkedTo;
+          const spin = active ? t * 3.2 : t * 0.8;
+          const rr = R * 0.42;
+          const petals = 6;
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.scale(OVAL_RX, OVAL_RY);
+          for (let k = 0; k < petals; k++) {
+            const phase = (k * Math.PI * 2) / petals;
+            const flicker = 0.5 + 0.5 * Math.sin(t * (5 + k * 1.7) + k * 2.1);
+            const a = spin + phase + Math.sin(t * 3 + k) * 0.15;
+            const len = 0.55 + flicker * 0.9;
+            const rJitter = rr * (0.85 + flicker * 0.3);
+            const hue = isOrange
+              ? `255,${Math.round(140 + flicker * 90)},${Math.round(30 + flicker * 60)}`
+              : `${Math.round(120 + flicker * 90)},${Math.round(190 + flicker * 50)},255`;
+            ctx.globalAlpha = fade * (0.35 + flicker * 0.55);
+            ctx.strokeStyle = `rgba(${hue},1)`;
+            ctx.lineWidth = (1.4 + flicker * 1.6) / Math.min(OVAL_RX, OVAL_RY); // keep the stroke visually even under the squash
+            ctx.beginPath();
+            ctx.arc(0, 0, rJitter, a, a + len);
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          ctx.restore();
+        });
+        ctx.restore();
+      }
     }
 
     // Ubik flicker: for a half-beat right after spraying, the old, decayed
-    // world flashes through — a sickly desaturated pulse over the whole play
-    // area — before Ubik visibly wins and the flicker dies away. Purely
-    // cosmetic (player.ubikFlickerT, ticked in Player.update).
+    // world flashes through near the sprayed spot — a sickly desaturated,
+    // localised pulse (not the whole screen) — before Ubik visibly wins and
+    // the flicker dies away. Purely cosmetic (player.ubikFlickerT/X/Y,
+    // ticked in Player.update).
     if (hud.ubikFlicker > 0) {
       const t = hud.ubikFlicker / 0.35; // 1 -> 0 over the flicker's life
       const jitter = Math.sin(performance.now() / 28) * 0.5 + 0.5;
+      const z = camera.zoom || 1;
+      const cw = worldToScreen(camera.x, camera.y);
+      const pw = worldToScreen(hud.ubikFlickerX ?? camera.x, hud.ubikFlickerY ?? camera.y);
+      const fx = (pw.x - cw.x) * z + this.w / 2;
+      const fy = (pw.y - cw.y) * z + this.h / 2 - 8 * z;
+      const fR = 140 * z;
+      const mask = ctx.createRadialGradient(fx, fy, 0, fx, fy, fR);
+      mask.addColorStop(0, 'rgba(255,255,255,1)');
+      mask.addColorStop(0.7, 'rgba(255,255,255,0.6)');
+      mask.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.save();
       ctx.globalCompositeOperation = 'saturation'; // canvas silently ignores this if unsupported
-      ctx.fillStyle = `rgba(140,130,110,${(0.5 * t * jitter).toFixed(3)})`;
-      ctx.fillRect(0, 0, this.w, this.h - DASH_H);
+      ctx.fillStyle = mask;
+      ctx.globalAlpha = 0.5 * t * jitter;
+      ctx.fillRect(fx - fR, fy - fR, fR * 2, fR * 2);
       ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = `rgba(70,60,45,${(0.22 * t * jitter).toFixed(3)})`;
-      ctx.fillRect(0, 0, this.w, this.h - DASH_H);
+      ctx.globalAlpha = 0.22 * t * jitter;
+      ctx.fillRect(fx - fR, fy - fR, fR * 2, fR * 2);
       ctx.restore();
     }
 
@@ -1999,18 +2115,19 @@ export class Renderer {
     const ctx = this.ctx;
     const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
     const w = 11, h = 10;
-    // The starter cache advertises itself with a wide, slow orange pulse
+    // The starter cache advertises itself with a wide, slow white pulse
     // while the player still reads as a beginner (threatEase() below 1) —
     // once they've found their feet the nudge is no longer needed, and the
-    // glow fades away on its own along with the easing.
+    // glow fades away on its own along with the easing. White reads far
+    // better against grass/dirt than the orange this used to be.
     if (obj.starterCache && !obj.opened && this.hudPlayer && this.hudPlayer.threatEase) {
       const ease = this.hudPlayer.threatEase();
       if (ease < 1) {
         const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 340);
         const strength = 1 - ease; // stronger the newer the player looks
         const glow = ctx.createRadialGradient(c.x, c.y - h / 2, 2, c.x, c.y - h / 2, 34);
-        glow.addColorStop(0, `rgba(240,150,40,${(0.35 + 0.25 * pulse) * strength})`);
-        glow.addColorStop(1, 'rgba(240,150,40,0)');
+        glow.addColorStop(0, `rgba(255,255,255,${(0.4 + 0.3 * pulse) * strength})`);
+        glow.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = glow;
         ctx.beginPath(); ctx.arc(c.x, c.y - h / 2, 34, 0, Math.PI * 2); ctx.fill();
       }
@@ -2291,15 +2408,16 @@ export class Renderer {
       ctx.globalAlpha = Math.max(0.08, gi.fade) * (0.6 + 0.4 * Math.abs(Math.sin(performance.now() / 140)));
     }
     // A dropped backpack is a big deal early on (extra storage) and easy to
-    // miss in the grass — give it a soft pulsing orange halo once you're
-    // close enough to be looking for it, same colour as its compass chevron.
+    // miss in the grass — give it a soft pulsing white halo once you're
+    // close enough to be looking for it. White rather than the compass
+    // chevron's yellow: it reads far better against grass/dirt at a glance.
     if (gi.item === 'backpack' && this.hudPlayer) {
       const d = Math.hypot(gi.x - this.hudPlayer.x, gi.y - this.hudPlayer.y);
       if (d < 10) {
         const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 260);
         const glow = ctx.createRadialGradient(c.x, c.y - 3, 1, c.x, c.y - 3, 16);
-        glow.addColorStop(0, `rgba(230,180,70,${(0.4 + 0.25 * pulse).toFixed(3)})`);
-        glow.addColorStop(1, 'rgba(230,180,70,0)');
+        glow.addColorStop(0, `rgba(255,255,255,${(0.45 + 0.3 * pulse).toFixed(3)})`);
+        glow.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = glow;
         ctx.beginPath(); ctx.arc(c.x, c.y - 3, 16, 0, Math.PI * 2); ctx.fill();
       }
@@ -2895,7 +3013,27 @@ export class Renderer {
     // (the reported bug). Facing toward the camera, the tool is in front.
     const heldBehind = (player.facing.x + player.facing.y) < 0;
     if (heldBehind) this.drawHeldItem(player, c, by);
-    this.drawPlayerSprite(player, c, by);
+    // A brief Ubik reality-hiccup (player.ubikHiccupT/Kind, rolled in
+    // Player.update while standing in a brightened patch): a momentary
+    // discolour tint, or the sprite drawn leant/twisted off true for a
+    // beat, as if the ground under it hadn't quite settled on being real.
+    if (player.ubikHiccupT > 0) {
+      ctx.save();
+      if (player.ubikHiccupKind === 'discolor') {
+        ctx.filter = 'hue-rotate(140deg) saturate(2.2)';
+        this.drawPlayerSprite(player, c, by);
+      } else {
+        const amt = Math.sin((player.ubikHiccupT / 0.4) * Math.PI); // 0 -> 1 -> 0 over its life
+        ctx.translate(c.x, by);
+        if (player.ubikHiccupKind === 'lean') ctx.transform(1, 0, 0.35 * amt, 1, 0, 0);
+        else ctx.rotate(0.28 * amt * (player.ubikHiccupT > 0.2 ? 1 : -1)); // 'twist'
+        ctx.translate(-c.x, -by);
+        this.drawPlayerSprite(player, c, by);
+      }
+      ctx.restore();
+    } else {
+      this.drawPlayerSprite(player, c, by);
+    }
     if (!heldBehind) this.drawHeldItem(player, c, by);
 
     // Facing indicator: a small chevron ahead of the feet, pointing (in screen

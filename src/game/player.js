@@ -56,6 +56,11 @@ const UBIK_SPRAYS = 20; // charges in a Ubik can before it runs dry
 // reality — a beat of PKD's Ubik itself leaking through: a chapter-heading
 // ad, a flicker of an older world underneath this one, something.
 const UBIK_WEIRD_CHANCE = 0.28;
+// Spraying the same spot again (within this radius) tops up that patch
+// instead of laying a new one on top of it; three sprays there opens a
+// portal instead of just brightening the ground.
+const UBIK_MERGE_RANGE = 1.5;
+const UBIK_PORTAL_SPRAYS = 3;
 const UBIK_ADS = [
   'INSTANT UBIK. Poor sleep? Try new, improved Ubik, safe when taken as directed.',
   'Ubik. Comes in a spray can, extra fine mist. Safe when used as directed.',
@@ -105,6 +110,9 @@ export class Player {
     this.terminalSafe = false;  // true while jacked into an obelisk terminal (invisible to machines)
     this.ubikSprays = UBIK_SPRAYS; // charges left in the Ubik can (set on pickup below too)
     this.ubikFlickerT = 0; // seconds left of the "old world showing through" flicker on spray
+    this.ubikFlickerX = 0; this.ubikFlickerY = 0; // world pos the flicker is centred on
+    this._ubikTeleportCooldown = 0; // seconds before another portal can fire (main.js)
+    this.ubikHiccupT = 0; this.ubikHiccupKind = null; // brief discolor/lean/twist while standing in a patch
 
     // Adaptive-difficulty telemetry: a rough, cheap read on whether this is a
     // player still finding their feet — tracked purely from movement, no
@@ -437,6 +445,19 @@ export class Player {
     this.swingTimer = Math.max(0, this.swingTimer - dt);
     this.hurtTimer = Math.max(0, this.hurtTimer - dt);
     if (this.ubikFlickerT > 0) this.ubikFlickerT = Math.max(0, this.ubikFlickerT - dt);
+    if (this._ubikTeleportCooldown > 0) this._ubikTeleportCooldown = Math.max(0, this._ubikTeleportCooldown - dt);
+    // Standing in a brightened Ubik patch, reality hiccups every so often —
+    // a brief discolour, lean, or twist, like the ground hasn't quite
+    // decided it's real yet. Purely cosmetic; renderer.js reads
+    // ubikHiccupT/Kind. Rolled here (not in the renderer) so the effect
+    // persists smoothly across frames instead of re-rolling every draw.
+    if (this.ubikHiccupT > 0) this.ubikHiccupT = Math.max(0, this.ubikHiccupT - dt);
+    else if (map.ubikPatches && map.ubikPatches.some((p) => Math.hypot(p.x - this.x, p.y - this.y) < (p.r || 3))) {
+      if (Math.random() < dt * 0.35) {
+        this.ubikHiccupT = 0.25 + Math.random() * 0.2;
+        this.ubikHiccupKind = ['discolor', 'lean', 'twist'][Math.floor(Math.random() * 3)];
+      }
+    }
     this.playSeconds += dt;
     if (this.message) {
       this.message.ttl -= dt;
@@ -1105,7 +1126,10 @@ export class Player {
   // sprays to a can, tracked on the player; then it hisses dry. Sometimes
   // (UBIK_WEIRD_CHANCE) the can does something odder than that — a beat of
   // the old novel's paranoia leaking through: a stray chapter-ad, a flicker
-  // of an older world underneath (renderer.js reads player.ubikFlickerT).
+  // of an older world underneath (renderer.js reads player.ubikFlickerT/X/Y).
+  // Spraying the same spot three times over doesn't just brighten it harder
+  // — it tears all the way through and opens a portal (see map.ubikPatches'
+  // `portal`/`sprayCount` fields, linked up in main.js).
   sprayUbik(map) {
     this.swingTimer = 0.5;
     if (this.ubikSprays == null) this.ubikSprays = UBIK_SPRAYS;
@@ -1116,10 +1140,26 @@ export class Player {
     }
     this.ubikSprays -= 1;
     const px = this.x + this.facing.x * 1.2, py = this.y + this.facing.y * 1.2;
-    (map.ubikPatches ??= []).push({ x: px, y: py, r: 3.2, t: 0 });
+    const patches = (map.ubikPatches ??= []);
+    let patch = patches.find((p) => !p.portal && Math.hypot(p.x - px, p.y - py) < UBIK_MERGE_RANGE);
+    if (!patch) {
+      patch = { x: px, y: py, r: 3.2, t: 0, sprayCount: 0 };
+      patches.push(patch);
+    }
+    patch.sprayCount += 1;
+    patch.t = 0; // topping up a patch renews its life
+    patch.x = px; patch.y = py; // recentre slightly toward the latest spray
     sfx.play('zap');
     this.ubikFlickerT = 0.35; // a half-beat of the old world showing through before Ubik wins
+    this.ubikFlickerX = px; this.ubikFlickerY = py; // where to localise it (renderer.js)
     const left = this.ubikSprays;
+    if (patch.sprayCount >= UBIK_PORTAL_SPRAYS && !patch.portal) {
+      patch.portal = true;
+      patch.r = 1.5; // a doorway-sized tear, not a bus-sized one (renderer.js stretches it into a tall oval)
+      sfx.play('charge');
+      this.say('The ground doesn\'t just brighten this time — it tears, and holds open. A portal.');
+      return;
+    }
     if (Math.random() < UBIK_WEIRD_CHANCE) {
       const ad = UBIK_ADS[Math.floor(Math.random() * UBIK_ADS.length)];
       this.say(ad);

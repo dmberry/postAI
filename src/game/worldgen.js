@@ -587,11 +587,29 @@ function scatterWrecks(map, rng) {
     if (placed.some((p) => Math.hypot(p.x - x, p.y - y) < minGap)) continue;
     const footprint = [];
     for (let dy = 0; dy < fh; dy++) for (let dx = 0; dx < fw; dx++) footprint.push({ x: x + dx, y: y + dy });
+    // Orient the wreck along whichever axis the road actually runs here,
+    // so it reads as parked/crashed on the road rather than dropped at a
+    // random angle across it. World +x movement projects to screen SE,
+    // world +y to screen SW (iso.js worldToScreen), so an x-running road
+    // wants an se/nw-facing car and a y-running road wants sw/ne. Indices
+    // must match CAR_DIR_KEYS in textures.js (['se','sw','ne','nw']).
+    let alongXVotes = 0, alongYVotes = 0;
+    for (let dy = 0; dy < fh; dy++) {
+      if (map.floorAt(x - 1, y + dy) === 'road') alongXVotes++;
+      if (map.floorAt(x + fw, y + dy) === 'road') alongXVotes++;
+    }
+    for (let dx = 0; dx < fw; dx++) {
+      if (map.floorAt(x + dx, y - 1) === 'road') alongYVotes++;
+      if (map.floorAt(x + dx, y + fh) === 'road') alongYVotes++;
+    }
+    const carDir = alongXVotes >= alongYVotes
+      ? (rng() < 0.5 ? 0 : 3)   // se or nw
+      : (rng() < 0.5 ? 1 : 2);  // sw or ne
     const car = map.addObject('car', x, y, {
       hue: rng(), fw, fh, footprint, hp: 10, smashed: false,
       // Which sprite/colour and which of the four iso facings — resolved in
       // the renderer against CAR_MODEL_KEYS / CAR_DIR_KEYS (modulo).
-      carModel: Math.floor(rng() * 6), carDir: Math.floor(rng() * 4),
+      carModel: Math.floor(rng() * 6), carDir,
     });
     // Point every footprint tile at the one car object.
     for (const t of footprint) map.objectGrid[t.y * map.w + t.x] = car;

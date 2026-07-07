@@ -108,6 +108,16 @@ const W3_SPEED = 3.0;
 const W3_REPAIR_RANGE = 1.3;
 const W3_REPAIR_RATE = 2;       // obDamage points healed per second
 const W3_UNFREEZE_TIME = 3;     // seconds standing at a looped node to reset it
+
+// Ubik confusion: a hunter that wanders into a brightened patch loses its
+// mind for a while — refreshed continuously while inside, decaying once it
+// leaves, so lingering in the patch keeps it scrambled rather than a single
+// timed hit.
+const UBIK_CONFUSE_HOLD = 2.5;      // seconds confusion persists after leaving a patch
+const UBIK_CONFUSE_SPEED = 2.2;     // erratic stagger speed
+const UBIK_CONFUSE_ATTACK_RANGE = 1.0;
+const UBIK_CONFUSE_ATTACK_DAMAGE = 7;
+const UBIK_CONFUSE_ATTACK_COOLDOWN = 0.9;
 const W3_BODY = '#1c3a44';      // dull blue-teal, unmistakably not a hunter
 const W3_HEAD = '#122730';
 
@@ -535,6 +545,22 @@ export function updateRobots(dt, robots, player, map) {
     // (updateW3 below clears both this and frozenByOb).
     if (r.frozen) continue;
 
+    // Ubik: standing in a brightened patch scrambles a hunter's mind —
+    // refreshed continuously while inside so lingering keeps it confused,
+    // decaying for a while after it wanders (or staggers) back out. Unarmed
+    // W3 drones and reprogrammed friendlies are unaffected.
+    if (!r.friendly && r.type !== 'w3' && map.ubikPatches && map.ubikPatches.length
+      && map.ubikPatches.some((p) => Math.hypot(p.x - r.x, p.y - r.y) < (p.r || 3))) {
+      r.ubikConfusedT = UBIK_CONFUSE_HOLD;
+    } else if (r.ubikConfusedT > 0) {
+      r.ubikConfusedT = Math.max(0, r.ubikConfusedT - dt);
+    }
+    if (r.ubikConfusedT > 0) {
+      updateUbikConfused(r, dt, robots, map);
+      r.animT += dt;
+      continue;
+    }
+
     // Off-screen and far from the player: skip all thinking until they come
     // back near. Friendlies follow the player so are never far; they're left
     // to update normally. (Placed after the death check above so a machine
@@ -699,6 +725,37 @@ function separateRobots(robots, map, dt, player) {
       }
     }
     if (!moved) break;
+  }
+}
+
+// Ubik confusion: no targeting, no patrol — just a drunk stagger toward a
+// fresh small random point every beat, and taking a swing at whatever other
+// machine strays close, friend or foe alike (there's no "foe" distinction
+// left in its head at all). Battery still drains at the normal patrol rate
+// (drainBattery is called by the caller's usual paths before this, or not
+// at all here — a confused unit is still "on", just not doing its job, so
+// it isn't worth draining faster or slower than idling normally would).
+function updateUbikConfused(r, dt, robots, map) {
+  r.aggro = false;
+  r._confuseWanderT = (r._confuseWanderT || 0) - dt;
+  if (r._confuseWanderT <= 0 || !r._confuseTarget) {
+    r._confuseWanderT = 0.35 + Math.random() * 0.5;
+    const a = Math.random() * Math.PI * 2;
+    r._confuseTarget = { x: r.x + Math.cos(a) * 1.6, y: r.y + Math.sin(a) * 1.6 };
+  }
+  moveToward(r, r._confuseTarget.x, r._confuseTarget.y, UBIK_CONFUSE_SPEED, dt, map);
+  r._confuseAttackTimer = Math.max(0, (r._confuseAttackTimer || 0) - dt);
+  if (r._confuseAttackTimer <= 0) {
+    for (const other of robots) {
+      if (other === r || other.dead || other.fused || other.friendly) continue;
+      if (Math.hypot(other.x - r.x, other.y - r.y) > UBIK_CONFUSE_ATTACK_RANGE) continue;
+      other.hp -= UBIK_CONFUSE_ATTACK_DAMAGE;
+      other.hurt = true;
+      other.knockT = Math.max(other.knockT || 0, 0.3);
+      (map.sparks ??= []).push({ x: other.x, y: other.y, ttl: 0.35, max: 0.35 });
+      r._confuseAttackTimer = UBIK_CONFUSE_ATTACK_COOLDOWN;
+      break;
+    }
   }
 }
 
@@ -1137,8 +1194,25 @@ export function drawRobot(ctx, robot, worldToScreen) {
     ctx.ellipse(c.x, c.y - 14, 16, 18, 0, 0, Math.PI * 2);
     ctx.fill();
   }
-  if (robot.type === 't1') drawT1(ctx, robot, c, worldToScreen);
-  else drawT2(ctx, robot, c);
+  // Ubik confusion: the whole body juddering in place, on top of whatever
+  // spin/twitch drawT1/drawT2 add themselves — reads as haywire rather than
+  // just tilted.
+  const jc = robot.ubikConfusedT > 0
+    ? { x: c.x + (Math.random() - 0.5) * 5, y: c.y + (Math.random() - 0.5) * 5 }
+    : c;
+  if (robot.type === 't1') drawT1(ctx, robot, jc, worldToScreen);
+  else drawT2(ctx, robot, jc);
+  if (robot.ubikConfusedT > 0) {
+    // Tell: violet dizzy dots circling the head, PKD's reality-static
+    // rather than the boars' plain grey — same idea, different cause.
+    ctx.fillStyle = 'rgba(210,150,255,0.9)';
+    for (let i = 0; i < 3; i++) {
+      const ang = performance.now() / 130 + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(c.x + Math.cos(ang) * 9, c.y - 38 + Math.sin(ang) * 3, 2.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   if (flickered) ctx.restore();
 }
 
@@ -1154,8 +1228,9 @@ function drawT1(ctx, r, c, worldToScreen) {
   ctx.save();
   ctx.translate(c.x, c.y);
   // Tells: a burnt-out wreck slumps hard; a trapped machine lists to one
-  // side, wheels spinning uselessly.
+  // side, wheels spinning uselessly; a Ubik-confused one spins on the spot.
   if (r.fused) ctx.rotate(0.2);
+  else if (r.ubikConfusedT > 0) ctx.rotate(performance.now() / 140);
   else if (r.stuck) ctx.rotate(0.12);
 
   ctx.fillStyle = r.fused ? FUSED_EDGE : T1_WHEEL; // two dark wheels under the chassis
@@ -1219,6 +1294,7 @@ function drawT2(ctx, r, c) {
   ctx.save();
   ctx.translate(c.x, c.y);
   if (r.fused) ctx.rotate(0.14); // slumped wreck
+  else if (r.ubikConfusedT > 0) ctx.rotate(performance.now() / 140); // Ubik: spinning on the spot
 
   // Gait: legs scissor with the walk phase, same scheme as the player.
   // A wreck's legs hang straight.
