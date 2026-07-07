@@ -32,7 +32,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '0.86';
+const VERSION = '0.87';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -67,6 +67,24 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
   for (const b of books) drop(boards, b, 1);
   // A single backpack, somewhere in the ruins.
   drop(boards, 'backpack', 1);
+  // A few more spare backpacks dropped out in the forests, where they're
+  // easier to stumble on than deep in the ruins: open grass tiles that sit
+  // next to a tree (so they read as "in the woods", not on bare meadow).
+  const forestGrass = [];
+  for (let y = 1; y < map.h - 1; y++) {
+    for (let x = 1; x < map.w - 1; x++) {
+      if (map.floorAt(x, y) !== 'grass' || map.objectAt(x, y)) continue;
+      let nearTree = false;
+      for (let dy = -1; dy <= 1 && !nearTree; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const o = map.objectAt(x + dx, y + dy);
+          if (o && o.type === 'tree') { nearTree = true; break; }
+        }
+      }
+      if (nearTree) forestGrass.push([x, y]);
+    }
+  }
+  for (let i = 0; i < 4; i++) drop(forestGrass, 'backpack', 1);
 }
 
 // The AIs control the landscape: black obelisk towers dot the wilds (their
@@ -948,6 +966,11 @@ function update(dt) {
       player.equipSlot(drag.from); // released on the source: treat as a click
     } else if (target) {
       player.moveItem(drag.from, target);
+    } else if (showBackpack) {
+      // Released away from any slot while the backpack panel is open: drag it
+      // off the panel to drop it on the ground. Gated on the panel being up so
+      // a fumbled dashboard drag doesn't fling a pocket item away by accident.
+      player.dropSlot(drag.from, map);
     }
     drag = null;
   } else if (!input.mouseHeld) {

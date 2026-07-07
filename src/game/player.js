@@ -400,6 +400,8 @@ export class Player {
 
     // Face the cursor at all times, independent of movement direction —
     // lets the player strafe while keeping a weapon trained on a target.
+    // Also remembered so a thrown bomb can land where you're actually aiming.
+    this.aimWorld = mouseWorld || this.aimWorld;
     if (mouseWorld) {
       const fx = mouseWorld.x - this.x, fy = mouseWorld.y - this.y;
       const flen = Math.hypot(fx, fy);
@@ -575,6 +577,20 @@ export class Player {
     if (input.swapPressed()) this.swapHands();
     if (input.dropPressed()) this.drop(map);
     this.pickupNearby(map);
+  }
+
+  // Drop a specific slot's whole contents on the ground ahead (used by
+  // dragging an item off the inventory panel to get rid of it). Lands beyond
+  // pickup range so it doesn't walk straight back into your kit.
+  dropSlot(slot, map) {
+    const s = this.getSlot(slot);
+    if (!s) return false;
+    const dropX = this.x + this.facing.x * (PICKUP_RANGE + 0.4);
+    const dropY = this.y + this.facing.y * (PICKUP_RANGE + 0.4);
+    map.groundItems.push(this.giDrop(s.item, s.qty, dropX, dropY));
+    this.setSlot(slot, null);
+    this.say(`You drop the ${ITEMS[s.item].name.toLowerCase()}.`);
+    return true;
   }
 
   // F drops the selected pocket's contents, or the held tool/gun if no
@@ -935,14 +951,22 @@ export class Player {
   dropBomb(tool, map) {
     this.swingTimer = 0.4;
     map.bombs = map.bombs || [];
-    // Thrown, not just dropped: it lands a real distance out, in an arc —
-    // like an actual lobbed grenade it clears a wall or a low block in its
-    // path rather than stopping dead at the first one. Only pulled back if
-    // the landing spot itself would be inside solid geometry.
+    // Thrown, not just dropped: it lands where you're aiming, out to a real
+    // distance, in an arc — like an actual lobbed grenade it clears a wall or
+    // a low block in its path rather than stopping dead at the first one. You
+    // aim by pointing: it lands on the tile under the cursor, capped at the
+    // throw range, so a nearby click drops it close and a far one throws it
+    // full distance. Only pulled back if the landing spot is inside solid
+    // geometry.
     const THROW_RANGE = tool.throwRange ?? 4.5;
-    let bx = this.x + this.facing.x * THROW_RANGE, by = this.y + this.facing.y * THROW_RANGE;
+    let dist = THROW_RANGE;
+    if (this.aimWorld) {
+      const dd = Math.hypot(this.aimWorld.x - this.x, this.aimWorld.y - this.y);
+      dist = Math.max(0.6, Math.min(dd, THROW_RANGE));
+    }
+    let bx = this.x + this.facing.x * dist, by = this.y + this.facing.y * dist;
     if (map.isSolid(Math.floor(bx), Math.floor(by))) {
-      for (let d = THROW_RANGE - 0.5; d > 0.5; d -= 0.5) {
+      for (let d = dist - 0.5; d > 0.5; d -= 0.5) {
         const tx = this.x + this.facing.x * d, ty = this.y + this.facing.y * d;
         if (!map.isSolid(Math.floor(tx), Math.floor(ty))) { bx = tx; by = ty; break; }
       }

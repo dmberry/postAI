@@ -1601,13 +1601,13 @@ export class Renderer {
     ctx.beginPath();
     ctx.ellipse(c.x, c.y + 1, 13, 6, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = obj.opened ? '#4a3a24' : '#7a5c38'; // SW face
+    ctx.fillStyle = obj.opened ? '#33291a' : '#7a5c38'; // SW face (opened = spent, dark)
     ctx.beginPath();
     ctx.moveTo(c.x - w, c.y - 3); ctx.lineTo(c.x, c.y + 3);
     ctx.lineTo(c.x, c.y + 3 - h); ctx.lineTo(c.x - w, c.y - 3 - h);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = obj.opened ? '#3a2d1c' : '#63482c'; // SE face
+    ctx.fillStyle = obj.opened ? '#271f13' : '#63482c'; // SE face
     ctx.beginPath();
     ctx.moveTo(c.x + w, c.y - 3); ctx.lineTo(c.x, c.y + 3);
     ctx.lineTo(c.x, c.y + 3 - h); ctx.lineTo(c.x + w, c.y - 3 - h);
@@ -1625,12 +1625,24 @@ export class Renderer {
     const lidRight = { x: c.x + w, y: c.y - 3 - h };
     const lidTop = { x: c.x, y: c.y - 9 - h };
     if (obj.opened) {
-      ctx.fillStyle = '#241a10';
+      // A dark, empty interior...
+      ctx.fillStyle = '#160f08';
       ctx.beginPath();
       ctx.moveTo(lidLeft.x, lidLeft.y); ctx.lineTo(lidBottom.x, lidBottom.y);
       ctx.lineTo(lidRight.x, lidRight.y); ctx.lineTo(lidTop.x, lidTop.y);
       ctx.closePath();
       ctx.fill();
+      // ...and the lid thrown open, hinged at the back-left edge and standing
+      // up behind the crate, so it reads unmistakably as already looted.
+      const lift = 11;
+      ctx.fillStyle = '#4a3820';
+      ctx.beginPath();
+      ctx.moveTo(lidLeft.x, lidLeft.y); ctx.lineTo(lidTop.x, lidTop.y);
+      ctx.lineTo(lidTop.x, lidTop.y - lift); ctx.lineTo(lidLeft.x, lidLeft.y - lift);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(20,14,8,0.7)'; ctx.lineWidth = 1;
+      ctx.stroke();
     } else {
       this.drawTexturedQuad([lidLeft, lidBottom, lidRight, lidTop],
         FLOOR_TEXTURES.boards, '#8f6d42', '#7a5c34', 'multiply', 0.6);

@@ -17,7 +17,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 4. **One person owns the VERSION bump per push.** We collided on "v0.39" once (both used it); whoever pushes second takes the next number. Bump `VERSION` in `main.js` and the README header together.
 5. A bigger refactor (a formal systems registry so features attach as `{update, draw}` modules with zero hub edits) would remove most remaining friction, but it's risky to land while both of us are pushing daily — park it until there's a quiet window, then one of us does it in a single focused pass.
 
-## Where we are (v0.86)
+## Where we are (v0.87)
+
+### v0.87 — loot/inventory polish: used-box look, forest backpacks, drag-to-drop, aimed bombs
+
+- **Opened loot boxes now clearly read as spent** — darker wood on both faces, a near-black empty interior, and the lid drawn thrown open (a plank standing up behind the crate). `drawBox` in the renderer.
+- **A few spare backpacks now spawn out in the forests** (open grass tiles adjacent to a tree), not just the one buried in the ruins — four of them, so a backpack is much easier to find early. Added to the loot-scatter block in `main.js`.
+- **Drag an item off the open backpack panel to drop it.** The drag-release handler in `main.js` now, when a drag is released away from any slot *and the backpack panel is open* (`showBackpack` guard, so a fumbled dashboard drag doesn't fling things away), drops that slot's contents on the ground via a new `Player.dropSlot(slot, map)` helper.
+- **Bombs land where you aim.** `dropBomb` now throws to the tile under the cursor (`player.aimWorld`, captured each frame in `update`), capped at the bomb's throw range — a nearby click drops it close, a far one lobs it full distance — instead of always throwing a fixed 4.5 tiles ahead. The solid-tile pull-back still applies.
 
 ### v0.86 — electro-gun destroys bots + damages obelisks, robot chip fragments, craft-a-chip
 
