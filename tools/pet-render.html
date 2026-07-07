@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>postAI — Kenney cube-pets view-set render tool</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #202018; color: #ddd; font: 13px system-ui, sans-serif; }
+  #wrap { display: flex; height: 100%; }
+  #panel { width: 300px; padding: 14px; box-sizing: border-box; overflow-y: auto; background: #16160f; border-right: 1px solid #333; }
+  #panel h1 { font-size: 14px; margin: 0 0 12px; }
+  #panel label { display: block; margin: 10px 0 2px; color: #9db284; }
+  #panel input[type=range] { width: 100%; }
+  #panel select { width: 100%; }
+  #panel button { width: 100%; margin-top: 8px; padding: 8px; background: #3a4a2e; color: #eee; border: 1px solid #5a6e46; border-radius: 4px; cursor: pointer; }
+  #panel button:hover { background: #4a5e3a; }
+  #stage { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; background:
+    repeating-conic-gradient(#2a2a22 0% 25%, #222218 0% 50%) 50% / 20px 20px; }
+  #glcanvas { display: block; }
+  .val { color: #cfd8c3; font-size: 11px; }
+  #log { white-space: pre-wrap; font-size: 11px; color: #8a9878; margin-top: 10px; max-height: 260px; overflow-y: auto; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="panel">
+    <h1>Kenney cube-pets &rarr; view-set render</h1>
+
+    <label>Species</label>
+    <select id="speciesSel"></select>
+
+    <label>Camera elevation <span class="val" id="elevVal"></span></label>
+    <input type="range" id="elev" min="0" max="90" value="30">
+
+    <label>Camera azimuth <span class="val" id="aziVal"></span></label>
+    <input type="range" id="azi" min="0" max="360" value="0">
+
+    <label>Output size (px)</label>
+    <select id="size">
+      <option value="64">64</option>
+      <option value="96" selected>96</option>
+      <option value="128">128</option>
+    </select>
+
+    <button id="downloadOne">Download current PNG</button>
+    <button id="exportAll">Render &amp; export all species (8 dirs)</button>
+
+    <div id="log"></div>
+  </div>
+  <div id="stage"></div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+// Source GLB models live in the gitignored _tmp/ (not committed — see
+// .gitignore). Download the CC0 "Cube Pets" pack from kenney.nl and unzip it
+// to _tmp/kenney_cube-pets_1/ to re-run.
+const BASE = '../_tmp/kenney_cube-pets_1/Models/GLB format/';
+const SPECIES = [
+  'beaver', 'bee', 'bunny', 'cat', 'caterpillar', 'chick', 'cow', 'crab',
+  'deer', 'dog', 'elephant', 'fish', 'fox', 'giraffe', 'hog', 'koala',
+  'lion', 'monkey', 'panda', 'parrot', 'penguin', 'pig', 'polar', 'tiger',
+];
+
+const speciesSel = document.getElementById('speciesSel');
+for (const s of SPECIES) {
+  const opt = document.createElement('option');
+  opt.value = s; opt.textContent = s;
+  speciesSel.appendChild(opt);
+}
+
+const elevInput = document.getElementById('elev');
+const aziInput = document.getElementById('azi');
+const sizeSel = document.getElementById('size');
+const elevVal = document.getElementById('elevVal');
+const aziVal = document.getElementById('aziVal');
+const logEl = document.getElementById('log');
+function log(msg) { logEl.textContent += msg + '\n'; logEl.scrollTop = logEl.scrollHeight; }
+
+const stage = document.getElementById('stage');
+let W = 96, H = 96;
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(W, H);
+renderer.setPixelRatio(1);
+renderer.setClearColor(0x000000, 0);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, 100);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+const dir1 = new THREE.DirectionalLight(0xffffff, 0.8);
+dir1.position.set(1, 2, 1);
+scene.add(dir1);
+const dir2 = new THREE.DirectionalLight(0xffffff, 0.4);
+dir2.position.set(-1, 1, -1);
+scene.add(dir2);
+
+const gltfLoader = new GLTFLoader();
+const modelCache = {};   // species -> loaded THREE.Group (template, never mutated in-scene)
+let modelRoot = null;    // clone currently in the scene
+
+function loadModel(species) {
+  if (modelCache[species]) return Promise.resolve(modelCache[species]);
+  return new Promise((resolve, reject) => {
+    gltfLoader.load(BASE + 'animal-' + species + '.glb', gltf => {
+      modelCache[species] = gltf.scene;
+      resolve(gltf.scene);
+    }, undefined, reject);
+  });
+}
+
+async function showSpecies(species) {
+  if (modelRoot) scene.remove(modelRoot);
+  const template = await loadModel(species);
+  modelRoot = template.clone(true);
+  scene.add(modelRoot);
+}
+
+// A single shared world-unit radius across every species, computed once from
+// the biggest model (the elephant) with a margin. All species are rendered
+// through this same radius so an elephant reads big and a bee reads small
+// on screen at game scale, instead of each species separately auto-fit to
+// fill its own canvas (which would make every animal the same apparent
+// size — wrong, since a bee should not look elephant-sized).
+let GLOBAL_RADIUS = null;
+async function computeGlobalRadius(marginPct) {
+  let maxRadius = 0;
+  for (const s of SPECIES) {
+    const m = await loadModel(s);
+    const box = new THREE.Box3().setFromObject(m);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const r = Math.max(size.x, size.y, size.z) / 2;
+    if (r > maxRadius) { maxRadius = r; log(`  ${s}: r=${r.toFixed(3)}`); }
+  }
+  GLOBAL_RADIUS = maxRadius * (1 + marginPct / 100);
+  log(`global radius = ${GLOBAL_RADIUS.toFixed(3)} (from largest model, +${marginPct}% margin)`);
+  return GLOBAL_RADIUS;
+}
+
+function frameCamera(obj, radius) {
+  const box = new THREE.Box3().setFromObject(obj);
+  const center = new THREE.Vector3();
+  box.getCenter(center);
+
+  const elev = THREE.MathUtils.degToRad(parseFloat(elevInput.value));
+  const azi = THREE.MathUtils.degToRad(parseFloat(aziInput.value));
+  const dist = Math.max(radius * 4, 10);
+  const cx = Math.cos(elev) * Math.sin(azi) * dist;
+  const cy = Math.sin(elev) * dist;
+  const cz = Math.cos(elev) * Math.cos(azi) * dist;
+  camera.position.set(center.x + cx, center.y + cy, center.z + cz);
+  camera.up.set(0, 1, 0);
+  camera.lookAt(center);
+
+  camera.left = -radius; camera.right = radius;
+  camera.top = radius; camera.bottom = -radius;
+  camera.near = 0.01; camera.far = dist + radius * 2;
+  camera.updateProjectionMatrix();
+}
+
+function render(radius) {
+  if (!modelRoot) return;
+  frameCamera(modelRoot, radius ?? GLOBAL_RADIUS ?? 1);
+  renderer.render(scene, camera);
+}
+
+function updateLabels() {
+  elevVal.textContent = elevInput.value + '°';
+  aziVal.textContent = aziInput.value + '°';
+}
+
+[elevInput, aziInput].forEach(el => el.addEventListener('input', () => { updateLabels(); render(); }));
+sizeSel.addEventListener('change', () => {
+  W = H = parseInt(sizeSel.value, 10);
+  renderer.setSize(W, H);
+  render();
+});
+speciesSel.addEventListener('change', () => showSpecies(speciesSel.value).then(() => render()));
+
+function downloadCanvas(name) {
+  const a = document.createElement('a');
+  a.href = renderer.domElement.toDataURL('image/png');
+  a.download = name + '.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+document.getElementById('downloadOne').addEventListener('click', () => {
+  render();
+  downloadCanvas(speciesSel.value + '-' + aziInput.value);
+});
+
+// 8-direction export, driven externally (e.g. via preview_eval) and posted
+// to a local receiver (tools/export-receiver.py) rather than relying on
+// browser downloads — same pattern as sprite-render.html's __exportAnimSet.
+// Screen-compass angle theta (0=E,45=SE,90=S,135=SW,180=W,225=NW,270=N,315=NE)
+// maps to camera azimuth via azimuth = (270 - theta) mod 360 for the
+// character rig (sprite-render.html) — but the Cube Pets models' baked-in
+// "front" faces 180° opposite the character rig's (verified visually:
+// azimuth=(270-theta) put the dog's face on the S-labelled frame and its
+// rear on the N-labelled one, exactly backwards vs. the character set,
+// where S is front and N is back). So this tool needs the same formula
+// rotated 180°: azimuth = (90 - theta) mod 360.
+const DIRS = [
+  { name: 'E', theta: 0 }, { name: 'SE', theta: 45 }, { name: 'S', theta: 90 }, { name: 'SW', theta: 135 },
+  { name: 'W', theta: 180 }, { name: 'NW', theta: 225 }, { name: 'N', theta: 270 }, { name: 'NE', theta: 315 },
+];
+
+window.__exportPetSet = async function (opts = {}) {
+  const endpoint = opts.endpoint || 'http://127.0.0.1:8799/';
+  const elevDeg = opts.elev ?? 30;
+  const marginPct = opts.margin ?? 12;
+  const species = opts.species || SPECIES;
+
+  elevInput.value = elevDeg; updateLabels();
+  log('Computing shared camera radius across all species...');
+  const radius = await computeGlobalRadius(marginPct);
+
+  const out = [];
+  for (const sp of species) {
+    await showSpecies(sp);
+    for (const d of DIRS) {
+      const azimuth = (90 - d.theta + 360) % 360; // 180° rotated vs. the character rig — see note above
+      aziInput.value = azimuth; updateLabels();
+      render(radius);
+      const canvas = document.querySelector('#stage canvas');
+      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+      const filename = `${sp}_${d.name}.png`;
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'X-Filename': filename, 'Content-Type': 'application/octet-stream' },
+        body: blob,
+      });
+      out.push(filename + ':' + resp.status);
+    }
+    log(`  -> ${sp}: 8 views done`);
+  }
+  log('Done.');
+  return out.join(', ');
+};
+
+updateLabels();
+showSpecies(speciesSel.value).then(() => render()).catch(e => log('ERROR: ' + e.message));
+</script>
+</body>
+</html>

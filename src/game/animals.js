@@ -1,4 +1,5 @@
 import { makeRng } from './rng.js';
+import { ANIMAL_SPRITE_SETS } from '../engine/textures.js';
 
 // Wild animals: feral dogs, boars, and vipers. Each has a signature power,
 // a readable tell before it acts, and a counter the player can learn.
@@ -465,15 +466,81 @@ function updateViper(a, dt, player, map) {
 
 // ---- Drawing --------------------------------------------------------------
 
-// Placeholder art in code, matching the renderer's style: shadow ellipse at
-// the feet, simple shapes at tile scale. worldToScreen is the projection
-// function from engine/iso.js, passed in so this module stays engine-free.
+// Boar and viper are still placeholder art in code: shadow ellipse at the
+// feet, simple shapes at tile scale. Dog now draws the real Kenney
+// "Cube Pets" model (see ANIMAL_SPRITE_SETS in engine/textures.js,
+// pre-rendered offline via tools/pet-render.html into 8 screen-facing
+// directions), falling back to the old procedural shape until the image has
+// loaded. worldToScreen is the projection function from engine/iso.js,
+// passed in so most of this module stays engine-free; the sprite path is
+// the one exception, importing directly from textures.js.
 export function drawAnimal(ctx, animal, worldToScreen) {
   if (animal.dead) return;
   const c = worldToScreen(animal.x, animal.y);
-  if (animal.type === 'dog') drawDog(ctx, animal, c, worldToScreen);
-  else if (animal.type === 'boar') drawBoar(ctx, animal, c, worldToScreen);
+  if (animal.type === 'dog') {
+    if (!drawDogSprite(ctx, animal, c)) drawDog(ctx, animal, c, worldToScreen);
+  } else if (animal.type === 'boar') drawBoar(ctx, animal, c, worldToScreen);
   else if (animal.type === 'viper') drawViper(ctx, animal, c);
+}
+
+// Kenney normalises every Cube Pets model to a similar bounding cube
+// regardless of the real animal's size (confirmed by comparing rendered
+// bee/elephant output at the same camera framing — near-identical), so
+// species can't share one draw scale; each gets its own fudge factor here,
+// eyeballed relative to the dog. Only 'dog' is wired into gameplay so far —
+// the rest are rendered and ready in assets/textures/animals/ for whenever
+// boar/viper substitutes or further species are picked.
+const ANIMAL_SPRITE_SCALE = {
+  dog: 0.42, bee: 0.23, caterpillar: 0.19, chick: 0.23, crab: 0.23, fish: 0.26,
+  bunny: 0.32, beaver: 0.32, cat: 0.36, koala: 0.36, penguin: 0.36, parrot: 0.26,
+  fox: 0.39, monkey: 0.39, pig: 0.48, hog: 0.52, panda: 0.55, deer: 0.58,
+  lion: 0.61, tiger: 0.65, cow: 0.71, polar: 0.71, giraffe: 0.9, elephant: 1.03,
+};
+
+const ANIMAL_COMPASS_DIRS = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+const ANIMAL_DIR_THETA = { E: 0, SE: 45, S: 90, SW: 135, W: 180, NW: 225, N: 270, NE: 315 };
+// Same facing-vector -> screen-compass-direction mapping as
+// renderer.js:facingToCompassDir, duplicated here rather than imported so
+// this module doesn't reach into the renderer for one helper.
+function facingToCompassDir(facing) {
+  const sx = facing.y - facing.x, sy = facing.x + facing.y;
+  let theta = Math.atan2(sy, sx) * 180 / Math.PI;
+  if (theta < 0) theta += 360;
+  let best = 'S', bestDiff = Infinity;
+  for (const dir of ANIMAL_COMPASS_DIRS) {
+    const diff = Math.min(Math.abs(theta - ANIMAL_DIR_THETA[dir]), 360 - Math.abs(theta - ANIMAL_DIR_THETA[dir]));
+    if (diff < bestDiff) { bestDiff = diff; best = dir; }
+  }
+  return best;
+}
+
+// Returns false (drawing nothing) if the sprite for this facing hasn't
+// finished loading yet, so the caller can fall back to the procedural shape
+// instead of an invisible dog.
+function drawDogSprite(ctx, a, c) {
+  const set = ANIMAL_SPRITE_SETS.dog;
+  const dir = facingToCompassDir(a.facing);
+  const sprite = set && set[dir];
+  if (!sprite || !sprite.complete || !sprite.naturalWidth) return false;
+  const scale = ANIMAL_SPRITE_SCALE.dog;
+  const dw = sprite.naturalWidth * scale, dh = sprite.naturalHeight * scale;
+
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath();
+  ctx.ellipse(c.x, c.y, dw * 0.32, dw * 0.14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.drawImage(sprite, c.x - dw / 2, c.y - dh + dh * 0.16, dw, dh);
+
+  if (a.aggro) {
+    // Tell: barking, white "!" above the head.
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('!', c.x, c.y - dh - 4);
+    ctx.textAlign = 'left';
+  }
+  return true;
 }
 
 function drawDog(ctx, a, c, worldToScreen) {

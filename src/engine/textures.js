@@ -147,3 +147,24 @@ export const CHARACTER_SPRITE_SETS = {
   u: maleSet, // Neve reuses Adam's set — no distinct "other" skin rendered yet.
 };
 export const CHAR_COMPASS_DIRS = CHAR_DIRS;
+
+// Directional animal renders sourced from Kenney's CC0 "Cube Pets" pack
+// (assets/textures/animals/), pre-rendered offline via tools/pet-render.html
+// into 8 screen-facing directions per species, one static pose each (the
+// source models aren't rigged). Kenney normalises every model to a similar
+// bounding cube regardless of the real animal's size, so these are NOT
+// drawn at a shared scale — see ANIMAL_SPRITE_SCALE in animals.js for the
+// per-species fudge factor applied at draw time.
+const A = T + 'animals/';
+function loadAnimalSet(species) {
+  const set = {};
+  for (const dir of CHAR_DIRS) set[dir] = load(`${A}${species}_${dir}.png`);
+  return set;
+}
+export const ANIMAL_SPECIES = [
+  'beaver', 'bee', 'bunny', 'cat', 'caterpillar', 'chick', 'cow', 'crab',
+  'deer', 'dog', 'elephant', 'fish', 'fox', 'giraffe', 'hog', 'koala',
+  'lion', 'monkey', 'panda', 'parrot', 'penguin', 'pig', 'polar', 'tiger',
+];
+export const ANIMAL_SPRITE_SETS = {};
+for (const species of ANIMAL_SPECIES) ANIMAL_SPRITE_SETS[species] = loadAnimalSet(species);
