@@ -22,7 +22,14 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.15)
+## Where we are (v1.16)
+
+### v1.16 — floor lamps, isometric EXIT sign, share card
+
+- **Floor lamps.** The underworld `lamp` object was a hanging fixture; it's now a standing **floor lamp** (weighted foot + ground shadow, thin pole, flared shade with a glowing bulb sliver under the rim). `drawLamp` rewritten; `drawLampGlows` glow re-centred on the tile (was offset up for the ceiling drop). `tiles.js` comment updated.
+- **Isometric EXIT sign.** The sign above the exit door was a flat billboard with horizontal text. Now the panel is skewed onto the wall's SE face via the same `inset()` parallelogram as the door leaf, and the **lettering is rendered once to an offscreen canvas** (`_exitTextImg`) then drawn through an affine `ctx.transform` that maps the text rectangle onto the (inset) sign quad — so "EXIT" leans in perspective with the panel instead of sitting flat on top of it.
+- **Link-preview share card.** Added `assets/share-card.jpg` (1200×630, a framed game shot with title + tagline + green accent, composed off the live canvas) and Open Graph / Twitter meta tags in `index.html` `<head>`. A shared link now renders a proper thumbnail in iMessage / WhatsApp / Slack / Discord / X. **Requires hosting**: `og:url`/`og:image` are absolute and point at `https://dmberry.github.io/postAI/`, so the card only appears once the repo is served publicly (GitHub Pages: repo Settings → Pages → deploy from `main`). Update the host in the meta tags if deployed elsewhere.
+- **Roadmap.** Dropped the sight-cone item (didn't look good, per David); flagged full save/load as a wanted pull-forward candidate.
 
 ### v1.15 — the underworld at full scale, data-driven tapes, roadmap
 

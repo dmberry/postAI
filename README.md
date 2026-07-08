@@ -1,6 +1,6 @@
 # postAI
 
-**Version:** 1.15 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.16 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 *(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
@@ -8,7 +8,7 @@ An isometric 2D survival game set in a world devastated by an AI takeover. Civil
 
 Inspired by Project Zomboid: knowledge is the real progression, scarcity drives movement, every fight is optional and risky, and the world tells the story.
 
-## Current build (v1.15)
+## Current build (v1.16)
 
 **The world:** a seeded 128x128 isometric map — a river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, and roads. Away from the towns the terrain gets properly rugged: steep hills and deep hollows, always climbable one step at a time. Rubble and rocks are low enough to step straight over; a **wall block** is taller, so it takes a **double jump** (press jump again in mid-air) to get on top — once up there you move a little slower for control, can roam the block tops, and just walk off any edge to drop back down and carry on. **Up on a block you're safe from ground attacks** — machines and animals can't reach you, so a block top is high ground to catch your breath (a bomb blast still finds you, and the flying machines to come will too). Building walls still stop you on foot, so a town or house is a real boundary until you deliberately climb it. The forests are drawn with proper hand-drawn tree art — mostly full leafy trees, with the odd small or bare/dead one — and a chopped tree shows a damage bar so you can see how many swings it has left. The map is ringed by impassable dark-gravel rock cliffs at its edge — drawn semi-transparent so you still see yourself if one stands between you and the camera. Streams can be waded; the river can be swum (only your head and shoulders show above the water), slowly and at a cost — both now carry a slow, gently travelling opacity ripple along the watercourse, a cheap stand-in for current without an actual scrolling texture. Day and night cycle, with genuinely dark nights and torches to push them back.
 
@@ -33,6 +33,7 @@ Created by David and Henrik.
 Full technical detail (root causes, exact numbers) lives in [PAI-version-plan.md](PAI-version-plan.md); this is the one-line summary.
 
 | Version | Summary |
+| v1.16 | Underworld **lamps** are now proper **floor lamps** (base, pole, shade) standing in the rooms rather than hanging fixtures; the **EXIT** sign above the door is drawn in true isometric perspective — the panel skewed onto the wall face and the lettering rendered to an image and stretched to match, instead of sitting flat. Added a **link-preview share card** (`assets/share-card.jpg` + Open Graph / Twitter meta) so a shared link renders a proper thumbnail in iMessage, WhatsApp, Slack, etc. once the game is hosted (e.g. GitHub Pages). Dropped the sight-cone item from the roadmap. |
 |---|---|
 | v1.15 | The **underworld** grown to a full 128×128: varied-size rooms scattered across an open sea of worn-yellow floor, joined by road corridors, floored with seven photo textures (odd rooms baby-blue), lit by hanging **lamps** that flicker rarely, the way out a plain cream **door** with a green EXIT sign. Cassette tapes are now **data-driven** (`items.js` `TAPES` + `docs/tapes.md`) — the WARD "bare stanhope" tape waits in a **yellow box** in the first room, with more yellow tape-boxes scattered about; the walkman marquee is dimmer and drifts slowly. Added `docs/ROADMAP.md` (phased outstanding work) |
 | v1.14 | The **underworld** rebuilt as huge furniture-strewn rooms joined by doorways (not a corridor maze), with a worn/stained floor and a clearly-signed **EXIT** tear a few steps from where you arrive (lurker moved to the far rooms); fixed a crash on entering a tear; the Ubik tear restyled as a raw dark rip (the clean-portal look is reserved for a future portal gun); Ubik-confused machines bounce on the spot instead of spinning; music defaults to the synth bed, with the walkman looping a tape over it and dropping back to synth when stopped; the walkman shows a scrolling artist/track ticker |

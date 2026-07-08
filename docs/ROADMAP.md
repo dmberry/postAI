@@ -11,10 +11,6 @@ map, not a schedule.
 
 ## Phase 1 — polish & small wins (low risk, mostly self-contained)
 
-- **Sight cone**: the peripheral-indistinctness renderer exists (`drawSightCone`)
-  but is switched off (`SIGHT_CONE = false`). Tune it (cone width, falloff,
-  how dark the periphery goes) and turn it on. Pairs with T3 (which already
-  relies on genuine line-of-sight).
 - **Limping / WOUNDED tell**: the low-health slowdown exists; add the limp
   animation + a WOUNDED tag so the player can read it.
 - **Persist fog of war across reload/death** (like skills already do), so map
@@ -84,7 +80,8 @@ map, not a schedule.
 ## Phase 5 — infrastructure & tech debt
 
 - **Full world save/load** (localStorage) + a **title screen** with seed
-  selection — carry a whole run, not just character/skills.
+  selection — carry a whole run, not just character/skills. *(Flagged as
+  wanted — a strong candidate to pull forward once a quiet window opens.)*
 - **File-size refactor**: `renderer.js`, `player.js`, `robots.js`, `main.js`
   are large. Split candidates: renderer's HUD/modal drawing → `ui.js`; player's
   weapon-fire (`fire`/`pierceShot`/`coneShot`/`burnObelisk`) → `combat.js`;

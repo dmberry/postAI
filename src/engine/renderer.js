@@ -1439,38 +1439,50 @@ export class Renderer {
       if (o.type !== 'lamp') continue;
       const s = worldToScreen(o.x + 0.5, o.y + 0.5);
       const bright = this._lampFlicker(o.seed || 0);
-      const R = 52;
-      const glow = ctx.createRadialGradient(s.x, s.y - 6, 3, s.x, s.y - 6, R);
+      const R = 44;
+      const glow = ctx.createRadialGradient(s.x, s.y, 3, s.x, s.y, R);
       glow.addColorStop(0, `rgba(236,240,214,${(0.2 * bright).toFixed(3)})`);
       glow.addColorStop(1, 'rgba(236,240,214,0)');
       ctx.fillStyle = glow;
-      ctx.beginPath(); ctx.arc(s.x, s.y - 6, R, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
 
-  // A single hanging lamp: a drop-rod from above with a small tube fixture,
-  // glowing at its own flicker brightness. Non-solid — you walk beneath it.
+  // A single floor lamp: a base standing on the tile, a thin pole, and a
+  // shaded head at about waist-to-shoulder height, glowing at its own
+  // flicker brightness. Non-solid — you can walk past it.
   drawLamp(obj) {
     const ctx = this.ctx;
     const s = worldToScreen(obj.x + 0.5, obj.y + 0.5);
     const bright = this._lampFlicker(obj.seed || 0);
-    const topY = s.y - 62; // up near the "ceiling"
-    const fixY = s.y - 40;
-    ctx.strokeStyle = 'rgba(30,28,22,0.8)'; // the drop rod
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.moveTo(s.x, topY); ctx.lineTo(s.x, fixY); ctx.stroke();
-    // A soft halo right at the tube.
-    const halo = ctx.createRadialGradient(s.x, fixY, 1, s.x, fixY, 16);
+    const baseY = s.y;
+    const headY = s.y - 34; // shade height, standing off the floor
+    // Ground shadow.
+    ctx.fillStyle = 'rgba(0,0,0,0.28)';
+    ctx.beginPath(); ctx.ellipse(s.x, baseY + 2, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
+    // Weighted foot.
+    ctx.fillStyle = 'rgba(35,32,24,0.9)';
+    ctx.beginPath(); ctx.ellipse(s.x, baseY, 5.5, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+    // The pole.
+    ctx.strokeStyle = 'rgba(40,36,26,0.85)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(s.x, baseY - 1); ctx.lineTo(s.x, headY + 7); ctx.stroke();
+    // A soft halo right at the shade.
+    const halo = ctx.createRadialGradient(s.x, headY, 1, s.x, headY, 18);
     halo.addColorStop(0, `rgba(244,248,224,${(0.55 * bright).toFixed(3)})`);
     halo.addColorStop(1, 'rgba(244,248,224,0)');
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(s.x, fixY, 16, 0, Math.PI * 2); ctx.fill();
-    // The tube itself: a small horizontal bar in a dark housing.
-    ctx.fillStyle = 'rgba(40,38,30,0.9)';
-    ctx.fillRect(s.x - 11, fixY - 3, 22, 6);
+    ctx.beginPath(); ctx.arc(s.x, headY, 18, 0, Math.PI * 2); ctx.fill();
+    // The shade itself: a small dark trapezoid, flared at the base.
+    ctx.fillStyle = 'rgba(42,38,30,0.92)';
+    ctx.beginPath();
+    ctx.moveTo(s.x - 4, headY - 7); ctx.lineTo(s.x + 4, headY - 7);
+    ctx.lineTo(s.x + 7.5, headY + 6); ctx.lineTo(s.x - 7.5, headY + 6);
+    ctx.closePath(); ctx.fill();
+    // A sliver of glowing bulb showing under the shade's rim.
     ctx.fillStyle = `rgba(248,250,230,${(0.35 + 0.6 * bright).toFixed(3)})`;
-    ctx.fillRect(s.x - 9, fixY - 1.5, 18, 3);
+    ctx.beginPath(); ctx.ellipse(s.x, headY + 5.5, 5, 1.8, 0, 0, Math.PI * 2); ctx.fill();
   }
 
   // Procedural wear for the underworld's bare-colour lino floor: worn patches,
@@ -1626,19 +1638,55 @@ export class Renderer {
     const knob = { x: g.bottom.x + (g.right.x - g.bottom.x) * 0.8, y: g.bottom.y + (g.right.y - g.bottom.y) * 0.8 - H / 2 };
     ctx.fillStyle = '#2a241a';
     ctx.beginPath(); ctx.arc(knob.x, knob.y, 1.8, 0, Math.PI * 2); ctx.fill();
-    // A lit green EXIT sign mounted above the door — the one clear marker in
-    // all this wrongness.
-    const cxm = (g.bottom.x + g.right.x) / 2, sy = g.bottom.y - H - 12;
-    const glow = ctx.createRadialGradient(cxm, sy + 7, 2, cxm, sy + 7, 24);
+    // A lit green EXIT sign, flush-mounted on the same wall face as the door
+    // (the SE face, via the same skewed inset() used for the leaf) so it sits
+    // in correct isometric perspective directly above the door rather than as
+    // a flat billboard — the one clear marker in all this wrongness.
+    const sign = inset(g.bottom, g.right, 0.14, 0.86, H + 6, H + 22);
+    const scx = (sign[0].x + sign[2].x) / 2, scy = (sign[0].y + sign[2].y) / 2;
+    const glow = ctx.createRadialGradient(scx, scy, 2, scx, scy, 26);
     glow.addColorStop(0, 'rgba(60,220,120,0.5)'); glow.addColorStop(1, 'rgba(60,220,120,0)');
-    ctx.fillStyle = glow; ctx.fillRect(cxm - 24, sy - 17, 48, 48);
-    ctx.fillStyle = 'rgba(8,20,12,0.94)'; ctx.fillRect(cxm - 17, sy, 34, 14);
-    ctx.strokeStyle = 'rgba(80,240,140,0.9)'; ctx.lineWidth = 1.5;
-    ctx.strokeRect(cxm - 16.5, sy + 0.5, 33, 13);
-    ctx.fillStyle = '#7dffb0'; ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('EXIT', cxm, sy + 7.5);
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(scx, scy, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(8,20,12,0.94)';
+    ctx.beginPath(); ctx.moveTo(sign[0].x, sign[0].y);
+    for (const p of sign.slice(1)) ctx.lineTo(p.x, p.y);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(80,240,140,0.9)'; ctx.lineWidth = 1.5; ctx.stroke();
+    // The "EXIT" lettering, rendered once to an offscreen canvas and then
+    // mapped through an affine transform onto the sign's skewed face so it
+    // leans in the same isometric perspective as the panel rather than sitting
+    // flat. The transform sends the text-image rectangle's corners to the
+    // (slightly inset) sign quad: (0,0)->top-left, (w,0)->top-right,
+    // (0,h)->bottom-left.
+    const img = this._exitTextImg();
+    const k = 0.84; // inset the letters inside the panel border
+    const inner = sign.map((p) => ({ x: scx + (p.x - scx) * k, y: scy + (p.y - scy) * k }));
+    const P00 = inner[3], P10 = inner[2], P01 = inner[0];
+    const w = img.width, h = img.height;
+    ctx.save();
+    ctx.transform(
+      (P10.x - P00.x) / w, (P10.y - P00.y) / w,
+      (P01.x - P00.x) / h, (P01.y - P00.y) / h,
+      P00.x, P00.y,
+    );
+    ctx.drawImage(img, 0, 0);
+    ctx.restore();
+  }
+
+  // Cached green "EXIT" glyph image, drawn flat here and skewed at draw time.
+  _exitTextImg() {
+    if (this._exitText) return this._exitText;
+    const c = document.createElement('canvas');
+    c.width = 120; c.height = 44;
+    const x = c.getContext('2d');
+    x.fillStyle = '#8dffbc';
+    x.font = 'bold 34px system-ui, sans-serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.shadowColor = 'rgba(140,255,185,0.9)'; x.shadowBlur = 5;
+    x.fillText('EXIT', 60, 23);
+    this._exitText = c;
+    return c;
   }
 
   // A pile of stacked junk cluttering an underworld room: one blocky extruded
