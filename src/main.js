@@ -48,7 +48,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.26';
+const VERSION = '1.27';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);

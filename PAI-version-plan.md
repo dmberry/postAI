@@ -22,7 +22,15 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.26)
+## Where we are (v1.27)
+
+### v1.27 — gate/title branding + label marquee + bigger tape
+
+All in `src/game/mobile-gate.js`:
+- **Branding wordmark.** `<h1>` is now `post<span class="mg-ai">AI</span><span class="mg-caret">▮</span>` in a `.mg-brand` flex row with a CSS-drawn cassette mark (`.mg-brand-mark`, a dark rounded rect with two reel dots and a `--deck` inset). Monospace, "AI" glows in `--accent`, a blinking terminal caret. Title mode scales it up (46px logo, 48px mark). Themes recolour it via `--accent`/`--deck`.
+- **Label marquee.** The `#mg-now` text line is gone; the now-playing string lives in a `nowText` var (set by `updateNow`) and is drawn as a marquee across the cassette's own coloured label strip (drawCassette's `fillRect(-9,-5.5,18,3)`) in the deck frame loop — clipped to the strip, dark ink, seamless two-copy loop while playing (`t/34` drift), centred when idle (shows `postAI`).
+- **Bigger tape.** Deck canvas intrinsic 280×110 → 264×168 (≈ cassette 22:14 aspect) and draw scale 5.0 → 11.2, so the tape nearly fills the deck. Verified the taller deck still fits the mobile gate (themes bottom ≈ 798 < 812) and reads on desktop; no console errors; marquee scrolls in both modes.
+- Branding is a first pass — wordmark treatment / mark are easy to iterate.
 
 ### v1.26 — WARD tape three-track rework + copy newline
 

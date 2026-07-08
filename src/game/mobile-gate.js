@@ -68,7 +68,21 @@ export function initMobileGate(mode = 'gate') {
         display: flex; flex-direction: column; align-items: center;
         padding: max(16px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
         -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-      #mobile-gate h1 { font-size: 26px; margin: 2px 0 1px; letter-spacing: 0.02em; }
+      /* branding wordmark: mono terminal type, glowing AI, blinking caret,
+         and a little cassette mark — themes with --accent. */
+      .mg-brand { display: flex; align-items: center; gap: 12px; margin: 2px 0 1px; }
+      #mobile-gate h1 { font: 800 30px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.01em;
+        margin: 0; color: #f2ecda; text-shadow: 0 2px 14px rgba(0,0,0,0.55); }
+      #mobile-gate h1 .mg-ai { color: var(--accent); text-shadow: 0 0 16px color-mix(in srgb, var(--accent) 70%, transparent); }
+      #mobile-gate h1 .mg-caret { color: var(--accent); font-weight: 400; margin-left: 2px;
+        animation: mg-blink 1.1s steps(1) infinite; }
+      @keyframes mg-blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+      .mg-brand-mark { width: 34px; height: 22px; border-radius: 4px; flex: 0 0 auto; position: relative;
+        background: #26282d; border: 1.6px solid rgba(0,0,0,0.55);
+        box-shadow: 0 3px 10px rgba(0,0,0,0.4), inset 0 0 0 2px var(--deck); }
+      .mg-brand-mark::before, .mg-brand-mark::after { content: ''; position: absolute; top: 9px;
+        width: 8px; height: 8px; border-radius: 50%; background: #e8e2d0; box-shadow: inset 0 0 0 2px #26282d; }
+      .mg-brand-mark::before { left: 6px; } .mg-brand-mark::after { right: 6px; }
       #mobile-gate .mg-sub { font-size: 15px; line-height: 1.4; color: #f0ead8; font-weight: 700; text-align: center; max-width: 30em; margin: 0 0 2px; }
       #mobile-gate .mg-sub2 { display: block; font-size: 12px; font-weight: 400; color: var(--accent); margin-top: 6px; }
       .mg-tryanyway { font-size: 12px; color: var(--accent); opacity: 0.8; text-decoration: underline;
@@ -105,7 +119,6 @@ export function initMobileGate(mode = 'gate') {
         border: 3px solid var(--edge); box-shadow: 0 8px 22px rgba(0,0,0,0.5), inset 0 0 0 2px var(--bezel);
         padding: 9px; margin-bottom: 8px; flex: 0 0 auto; }
       .mg-deck-cass { display: block; width: 100%; height: auto; }
-      .mg-nowplaying { text-align: center; font-size: 13px; color: #1c1a10; font-weight: 700; margin-top: 5px; min-height: 16px; letter-spacing: 0.02em; }
       /* transport controls — play/pause, stop, next */
       .mg-transport { display: flex; gap: 8px; justify-content: center; margin-top: 7px; }
       .mg-transport button { width: 40px; height: 32px; border-radius: 7px; cursor: pointer;
@@ -128,14 +141,18 @@ export function initMobileGate(mode = 'gate') {
       /* title mode has a full desktop window to breathe into — bigger logo,
          more air between the header, buttons, clock and stage. */
       #mobile-gate[data-mode="title"] { padding-top: max(28px, env(safe-area-inset-top)); gap: 4px; }
-      #mobile-gate[data-mode="title"] h1 { font-size: 40px; margin: 6px 0 6px; }
+      #mobile-gate[data-mode="title"] .mg-brand { margin: 6px 0 6px; gap: 16px; }
+      #mobile-gate[data-mode="title"] h1 { font-size: 46px; }
+      #mobile-gate[data-mode="title"] .mg-brand-mark { width: 48px; height: 31px; border-radius: 5px; }
+      #mobile-gate[data-mode="title"] .mg-brand-mark::before, #mobile-gate[data-mode="title"] .mg-brand-mark::after { top: 13px; width: 11px; height: 11px; }
+      #mobile-gate[data-mode="title"] .mg-brand-mark::before { left: 9px; } #mobile-gate[data-mode="title"] .mg-brand-mark::after { right: 9px; }
       #mobile-gate[data-mode="title"] .mg-sub { font-size: 17px; margin-bottom: 6px; }
       #mobile-gate[data-mode="title"] .mg-actions { margin: 18px 0 6px; }
       #mobile-gate[data-mode="title"] .mg-btn { font-size: 16px; padding: 12px 30px; }
       #mobile-gate[data-mode="title"] .mg-skylink { margin-top: 20px; margin-bottom: 10px; }
       #mobile-gate[data-mode="title"] .mg-stage { margin-top: 10px; max-height: 240px; }
     </style>
-    <h1>postAI</h1>
+    <div class="mg-brand"><span class="mg-brand-mark" aria-hidden="true"></span><h1>post<span class="mg-ai">AI</span><span class="mg-caret">▮</span></h1></div>
     ${isTitle ? `
     <p class="mg-sub">The machines outlived the world. Now survive it.<span class="mg-sub2">A keyboard-and-mouse survival game. Here's the soundtrack while you decide.</span></p>
     <div class="mg-actions">
@@ -147,8 +164,7 @@ export function initMobileGate(mode = 'gate') {
     <div class="mg-skylink" id="mg-skylink">SKYLINK uplink operative · T‑<span id="mg-sky">--:--:--</span></div>
     <div class="mg-stage" id="mg-stage"></div>
     <div class="mg-deck">
-      <canvas class="mg-deck-cass" id="mg-deck-cass" width="280" height="110"></canvas>
-      <div class="mg-nowplaying" id="mg-now">— tap a tape below —</div>
+      <canvas class="mg-deck-cass" id="mg-deck-cass" width="264" height="168"></canvas>
       <div class="mg-transport">
         <button id="mg-play" title="Play / pause" aria-label="Play or pause">▶</button>
         <button id="mg-stop" title="Stop" aria-label="Stop">■</button>
@@ -245,7 +261,7 @@ export function initMobileGate(mode = 'gate') {
   let playlist = [];
   let idx = 0;
   let current = -1;
-  const nowEl = el.querySelector('#mg-now');
+  let nowText = 'postAI';   // scrolls across the tape's label window (marquee)
   const playBtn = el.querySelector('#mg-play');
   const stopBtn = el.querySelector('#mg-stop');
   const nextBtn = el.querySelector('#mg-next');
@@ -257,10 +273,10 @@ export function initMobileGate(mode = 'gate') {
   // Deck readout: while a tape is loaded, show artist + current track (with the
   // side it's on); otherwise the prompt.
   const updateNow = () => {
-    if (current < 0) { nowEl.textContent = '— tap a tape below —'; return; }
+    if (current < 0) { nowText = 'postAI'; return; }
     const t = TAPES[current];
     const side = idx < t.a.tracks.length ? 'A' : 'B';
-    nowEl.textContent = `${t.artist} — ${trackName(playlist[idx])} · ${side}`;
+    nowText = `${t.artist} — ${trackName(playlist[idx])} · ${side}`;
   };
 
   // Reflect play/pause on the button glyph; disable stop/next until a tape's in.
@@ -327,12 +343,36 @@ export function initMobileGate(mode = 'gate') {
     if (!running) return;   // stop drawing once we've booted the game
     const dt = Math.min(0.05, (t - lastT) / 1000); lastT = t;
     const playing = current >= 0 && !audio.paused;
-    // deck cassette
+    // deck cassette — scaled up so the tape nearly fills the deck
     if (playing) spin += dt * 2.4; // slow, lazy reel turn
+    const S = 11.2, dcx = deckCv.width / 2, dcy = deckCv.height / 2;
     deckCtx.clearRect(0, 0, deckCv.width, deckCv.height);
-    deckCtx.save(); deckCtx.translate(deckCv.width / 2, deckCv.height / 2); deckCtx.scale(5.0, 5.0);
+    deckCtx.save(); deckCtx.translate(dcx, dcy); deckCtx.scale(S, S);
     deckRenderer.drawCassette({ color: deckColor }, spin);
     deckCtx.restore();
+    // now-playing marquee across the tape's own coloured label strip
+    // (drawCassette draws that strip at local x -9..9, y -5.5..-2.5).
+    {
+      const lx = dcx - 9 * S, ly = dcy - 5.5 * S, lw = 18 * S, lh = 3 * S;
+      deckCtx.save();
+      deckCtx.beginPath(); deckCtx.rect(lx, ly, lw, lh); deckCtx.clip();
+      deckCtx.font = `700 ${Math.round(lh * 0.56)}px ui-monospace, Menlo, monospace`;
+      deckCtx.textBaseline = 'middle';
+      deckCtx.fillStyle = 'rgba(18,15,8,0.92)'; // dark ink printed on the coloured label
+      const midY = ly + lh / 2 + 0.5;
+      if (playing) {
+        // seamless loop: a second copy one period ahead, a full-width gap between.
+        const tw = deckCtx.measureText(nowText).width;
+        const period = tw + lw, off = (t / 34) % period;
+        deckCtx.textAlign = 'left';
+        deckCtx.fillText(nowText, lx + lw - off, midY);
+        deckCtx.fillText(nowText, lx + lw - off + period, midY);
+      } else {
+        deckCtx.textAlign = 'center';
+        deckCtx.fillText(nowText, lx + lw / 2, midY);
+      }
+      deckCtx.restore();
+    }
     // machines — bob up and down to the beat (drawRobot's own shadow is
     // suppressed via r.noShadow; we draw a separate shadow that stays planted
     // on the floor and just shrinks a touch as the machine springs up).
