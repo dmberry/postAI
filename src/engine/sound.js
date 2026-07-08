@@ -7,11 +7,19 @@
 // audio stack can never crash the game.
 //
 // One deliberate exception to "nothing is fetched": the background music
-// also offers a real audio file (assets/audio/eliza-theme.mp3) as an
-// alternative to the synthesised piano bed, cycled with the synth mode via
-// the same M-key toggle — see "ambient music" below.
+// also offers real audio files (assets/audio/*) as alternatives to the
+// synthesised piano bed, cycled together with the synth mode via the same
+// M-key toggle — see "ambient music" below.
 
 import { CHOIR_NOTES, CHOIR_DURATION } from './choir-notes.js';
+
+// Alternate real-audio tracks, in cycle order. Add more here freely — the
+// M-key toggle and _setupFileMusic below both just iterate this list.
+const FILE_TRACKS = [
+  { mode: 'eliza', src: 'assets/audio/eliza-theme.mp3', label: 'a found tape' },
+  { mode: 'resonance', src: 'assets/audio/resonance-theme.mp3', label: 'another found tape' },
+];
+const MUSIC_MODES = [...FILE_TRACKS.map((t) => t.mode), 'synth', 'off'];
 
 const MASTER_GAIN = 0.3;
 const PLAY_DEBOUNCE_MS = 70;   // per-name minimum interval for play()
@@ -42,10 +50,9 @@ class Sound {
     this._windGain = null;
     this._cricketGain = null;
     this._musicGain = null;          // synth-piano fade bus: mode and combat tension both ramp this
-    this._musicMode = 'file';        // 'synth' | 'file' | 'off' — cycled by the M key; starts on the found tape
+    this._musicMode = 'eliza';       // one of MUSIC_MODES — cycled by the M key; starts on the first found tape
     this._musicTense = false;        // true while fighting or being hunted
-    this._fileEl = null;             // the alternate real-audio track (assets/audio/eliza-theme.mp3)
-    this._fileGain = null;
+    this._fileTracks = new Map();    // mode -> { el, gain }, one per FILE_TRACKS entry
   }
 
   // ---- lifecycle -------------------------------------------------------
@@ -399,37 +406,41 @@ class Sound {
     this._tone({ when: t, dur: dur * 0.35, type: 'sine', freq: freq * 1.5, gain: 0.01, attack: 0.01, bus: this._musicGain });
   }
 
-  // The alternate real-audio track: a plain looping <audio> element routed
-  // through Web Audio (createMediaElementSource) so it shares the master bus
-  // and gets the same tension-ducking treatment as the synth bed. Built once
-  // in unlock(); playback starts immediately if 'file' is already the active
-  // mode (the default), or the first time the mode is switched to 'file' —
-  // either way unlock() only ever runs after a user gesture, so browsers'
+  // The alternate real-audio tracks (FILE_TRACKS): plain looping <audio>
+  // elements routed through Web Audio (createMediaElementSource) so each
+  // shares the master bus and gets the same tension-ducking treatment as
+  // the synth bed. Built once in unlock(); whichever one is already the
+  // active mode (the default is the first) starts playing immediately, the
+  // rest start the first time the mode is switched onto them — either way
+  // unlock() only ever runs after a user gesture, so browsers'
   // autoplay-blocking is a non-issue here.
   _setupFileMusic() {
-    if (this._fileEl || typeof Audio === 'undefined') return;
-    try {
-      const el = new Audio('assets/audio/eliza-theme.mp3');
-      el.loop = true;
-      el.preload = 'auto';
-      const src = this.ctx.createMediaElementSource(el);
-      this._fileGain = this.ctx.createGain();
-      this._fileGain.gain.value = 0;
-      src.connect(this._fileGain);
-      this._fileGain.connect(this.master);
-      this._fileEl = el;
-      if (this._musicMode === 'file') el.play().catch(() => {});
-    } catch (e) { /* audio must never crash the game */ }
+    if (this._fileTracks.size || typeof Audio === 'undefined') return;
+    for (const t of FILE_TRACKS) {
+      try {
+        const el = new Audio(t.src);
+        el.loop = true;
+        el.preload = 'auto';
+        const src = this.ctx.createMediaElementSource(el);
+        const gain = this.ctx.createGain();
+        gain.gain.value = 0;
+        src.connect(gain);
+        gain.connect(this.master);
+        this._fileTracks.set(t.mode, { el, gain });
+        if (this._musicMode === t.mode) el.play().catch(() => {});
+      } catch (e) { /* audio must never crash the game */ }
+    }
   }
 
-  // The M key cycles: synth piano bed -> the real audio track -> off -> back
-  // to synth. Returns the new mode so the caller can print what changed.
+  // The M key cycles through every FILE_TRACKS entry, then the synth piano
+  // bed, then off, then back to the first track. Returns the new mode so
+  // the caller can print what changed.
   toggleMusic() {
-    const order = ['synth', 'file', 'off'];
-    this._musicMode = order[(order.indexOf(this._musicMode) + 1) % order.length];
-    if (this._musicMode === 'file' && this._fileEl) {
-      this._fileEl.currentTime = this._fileEl.currentTime || 0;
-      this._fileEl.play().catch(() => {}); // ignore a blocked autoplay; gain stays at 0 either way
+    this._musicMode = MUSIC_MODES[(MUSIC_MODES.indexOf(this._musicMode) + 1) % MUSIC_MODES.length];
+    const track = this._fileTracks.get(this._musicMode);
+    if (track) {
+      track.el.currentTime = track.el.currentTime || 0;
+      track.el.play().catch(() => {}); // ignore a blocked autoplay; gain stays at 0 either way
     }
     this._applyMusicGain();
     return this._musicMode;
@@ -455,16 +466,15 @@ class Sound {
 
   _applyMusicGain(fade = 2.5) {
     if (!this.ctx) return;
-    const synthTarget = this._musicMode === 'synth' ? 1 : 0;
-    const fileTarget = this._musicMode === 'file' ? 1 : 0;
-    if (this._fileGain) {
-      const fg = this._fileGain.gain;
+    for (const [mode, track] of this._fileTracks) {
+      const target = this._musicMode === mode ? 1 : 0;
+      const fg = track.gain.gain;
       fg.cancelScheduledValues(this.ctx.currentTime);
       fg.setValueAtTime(fg.value, this.ctx.currentTime);
-      fg.linearRampToValueAtTime(fileTarget, this.ctx.currentTime + fade);
+      fg.linearRampToValueAtTime(target, this.ctx.currentTime + fade);
     }
     if (!this._musicGain) return;
-    const target = synthTarget;
+    const target = this._musicMode === 'synth' ? 1 : 0;
     const t = this.ctx.currentTime;
     const g = this._musicGain.gain;
     g.cancelScheduledValues(t);

@@ -22,7 +22,11 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.06)
+## Where we are (v1.07)
+
+### v1.07 — a second music track
+
+Small follow-up. `sound.js`'s music system generalised from a single hardcoded file track to a `FILE_TRACKS` list (`{mode, src, label}`) iterated everywhere it used to special-case `'file'` — `_setupFileMusic` now builds one `<audio>`/gain pair per entry into a `Map`, `_applyMusicGain` loops the map instead of touching one gain node, and `toggleMusic` cycles a derived `MUSIC_MODES` array (`[...FILE_TRACKS.map(t => t.mode), 'synth', 'off']`) instead of a hardcoded 3-array. Added `assets/audio/resonance-theme.mp3` (copied from `_tmp/meme-resonance.mp3`, same as the first track) as the second entry. Cycle is now `eliza -> resonance -> synth -> off -> eliza`; default unchanged (starts on `eliza`). Adding a third track going forward is a one-line addition to `FILE_TRACKS`, nothing else to touch. Verified live: full 5-step cycle through `toggleMusic()` matched the expected mode sequence exactly, both tracks' `<audio>` elements confirmed unpaused when active, `resonance-theme.mp3` confirmed served correctly (200, audio/mpeg, correct byte count).
 
 ### v1.06 — music defaults/combat fix, per-house loot cap, About box
 

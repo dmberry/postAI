@@ -47,7 +47,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.06';
+const VERSION = '1.07';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -1285,7 +1285,7 @@ function update(dt) {
   if (input.musicTogglePressed()) {
     const mode = sfx.toggleMusic();
     player.say(mode === 'synth' ? 'Music: the old piano bed.'
-      : mode === 'file' ? 'Music: a found tape, played through.' : 'Music off.');
+      : mode === 'off' ? 'Music off.' : 'Music: another found tape, played through.');
   }
   // Rest (B): skips the clock forward 10 game-minutes and restores some
   // health, so long as nothing hostile is close enough to make that a bad
