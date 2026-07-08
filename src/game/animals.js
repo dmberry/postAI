@@ -51,13 +51,18 @@ const VIPER_STRIKE_COOLDOWN = 0.5;
 const VIPER_VENOM_SECONDS = 6;
 
 // Deer: a test case for a purely placid animal — no power, no tell, no
-// attack. Grazes until the player gets close, then just runs; never turns
-// to fight. Sprite-only (no procedural fallback art, since this is a test
-// of the sprite pipeline on a second species, not a design commitment).
+// attack. Grazes until the player gets close, then runs; never turns to
+// fight. Sprite-only (no procedural fallback art, since this is a test of
+// the sprite pipeline on a second species, not a design commitment).
 const DEER_HP = 15;
 const DEER_WANDER_SPEED = 0.9;
 const DEER_FLEE_SPEED = 5.2;
-const DEER_FLEE_RANGE = 6; // notices the player and bolts within this
+const DEER_FLEE_RANGE = 6;      // notices the player and reacts within this
+const DEER_PANIC_RANGE = 3;     // inside this it always bolts, no freeze roll
+const DEER_FREEZE_CHANCE = 0.15; // per second, while alert but not panicking: real deer freeze more than they run
+const DEER_FREEZE_TIME = [0.8, 1.6]; // [min, max] seconds held on a natural freeze
+const DEER_STUCK_TIME = 0.3;    // seconds of near-zero progress before it gives up shoving into an obstacle
+const DEER_STUCK_FREEZE_TIME = [1.5, 2.5]; // held longer when cornered — matches "freezes when there's no exit"
 
 // Spawn counts and placement.
 const DOG_PACKS = 3;
@@ -204,7 +209,10 @@ export function spawnAnimals(map, seed, avoid) {
 
   // Deer on forest edges, same candidate tiles as boars.
   for (const [x, y] of pickSpots(boarTiles, DEER_COUNT, DEER_MIN_GAP, rng)) {
-    animals.push(baseAnimal('deer', x, y, DEER_HP, rng));
+    const deer = baseAnimal('deer', x, y, DEER_HP, rng);
+    deer.freezeTimer = 0; // tell: renderer shows the idle pose (not walk) while > 0
+    deer.stuckTimer = 0;  // internal: tracks failed-progress time towards the current flee direction
+    animals.push(deer);
   }
 
   return animals;
@@ -354,14 +362,44 @@ export function updateAnimals(dt, animals, player, map) {
 
 // Placid: grazes (wander), bolts on sight of the player, never fights back.
 function updateDeer(a, dt, player, map) {
+  a.freezeTimer = Math.max(0, a.freezeTimer - dt);
   const d = distTo(a, player);
-  if (d < DEER_FLEE_RANGE) {
-    const away = d > 1e-6
-      ? { x: (a.x - player.x) / d, y: (a.y - player.y) / d }
-      : { x: 1, y: 0 };
-    moveToward(a, a.x + away.x * 2, a.y + away.y * 2, DEER_FLEE_SPEED, dt, map);
-  } else {
+
+  if (d >= DEER_FLEE_RANGE) {
+    a.stuckTimer = 0;
     wander(a, DEER_WANDER_SPEED, dt, map);
+    return;
+  }
+
+  if (a.freezeTimer > 0) return; // held still — no movement, no re-roll
+
+  // Natural alert-freeze: real deer hold rather than bolt more often than
+  // not, unless the player is right on top of them. Rolled once per frame
+  // scaled by dt so the expected freeze rate stays ~DEER_FREEZE_CHANCE/sec
+  // regardless of frame rate.
+  if (d > DEER_PANIC_RANGE && a.rng() < DEER_FREEZE_CHANCE * dt) {
+    a.freezeTimer = DEER_FREEZE_TIME[0] + a.rng() * (DEER_FREEZE_TIME[1] - DEER_FREEZE_TIME[0]);
+    return;
+  }
+
+  const away = d > 1e-6
+    ? { x: (a.x - player.x) / d, y: (a.y - player.y) / d }
+    : { x: 1, y: 0 };
+  const moved = moveToward(a, a.x + away.x * 2, a.y + away.y * 2, DEER_FLEE_SPEED, dt, map);
+
+  // Cornered: the direct-away line is blocked (wall, water, tree cluster)
+  // and shoving into it every frame reads as jittering in place. Give up
+  // on that line and freeze instead — matches real deer holding still when
+  // there's no clear bolt line, rather than a scripted animal thrashing at
+  // an obstacle in plain sight.
+  if (moved < 0.01) {
+    a.stuckTimer += dt;
+    if (a.stuckTimer > DEER_STUCK_TIME) {
+      a.freezeTimer = DEER_STUCK_FREEZE_TIME[0] + a.rng() * (DEER_STUCK_FREEZE_TIME[1] - DEER_STUCK_FREEZE_TIME[0]);
+      a.stuckTimer = 0;
+    }
+  } else {
+    a.stuckTimer = 0;
   }
 }
 
@@ -660,10 +698,11 @@ function drawDog(ctx, a, c, worldToScreen) {
   }
 }
 
-// One reusable offscreen canvas for compositing the boar's telegraph-flash
-// tint onto its sprite before drawing — same 'source-atop' trick as
-// renderer.js:tintScratch, duplicated locally for the same reason
-// facingToCompassDir is (this module stays out of the renderer/engine).
+// One reusable offscreen canvas for compositing the boar's always-on black
+// colourize tint and its telegraph-flash tint onto its sprite before
+// drawing — same compositing trick as renderer.js:tintScratch, duplicated
+// locally for the same reason facingToCompassDir is (this module stays out
+// of the renderer/engine).
 let _boarTintCanvas = null;
 function boarTintScratch(w, h) {
   if (!_boarTintCanvas) _boarTintCanvas = document.createElement('canvas');
@@ -695,20 +734,38 @@ function drawBoarSprite(ctx, a, c) {
   ctx.ellipse(c.x, c.y, dw * 0.36, dw * 0.16, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  // Tell: flashes reddish while telegraphing (same cadence as the old art).
+  // hog's stock colouring is the same warm brown as dog, which read as
+  // near-identical creatures at a glance. Always darken the boar towards
+  // black (a 'multiply' pass keeps the model's own shading/highlights
+  // instead of flattening it to a silhouette) so it's a distinct "wild
+  // boar" colour rather than the raw hog asset. Unlike 'source-atop',
+  // 'multiply' isn't confined to the destination's existing alpha — a
+  // fillRect under it darkens the WHOLE canvas rectangle, including the
+  // sprite's transparent margin, turning it into an opaque dark square. So
+  // the multiply fill is followed by a 'destination-in' redraw of the
+  // original sprite, which multiplies the alpha channel back down to the
+  // sprite's own silhouette and restores the transparent margin.
+  const off = boarTintScratch(sprite.naturalWidth, sprite.naturalHeight);
+  off.ctx.clearRect(0, 0, off.canvas.width, off.canvas.height);
+  off.ctx.drawImage(sprite, 0, 0);
+  off.ctx.globalCompositeOperation = 'multiply';
+  off.ctx.fillStyle = 'rgba(40,35,32,0.85)';
+  off.ctx.fillRect(0, 0, off.canvas.width, off.canvas.height);
+  off.ctx.globalCompositeOperation = 'destination-in';
+  off.ctx.drawImage(sprite, 0, 0);
+  off.ctx.globalCompositeOperation = 'source-over';
+
+  // Tell: flashes reddish while telegraphing (same cadence as the old art),
+  // layered on top of the black tint via 'source-atop' so only the sprite's
+  // own pixels (not the transparent margin) pick up the flash colour.
   const flash = telegraphing && Math.sin(a.animT * 20) > 0;
   if (flash) {
-    const off = boarTintScratch(sprite.naturalWidth, sprite.naturalHeight);
-    off.ctx.clearRect(0, 0, off.canvas.width, off.canvas.height);
-    off.ctx.drawImage(sprite, 0, 0);
     off.ctx.globalCompositeOperation = 'source-atop';
     off.ctx.fillStyle = 'rgba(200,40,30,0.55)';
     off.ctx.fillRect(0, 0, off.canvas.width, off.canvas.height);
     off.ctx.globalCompositeOperation = 'source-over';
-    ctx.drawImage(off.canvas, dx, dy, dw, dh);
-  } else {
-    ctx.drawImage(sprite, dx, dy, dw, dh);
   }
+  ctx.drawImage(off.canvas, dx, dy, dw, dh);
 
   if (a.state === 'stun') {
     // Tell: dizzy dots circling above the head.
