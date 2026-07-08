@@ -22,7 +22,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.25)
+## Where we are (v1.26)
+
+### v1.26 — WARD tape three-track rework + copy newline
+
+- **WARD "bare stanhope" now has three tracks.** David reorganised the audio: side A is *five* + *glock* (`01 five.mp3`, `02 glock.mp3`), side B is the newly-added *tau bootis* (`03 tau bootis.mp3`); the old layout had *five* on A and *glock* alone on B. Synced the `TAPES[num:3]` entry in `items.js` (labels `five · glock` / `tau bootis`) and `docs/tapes.md`. Verified in the gate: plays five → glock → tau bootis → wraps, all files resolve, no errors.
+- **Gate copy**: `<br>` before "Meanwhile, here's the soundtrack." so it sits on its own line under "Grab a laptop…".
 
 ### v1.25 — Walkman transport + gate/title spacing
 

@@ -42,7 +42,7 @@ changes.
 |---|--------|--------|-------|--------|--------|-------|
 | 1 | `Tape-01 meme - compilation` | meme | compilation | resonance | eliza · slip | walkman starter |
 | 2 | `Tape-02 meme - maieutics` | meme | maieutics | maieutics 1 · 2 | maieutics 3 | scattered in the ruins |
-| 3 | `Tape-03 WARD - bare stanhope` | WARD | bare stanhope | five | glock | yellow box, first underworld room |
+| 3 | `Tape-03 WARD - bare stanhope` | WARD | bare stanhope | five · glock | tau bootis | yellow box, first underworld room |
 | 4 | `Tape-04 Meme vs Xan - 24 EP` | Meme vs Xan | 24 EP | 24 · High | Release · Världen · Incognito | underworld / scatter |
 
 > Note: the folder format could later be read from a manifest at runtime (so

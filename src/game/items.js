@@ -507,8 +507,8 @@ export const TAPES = [
   },
   {
     num: 3, artist: 'WARD', title: 'bare stanhope', dir: 'Tape-03 WARD - bare stanhope', color: '#b06a4a',
-    a: { label: 'five', tracks: ['01 five.mp3'] },
-    b: { label: 'glock', tracks: ['02 glock.mp3'] },
+    a: { label: 'five · glock', tracks: ['01 five.mp3', '02 glock.mp3'] },
+    b: { label: 'tau bootis', tracks: ['03 tau bootis.mp3'] },
   },
   {
     num: 4, artist: 'Meme vs Xan', title: '24 EP', dir: 'Tape-04 Meme vs Xan - 24 EP', color: '#7a8fb0',

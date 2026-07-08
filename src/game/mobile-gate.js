@@ -142,7 +142,7 @@ export function initMobileGate(mode = 'gate') {
       ${hasSave ? '<button id="mg-continue" class="mg-btn primary">Continue</button>' : ''}
       <button id="mg-start" class="mg-btn ${hasSave ? '' : 'primary'}">${hasSave ? 'New game' : 'Start'}</button>
     </div>` : `
-    <p class="mg-sub">It is the end of the world, and you will need a keyboard and mouse to save it!<span class="mg-sub2">Grab a laptop or desktop for the real thing. Meanwhile, here's the soundtrack.</span></p>
+    <p class="mg-sub">It is the end of the world, and you will need a keyboard and mouse to save it!<span class="mg-sub2">Grab a laptop or desktop for the real thing.<br>Meanwhile, here's the soundtrack.</span></p>
     <button class="mg-tryanyway" id="mg-tryanyway">Try and play it anyway…</button>`}
     <div class="mg-skylink" id="mg-skylink">SKYLINK uplink operative · T‑<span id="mg-sky">--:--:--</span></div>
     <div class="mg-stage" id="mg-stage"></div>
