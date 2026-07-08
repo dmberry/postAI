@@ -80,6 +80,8 @@ function baseAnimal(type, x, y, hp, rng) {
     wanderTarget: null,
     wanderTimer: 0,
     animT: rng() * 10, // desync idle animation between individuals
+    moving: false,     // set true for a frame whenever moveToward actually moves it
+    walkPhase: rng() * Math.PI * 2, // desync walk cycle between individuals
   };
 }
 
@@ -235,6 +237,11 @@ function moveToward(a, tx, ty, speed, dt, map) {
   const moved = Math.hypot(a.x - ox, a.y - oy);
   if (moved > 1e-6) {
     a.facing = { x: (a.x - ox) / moved, y: (a.y - oy) / moved };
+    a.moving = true;
+    // Phase advances with distance covered (not just dt), so a fast chase
+    // cycles legs visibly faster than an idle amble — same idea as the
+    // player's walkPhase, driven here by tiles moved instead of speed.
+    a.walkPhase = (a.walkPhase + moved * 6) % (Math.PI * 2);
   }
   return moved;
 }
@@ -301,6 +308,7 @@ export function updateAnimals(dt, animals, player, map) {
     // keeps a big map cheap (only nearby wildlife thinks each frame).
     if (distTo(a, player) > ANIMAL_ACTIVE_RANGE) continue;
     a.animT += dt;
+    a.moving = false; // moveToward sets this true below if it actually steps this frame
     // Knocked back by a solid hit: frozen (no movement, no attack) for a
     // beat, same as the shove the player's strike just gave it — stops it
     // trading blows nose-to-nose the instant it's been hit.
@@ -516,13 +524,24 @@ function facingToCompassDir(facing) {
   return best;
 }
 
+// Picks the idle frame or the appropriate walk-cycle frame for this
+// direction, same indexing scheme as renderer.js:drawPlayerSprite.
+function pickAnimalFrame(set, dir, a) {
+  if (a.moving) {
+    const frames = set.walk[dir];
+    const idx = Math.floor((a.walkPhase / (Math.PI * 2)) * frames.length) % frames.length;
+    return frames[idx];
+  }
+  return set.idle[dir];
+}
+
 // Returns false (drawing nothing) if the sprite for this facing hasn't
 // finished loading yet, so the caller can fall back to the procedural shape
 // instead of an invisible dog.
 function drawDogSprite(ctx, a, c) {
   const set = ANIMAL_SPRITE_SETS.dog;
   const dir = facingToCompassDir(a.facing);
-  const sprite = set && set[dir];
+  const sprite = set && pickAnimalFrame(set, dir, a);
   if (!sprite || !sprite.complete || !sprite.naturalWidth) return false;
   const scale = ANIMAL_SPRITE_SCALE.dog;
   const dw = sprite.naturalWidth * scale, dh = sprite.naturalHeight * scale;
@@ -603,7 +622,7 @@ function boarTintScratch(w, h) {
 function drawBoarSprite(ctx, a, c) {
   const set = ANIMAL_SPRITE_SETS.hog;
   const dir = facingToCompassDir(a.facing);
-  const sprite = set && set[dir];
+  const sprite = set && pickAnimalFrame(set, dir, a);
   if (!sprite || !sprite.complete || !sprite.naturalWidth) return false;
   const telegraphing = a.state === 'telegraph';
   // Tell: shakes in place while telegraphing (matches the old procedural art).

@@ -105,16 +105,26 @@ const dir2 = new THREE.DirectionalLight(0xffffff, 0.4);
 dir2.position.set(-1, 1, -1);
 scene.add(dir2);
 
+// Kenney's Cube Pets models ARE rigged (checked via gltf.animations after
+// initially assuming, wrongly, that they were static): every species ships
+// the same clip names — static, idle, walk, run, eat, dance,
+// gesture-positive, gesture-negative. Only idle + walk are used here, same
+// two states as the character rig's CHARACTER_SPRITE_SETS.
 const gltfLoader = new GLTFLoader();
-const modelCache = {};   // species -> loaded THREE.Group (template, never mutated in-scene)
+const modelCache = {};   // species -> { scene: THREE.Group (template), clips: {name: AnimationClip} }
 let modelRoot = null;    // clone currently in the scene
+let mixer = null;        // AnimationMixer bound to modelRoot
+let currentAction = null;
 
 function loadModel(species) {
   if (modelCache[species]) return Promise.resolve(modelCache[species]);
   return new Promise((resolve, reject) => {
     gltfLoader.load(BASE + 'animal-' + species + '.glb', gltf => {
-      modelCache[species] = gltf.scene;
-      resolve(gltf.scene);
+      const clips = {};
+      for (const c of gltf.animations) clips[c.name] = c;
+      const entry = { scene: gltf.scene, clips };
+      modelCache[species] = entry;
+      resolve(entry);
     }, undefined, reject);
   });
 }
@@ -122,8 +132,23 @@ function loadModel(species) {
 async function showSpecies(species) {
   if (modelRoot) scene.remove(modelRoot);
   const template = await loadModel(species);
-  modelRoot = template.clone(true);
+  modelRoot = template.scene.clone(true);
   scene.add(modelRoot);
+  mixer = new THREE.AnimationMixer(modelRoot);
+  currentAction = null;
+  await setPose(species, 'idle', 0);
+}
+
+async function setPose(species, animName, frac) {
+  const template = await loadModel(species);
+  const clip = template.clips[animName];
+  if (!clip) return;
+  if (currentAction) currentAction.stop();
+  currentAction = mixer.clipAction(clip);
+  currentAction.play();
+  currentAction.paused = true;
+  currentAction.time = clip.duration * frac;
+  mixer.update(0);
 }
 
 // A single shared world-unit radius across every species, computed once from
@@ -131,20 +156,31 @@ async function showSpecies(species) {
 // through this same radius so an elephant reads big and a bee reads small
 // on screen at game scale, instead of each species separately auto-fit to
 // fill its own canvas (which would make every animal the same apparent
-// size — wrong, since a bee should not look elephant-sized).
+// size — wrong, since a bee should not look elephant-sized). Also samples
+// across the walk cycle per species (not just the bind pose) so the camera
+// doesn't dolly in/out frame-to-frame as legs extend — same rationale as
+// sprite-render.html's computeMaxRadius.
 let GLOBAL_RADIUS = null;
 async function computeGlobalRadius(marginPct) {
   let maxRadius = 0;
   for (const s of SPECIES) {
-    const m = await loadModel(s);
-    const box = new THREE.Box3().setFromObject(m);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const r = Math.max(size.x, size.y, size.z) / 2;
-    if (r > maxRadius) { maxRadius = r; log(`  ${s}: r=${r.toFixed(3)}`); }
+    await showSpecies(s);
+    const fracs = { idle: [0, 0.5], walk: [0, 0.25, 0.5, 0.75] };
+    let speciesMax = 0;
+    for (const [anim, fs] of Object.entries(fracs)) {
+      for (const f of fs) {
+        await setPose(s, anim, f);
+        const box = new THREE.Box3().setFromObject(modelRoot);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const r = Math.max(size.x, size.y, size.z) / 2;
+        if (r > speciesMax) speciesMax = r;
+      }
+    }
+    if (speciesMax > maxRadius) { maxRadius = speciesMax; log(`  ${s}: r=${speciesMax.toFixed(3)}`); }
   }
   GLOBAL_RADIUS = maxRadius * (1 + marginPct / 100);
-  log(`global radius = ${GLOBAL_RADIUS.toFixed(3)} (from largest model, +${marginPct}% margin)`);
+  log(`global radius = ${GLOBAL_RADIUS.toFixed(3)} (from largest model/pose, +${marginPct}% margin)`);
   return GLOBAL_RADIUS;
 }
 
@@ -218,6 +254,15 @@ const DIRS = [
   { name: 'W', theta: 180 }, { name: 'NW', theta: 225 }, { name: 'N', theta: 270 }, { name: 'NE', theta: 315 },
 ];
 
+// Idle (1 frame) + walk (4 frames sampled from the 'walk' clip) per
+// direction — same shape and naming as sprite-render.html's
+// __exportAnimSet (skin_state{i}_DIR.png), so textures.js's
+// loadCharacterSet-style loader works unchanged for animals too.
+const STATES = [
+  { state: 'idle', anim: 'idle', fracs: [0] },
+  { state: 'walk', anim: 'walk', fracs: [0, 0.25, 0.5, 0.75] },
+];
+
 window.__exportPetSet = async function (opts = {}) {
   const endpoint = opts.endpoint || 'http://127.0.0.1:8799/';
   const elevDeg = opts.elev ?? 30;
@@ -225,27 +270,32 @@ window.__exportPetSet = async function (opts = {}) {
   const species = opts.species || SPECIES;
 
   elevInput.value = elevDeg; updateLabels();
-  log('Computing shared camera radius across all species...');
+  log('Computing shared camera radius across all species (idle + walk poses)...');
   const radius = await computeGlobalRadius(marginPct);
 
   const out = [];
   for (const sp of species) {
     await showSpecies(sp);
-    for (const d of DIRS) {
-      const azimuth = (90 - d.theta + 360) % 360; // 180° rotated vs. the character rig — see note above
-      aziInput.value = azimuth; updateLabels();
-      render(radius);
-      const canvas = document.querySelector('#stage canvas');
-      const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-      const filename = `${sp}_${d.name}.png`;
-      const resp = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'X-Filename': filename, 'Content-Type': 'application/octet-stream' },
-        body: blob,
-      });
-      out.push(filename + ':' + resp.status);
+    for (const s of STATES) {
+      for (let i = 0; i < s.fracs.length; i++) {
+        await setPose(sp, s.anim, s.fracs[i]);
+        for (const d of DIRS) {
+          const azimuth = (90 - d.theta + 360) % 360; // 180° rotated vs. the character rig — see note above
+          aziInput.value = azimuth; updateLabels();
+          render(radius);
+          const canvas = document.querySelector('#stage canvas');
+          const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+          const filename = `${sp}_${s.state}${i}_${d.name}.png`;
+          const resp = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'X-Filename': filename, 'Content-Type': 'application/octet-stream' },
+            body: blob,
+          });
+          out.push(filename + ':' + resp.status);
+        }
+      }
     }
-    log(`  -> ${sp}: 8 views done`);
+    log(`  -> ${sp}: idle + walk (4) x 8 dirs done`);
   }
   log('Done.');
   return out.join(', ');

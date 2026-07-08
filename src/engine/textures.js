@@ -150,15 +150,21 @@ export const CHAR_COMPASS_DIRS = CHAR_DIRS;
 
 // Directional animal renders sourced from Kenney's CC0 "Cube Pets" pack
 // (assets/textures/animals/), pre-rendered offline via tools/pet-render.html
-// into 8 screen-facing directions per species, one static pose each (the
-// source models aren't rigged). Kenney normalises every model to a similar
-// bounding cube regardless of the real animal's size, so these are NOT
-// drawn at a shared scale — see ANIMAL_SPRITE_SCALE in animals.js for the
-// per-species fudge factor applied at draw time.
+// into 8 screen-facing directions x idle (1 frame) + walk (4-frame cycle)
+// per species — same shape as CHARACTER_SPRITE_SETS above, since the models
+// turned out to be rigged with matching clip names across the whole pack
+// (checked via gltf.animations, having wrongly assumed "static" at first).
+// Kenney normalises every model to a similar bounding cube regardless of
+// the real animal's size, so these are NOT drawn at a shared scale — see
+// ANIMAL_SPRITE_SCALE in animals.js for the per-species fudge factor
+// applied at draw time.
 const A = T + 'animals/';
 function loadAnimalSet(species) {
-  const set = {};
-  for (const dir of CHAR_DIRS) set[dir] = load(`${A}${species}_${dir}.png`);
+  const set = { idle: {}, walk: {} };
+  for (const dir of CHAR_DIRS) {
+    set.idle[dir] = load(`${A}${species}_idle0_${dir}.png`);
+    set.walk[dir] = [0, 1, 2, 3].map(i => load(`${A}${species}_walk${i}_${dir}.png`));
+  }
   return set;
 }
 export const ANIMAL_SPECIES = [
