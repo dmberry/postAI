@@ -22,7 +22,18 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.20)
+## Where we are (v1.21)
+
+### v1.21 — minimap orientation, repair drones, key cards, tape 4, HUD icons
+
+- **Repair drones (real fix).** W3s spawn at the remote factory and must travel across the map to mend a damaged tower — but the per-robot `updateRobots` loop skipped any non-friendly robot not `nearPlayer`, so a W3 dispatched off-screen never moved. Exempted `w3` from that cull; they now travel and repair off-screen (verified in isolation: spawn → travel → obDamage→0). Caveat: `moveToward` is greedy axis-slide with no true pathfinding, so a long trip can still jam against a big obstacle (same limitation behind the "trapped on the factory" report — not fully solved).
+- **Minimap orientation.** Was a plain top-down blit, 90° out from how the world reads (river ran down the left). `drawMinimap` now rotates the whole thing (map, fog, dot, tracking pings, overlay) a quarter-turn so the river sits along the top, north-up; kept square, filling the box. (A first pass rotated 45° to a diamond to match the true iso angle; David preferred square + river-at-top.) Toggle with **]** (`input.minimapTogglePressed` → `BracketRight`; `showMinimap` gates `hud.minimap` in main.js).
+- **Downloaded-map overlay.** While a `printed_map` is carried, the minimap shows obelisks (green), factory (blue) and mainframe (red) through the fog — the RON-ML `print` schematic laid over the map.
+- **Bigger HUD icons.** `drawSlot` draws item icons at `size/26` (was `size/40`), clipped to the slot so a large weapon icon can't spill over the border or qty badge.
+- **Keys as access cards.** `ai_key`/`fortress_key` icons redrawn from mechanical keys to electronic access cards (chip pad, data stripe, lanyard hole) — the AI's locks are digital.
+- **Tape 4 + guaranteed tapes.** Added `tape_4` (Meme — Versus Xan, `Tape-Meme-Versus-Xan-24-EP`). `underworld.js` now imports the `TAPES` manifest and force-places every tape in a yellow box so all of them appear each run (doubles via the random scatter). Fixed the dir after the folder turned out to be `-24-EP`, not the path first given.
+- **Graffiti posters full face.** `drawGraffitiPoster` subQuad widened to ~the whole wall face (mural, not a small pasted photo).
+- **Gardener drones visible.** Two W5s seeded out in the world at start (away from the factory) + the factory sustains up to two; each lamp/gardener carries a per-object glow warmth.
 
 ### v1.20 — crickets in bouts
 

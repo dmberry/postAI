@@ -510,6 +510,11 @@ export const TAPES = [
     a: { label: 'five', tracks: ['01 five.mp3'] },
     b: { label: 'glock', tracks: ['02 glock.mp3'] },
   },
+  {
+    num: 4, artist: 'Meme', title: 'Versus Xan', dir: 'Tape-Meme-Versus-Xan-24-EP', color: '#7a8fb0',
+    a: { label: '24 · High', tracks: ['01-01- 24.mp3', '01-02- High.mp3'] },
+    b: { label: 'Release · Världen · Incognito', tracks: ['01-03- Release.mp3', '01-04- Världen.mp3', '01-05- Incognito.mp3'] },
+  },
 ];
 for (const t of TAPES) {
   const side = (s) => ({ label: s.label, tracks: s.tracks.map((f) => `assets/audio/${t.dir}/${s === t.a ? 'A' : 'B'}/${f}`) });

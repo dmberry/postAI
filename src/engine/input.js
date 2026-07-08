@@ -7,7 +7,7 @@ const TRACKED = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight',
   'KeyE', 'Slash', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG', 'KeyF', 'KeyI', 'KeyP', 'KeyZ', 'KeyJ',
-  'KeyK', 'KeyC', 'KeyM', 'KeyV', 'KeyN', 'KeyB',
+  'KeyK', 'KeyC', 'KeyM', 'KeyV', 'KeyN', 'KeyB', 'BracketRight',
   'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
 ]);
 
@@ -225,6 +225,11 @@ export class Input {
 
   weaponChartPressed() {
     return this.consumePress('KeyV');
+  }
+
+  // Show/hide the corner minimap ( ] ).
+  minimapTogglePressed() {
+    return this.consumePress('BracketRight');
   }
 
   // Ctrl/Cmd+N only — a bare N is notesPressed() below, so a stray tap can

@@ -11,6 +11,7 @@
 
 import { GameMap } from './map.js';
 import { makeRng } from './rng.js';
+import { TAPES } from './items.js';
 import { ANIMAL_SPRITE_SETS } from '../engine/textures.js';
 
 // A big 128x128 pocket: rooms of wildly varying size scattered across an open
@@ -144,17 +145,48 @@ function carveWorld(map, rng) {
   // reads as an afterthought. Mundane, which is exactly what makes it wrong.
   const exitTX = spawn.x, exitTY = spawn.cy;
 
-  // Yellow supply boxes: one guaranteed in the spawn room, holding the WARD
-  // "bare stanhope" tape, plus a sparse scatter through the other rooms with
-  // the odd extra tape to find. Reuses the resistance-cache box (opened with
-  // E), tinted yellow (renderer drawBox reads obj.yellow).
-  const boxAt = (bx, by, loot) => { if (map.inBounds(bx, by) && !map.objectAt(bx, by)) map.addObject('box', bx, by, { loot, opened: false, yellow: true }); };
-  boxAt(spawn.cx + 2, spawn.cy, [{ item: 'tape_3', qty: 1 }]);
+  // Yellow supply boxes hold the cassette tapes. Reuses the resistance-cache
+  // box (opened with E), tinted yellow (renderer drawBox reads obj.yellow).
+  // EVERY tape in the manifest is guaranteed to appear at least once down here
+  // (doubles are fine): the WARD "bare stanhope" tape sits in the spawn room
+  // where you land, and every other tape is force-placed in one of the further
+  // rooms, then a sparse random scatter drops extra copies for good measure.
+  const boxAt = (bx, by, num) => {
+    if (map.inBounds(bx, by) && !map.objectAt(bx, by)) {
+      map.addObject('box', bx, by, { loot: [{ item: `tape_${num}`, qty: 1 }], opened: false, yellow: true });
+      return true;
+    }
+    return false;
+  };
+  const placeInRoom = (r, num) => {
+    for (let tries = 0; tries < 16; tries++) {
+      if (boxAt(r.x + 2 + Math.floor(rng() * (r.w - 4)), r.y + 2 + Math.floor(rng() * (r.h - 4)), num)) return true;
+    }
+    return false;
+  };
+  const allNums = TAPES.map((t) => t.num);
+  // The WARD tape (num 3) belongs in the spawn room if it exists; else the first.
+  const spawnTape = allNums.includes(3) ? 3 : allNums[0];
+  boxAt(spawn.cx + 2, spawn.cy, spawnTape);
+  // Guarantee every other tape lands in one of the further rooms.
+  const need = allNums.filter((n) => n !== spawnTape);
+  let ni = 0;
+  for (let i = 1; i < rooms.length && ni < need.length; i++) {
+    if (placeInRoom(rooms[i], need[ni])) ni++;
+  }
+  // Any tape still unplaced (too few usable rooms) goes into the spawn room so
+  // it can never be missing from a run.
+  for (; ni < need.length; ni++) {
+    for (let k = 3; k < spawn.w - 2; k++) {
+      if (boxAt(spawn.x + k, spawn.cy + (k % 2 ? 1 : 2), need[ni])) break;
+    }
+  }
+  // Sparse random extras (doubles) through the further rooms, for texture.
   for (let i = 1; i < rooms.length; i++) {
-    if (rng() >= 0.35) continue;
+    if (rng() >= 0.3) continue;
     const r = rooms[i];
     boxAt(r.x + 2 + Math.floor(rng() * (r.w - 4)), r.y + 2 + Math.floor(rng() * (r.h - 4)),
-      [{ item: `tape_${1 + Math.floor(rng() * 3)}`, qty: 1 }]);
+      allNums[Math.floor(rng() * allNums.length)]);
   }
 
   // Farthest room from spawn: where the lurker waits.

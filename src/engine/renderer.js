@@ -533,18 +533,7 @@ export class Renderer {
     if (hud.underworld) this.drawUnderworldVeil();
 
     if (hud.minimap) {
-      const mmX = this.w - MINIMAP_SIZE - 12, mmY = 12;
-      hud.minimap.draw(ctx, map, player, mmX, mmY, MINIMAP_SIZE);
-      this.drawFog(map, mmX, mmY, MINIMAP_SIZE);
-      // Tracking skill: nearby animals ping on the minimap.
-      if (player.skills && player.skills.has('tracking')) {
-        const s = MINIMAP_SIZE / map.w;
-        ctx.fillStyle = '#e05548';
-        for (const a of animals) {
-          if (a.dead || Math.hypot(a.x - player.x, a.y - player.y) > 24) continue;
-          ctx.fillRect(mmX + a.x * s - 1, mmY + a.y * s - 1, 2.5, 2.5);
-        }
-      }
+      this.drawMinimap(map, player, hud.minimap, animals, this.w - MINIMAP_SIZE - 12, 12, MINIMAP_SIZE);
     }
     if (hud.skylinkActive) this.drawSkylinkBanner(hud.skylinkTimer);
     this.drawDashboard(player, hud);
@@ -2124,9 +2113,12 @@ export class Renderer {
   // camera roll.
   drawGraffitiPoster(obj, seFace) {
     const tex = GRAFFITI_TEXTURES[obj.graffitiImage % GRAFFITI_TEXTURES.length];
-    const jitter = (tileHash(obj.x + 3, obj.y + 7) - 0.5) * 0.08;
-    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.90, 0.10, 0.70 + jitter, 0.20 + jitter);
-    this.drawTexturedQuad(quad, tex, '#1c1a16', 'rgba(30,22,14,0.35)', 'multiply', 0.9);
+    // Stretch the poster across (almost) the whole wall face — a mural covering
+    // the block, not a small pasted photo. A hair of inset keeps the dark paper
+    // backing from bleeding past the diamond edge. Un-mirrored + right-way-up
+    // via the same high->low bounds convention as drawGraffiti.
+    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.98, 0.02, 0.98, 0.04);
+    this.drawTexturedQuad(quad, tex, '#1c1a16', 'rgba(30,22,14,0.3)', 'multiply', 0.92);
   }
 
   // A wall is an extruded diamond prism: two visible faces plus a top.
@@ -2811,10 +2803,71 @@ export class Renderer {
     ctx.restore();
   }
 
-  // Fog of war over the minimap: an offscreen 1px-per-tile mask, darkened
-  // everywhere, with visited tiles punched out as the game reveals them.
-  drawFog(map, x, y, size) {
-    if (!map.explored) return;
+  // The corner minimap, kept a square but rotated a quarter-turn so it reads
+  // the right way round against the play view: the river (which runs down the
+  // west side of the map, x≈40) ends up along the top, north-up. A plain
+  // top-down blit had it running down the left, which read as "shifted 90°".
+  // The whole thing (map, fog, dot, pings, downloaded-map overlay) shares one
+  // rotate+scale transform so they always line up. Toggle with ].
+  drawMinimap(map, player, mm, animals, x, y, size) {
+    const ctx = this.ctx;
+    const cx = x + size / 2, cy = y + size / 2;
+    const k = size / Math.max(map.w, map.h); // tile -> px; a 90° turn keeps it square, filling the box
+    ctx.save();
+    // Backing + border stay axis-aligned (the panel is a square).
+    ctx.fillStyle = 'rgba(11,14,10,0.6)';
+    ctx.fillRect(x, y, size, size);
+    ctx.strokeStyle = 'rgba(207,216,195,0.6)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
+    ctx.beginPath(); ctx.rect(x, y, size, size); ctx.clip();
+    // Into rotated tile space: (0..w, 0..h) turned 90° clockwise (west edge to
+    // the top) then scaled to fill the square.
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI / 2);
+    ctx.scale(k, k);
+    ctx.translate(-map.w / 2, -map.h / 2);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(mm.canvas, 0, 0, map.w, map.h);
+    const fog = this._ensureFog(map);
+    if (fog) ctx.drawImage(fog, 0, 0, map.w, map.h);
+    // Downloaded-map overlay: while a printed AI territory map is carried, its
+    // obelisks (green), factory (blue) and mainframe (red) show through the
+    // fog — a schematic laid over the minimap, per the RON-ML `print` map.
+    if (player.hasItem && player.hasItem('printed_map')) {
+      const m = 3 / k;
+      for (const o of map.objects) {
+        let col = null;
+        if (o.type === 'obelisk' && !o.destroyed) col = '#4fe07a';
+        else if (o.type === 'wfactory' && !o.destroyed) col = '#4f8fe0';
+        else if (o.type === 'mainframe') col = '#e0503a';
+        if (!col) continue;
+        ctx.fillStyle = col;
+        ctx.fillRect(o.x + 0.5 - m / 2, o.y + 0.5 - m / 2, m, m);
+      }
+    }
+    // Player dot, sized in screen px regardless of the tile scale.
+    const d = 3 / k;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(player.x - d / 2, player.y - d / 2, d, d);
+    // Tracking skill: nearby animals ping.
+    if (player.skills && player.skills.has('tracking')) {
+      const a2 = 2.5 / k;
+      ctx.fillStyle = '#e05548';
+      for (const a of animals) {
+        if (a.dead || Math.hypot(a.x - player.x, a.y - player.y) > 24) continue;
+        ctx.fillRect(a.x - a2 / 2, a.y - a2 / 2, a2, a2);
+      }
+    }
+    ctx.restore();
+  }
+
+  // Maintains (and returns) the fog-of-war mask canvas: a 1px-per-tile mask,
+  // grey everywhere with visited tiles punched out. Returns null before any
+  // exploration data exists. Blitting is the caller's job (drawMinimap does it
+  // inside the rotated transform).
+  _ensureFog(map) {
+    if (!map.explored) return null;
     if (!this.fogCanvas || this.fogCanvas.width !== map.w) {
       this.fogCanvas = document.createElement('canvas');
       this.fogCanvas.width = map.w;
@@ -2841,11 +2894,7 @@ export class Renderer {
       f.globalCompositeOperation = 'source-over';
       map.newlyRevealed.length = 0;
     }
-    const ctx = this.ctx;
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(this.fogCanvas, x, y, size, size);
-    ctx.restore();
+    return this.fogCanvas;
   }
 
   drawGroundItem(gi) {
@@ -3438,6 +3487,41 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(4, -8, 1.4, 0, Math.PI * 2); ctx.arc(6, -6, 1, 0, Math.PI * 2); ctx.arc(5, -10, 0.9, 0, Math.PI * 2); ctx.fill();
         break;
       }
+      case 'ai_key':
+      case 'fortress_key': {
+        // A digital access card, not a mechanical key — the AI's locks are
+        // electronic. Rounded card in the item's colour (AI key gold, fortress
+        // key ice-blue), with a dark data stripe, a gold chip contact pad with
+        // traces, and a corner lanyard hole.
+        const col = itemDef.color;
+        ctx.fillStyle = col;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(-8, -6.5, 16, 13, 2.5); ctx.fill(); }
+        else ctx.fillRect(-8, -6.5, 16, 13);
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 1;
+        if (ctx.roundRect) ctx.stroke();
+        // data stripe across the top
+        ctx.fillStyle = 'rgba(18,22,26,0.9)';
+        ctx.fillRect(-8, -4.2, 16, 2.6);
+        // chip contact pad + traces (lower-left)
+        ctx.fillStyle = '#e3cf72';
+        ctx.fillRect(-6, 0.5, 4.5, 3.6);
+        ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 0.6;
+        ctx.strokeRect(-6, 0.5, 4.5, 3.6);
+        ctx.beginPath();
+        ctx.moveTo(-3.75, 0.5); ctx.lineTo(-3.75, 4.1);   // chip vertical division
+        ctx.moveTo(-6, 2.3); ctx.lineTo(-1.5, 2.3);       // chip horizontal division
+        ctx.stroke();
+        // a couple of printed traces to the right of the chip
+        ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.moveTo(0.5, 1.4); ctx.lineTo(6, 1.4);
+        ctx.moveTo(0.5, 3.2); ctx.lineTo(4.5, 3.2);
+        ctx.stroke();
+        // lanyard hole, top-right corner
+        ctx.fillStyle = 'rgba(8,10,12,0.75)';
+        ctx.beginPath(); ctx.arc(5.7, -3, 1.1, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
       default:
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-6, -6, 12, 12);
@@ -3934,7 +4018,12 @@ export class Renderer {
     ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
     ctx.lineWidth = 1;
     if (!itemDef) return;
-    this.drawItemIcon(itemDef, x + size / 2, y + size / 2, size / 40);
+    // Draw the icon large enough to fill the slot, clipped to the box so a
+    // bigger weapon icon can't spill over the border or the qty badge.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(x + 1, y + 1, size - 2, size - 2); ctx.clip();
+    this.drawItemIcon(itemDef, x + size / 2, y + size / 2, size / 26);
+    ctx.restore();
     if (qty > 1) {
       ctx.font = '10px system-ui, sans-serif';
       ctx.fillStyle = '#e8e0d0';

@@ -48,7 +48,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.20';
+const VERSION = '1.21';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -332,6 +332,16 @@ const factoryCx = () => wfactory.x + (wfactory.fw || 1) / 2;
 const factoryCy = () => wfactory.y + (wfactory.fh || 1) + 1.5;
 
 const robots = spawnRobots(map, WORLD_SEED, obelisks, { x: spawn.x, y: spawn.y, r: 14 });
+// A couple of gardener drones already out wandering the world at the start, at
+// random spots away from the remote factory, so you actually come across one
+// early instead of it only ever spawning at the (distant) factory. The factory
+// clock below keeps roughly this many topped up over time.
+for (let placed = 0, tries = 0; placed < 2 && tries < 120; tries++) {
+  const gx = 6 + Math.floor(Math.random() * (map.w - 12));
+  const gy = 6 + Math.floor(Math.random() * (map.h - 12));
+  const g = spawnW5(map, (WORLD_SEED ^ (0x5ad + placed * 131)) >>> 0, gx, gy);
+  if (g) { robots.push(g); placed++; }
+}
 const waterdroids = spawnWaterDroids(map, WORLD_SEED);
 // The tower objects themselves (for alert/blink state): {x,y} plus the
 // alert level cannot live on the plain {x,y} obelisks list, since that's
@@ -556,6 +566,7 @@ const lore = new Lore(map, WORLD_SEED);
 
 const dayNight = new DayNight();
 const minimap = new Minimap(map);
+let showMinimap = true; // toggled with the ] key
 const birds = spawnBirds(map, WORLD_SEED);
 let lastObjectCount = map.objects.length;
 
@@ -1390,6 +1401,7 @@ function update(dt) {
     else if (player.canCraftSword()) player.craftSword();
   }
   if (input.zoomTogglePressed()) camera.toggleZoom();
+  if (input.minimapTogglePressed()) { showMinimap = !showMinimap; player.say(showMinimap ? 'Minimap on.' : 'Minimap off.'); }
   lore.update(dt, player, input);
   if (input.musicTogglePressed()) {
     const mode = sfx.toggleMusic();
@@ -1682,8 +1694,8 @@ function update(dt) {
     if (wFactoryW5Clock > wFactoryW5Next) {
       wFactoryW5Clock = 0;
       wFactoryW5Next = 30 + Math.random() * 40;
-      const w5Active = robots.some((r) => r.type === 'w5' && !r.dead);
-      if (!w5Active) {
+      const w5Count = robots.reduce((n, r) => n + (r.type === 'w5' && !r.dead ? 1 : 0), 0);
+      if (w5Count < 2) {
         const gardener = spawnW5(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
         if (gardener) { robots.push(gardener); player.say('A small drone trundles out of the W-factory, unhurried.'); }
       }
@@ -1921,7 +1933,7 @@ function frame(now) {
       // underworld veil (below) carries the mood instead of day/night darkness.
       light: inUnderworld ? 1 : dayNight.light(),
       timeLabel: dayNight.countdownLabel,
-      minimap: inUnderworld ? null : minimap,
+      minimap: (inUnderworld || !showMinimap) ? null : minimap,
       birds: inUnderworld ? [] : birds,
       robots: inUnderworld ? [] : robots,
       waterdroids: inUnderworld ? [] : waterdroids,

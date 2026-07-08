@@ -708,8 +708,11 @@ export function updateRobots(dt, robots, player, map) {
     // Off-screen and far from the player: skip all thinking until they come
     // back near. Friendlies follow the player so are never far; they're left
     // to update normally. (Placed after the death check above so a machine
-    // killed at range still drops its scrap.)
-    if (!r.friendly && !nearPlayer(r, player)) continue;
+    // killed at range still drops its scrap.) W3 repair drones are exempt:
+    // they spawn at the remote factory and must travel across the map to mend
+    // a damaged tower, which almost always happens off-screen — gating them on
+    // player proximity meant they never actually came out and repaired.
+    if (!r.friendly && r.type !== 'w3' && !nearPlayer(r, player)) continue;
 
     // Stunned: frozen in place, battery preserved. Only the timer and the
     // amber flicker phase advance; on expiry normal AI resumes next frame
