@@ -17,6 +17,18 @@ const LIMINAL_TEX = [
   'floor-pavingstone.jpg', 'floor-road.jpg', 'floor-secret.jpg',
 ].map((file) => { const img = new Image(); img.src = `assets/textures/${file}`; return img; });
 
+// The open "sea" of the underworld (sentinel 255) gets its own worn, ring-
+// stained lino photo laid over the yellow base, so the endless expanse reads
+// as a real floor rather than flat colour. Loaded here to keep this file
+// self-contained (also used as CAR_RUIN_TEXTURE in textures.js).
+const SEA_TEX = new Image(); SEA_TEX.src = 'assets/textures/misc-ring-bottoms.jpg';
+
+// The underworld floor lamp, a hand-drawn sprite (shade + glowing bulb + pole +
+// round base) on a transparent field. Drawn by drawLamp, anchored by its foot;
+// the emitted light flickers via _lampFlicker. Foot/centre/bulb positions are
+// normalized fractions of the sprite's own height/width (measured off the art).
+const LAMP_SPRITE = new Image(); LAMP_SPRITE.src = 'assets/textures/liminal-lamp.png';
+
 // Maps a facing vector to one of 8 pre-rendered screen-compass directions
 // for CHARACTER_SPRITE_SETS (see textures.js) — replaces the old trick of
 // rotating one flat top-down icon, which read wrong for a humanoid with a
@@ -1405,11 +1417,18 @@ export class Renderer {
       // A photo floor: draw it over the yellow base, gently varied per tile.
       const alpha = 0.62 * (0.9 + 0.2 * tileHash(tx * 3 + 11, ty * 3 + 5));
       this.drawTexturedQuad(corners, LIMINAL_TEX[t], YELLOW, null, 'multiply', Math.min(0.85, alpha));
-    } else {
-      // The sea (or a not-yet-loaded photo): flat colour + procedural wear.
+    } else if (t === 250) {
+      // A baby-blue room: flat colour + procedural wear.
       this.diamondPath(corners);
-      ctx.fillStyle = shadeHex(t === 250 ? BLUE : YELLOW, shade); // 250 = baby-blue room
+      ctx.fillStyle = shadeHex(BLUE, shade);
       ctx.fill();
+      this.drawLiminalWear(tx, ty, corners);
+    } else {
+      // The open yellow sea: the ring-stained lino photo laid over the yellow
+      // base (falls back to flat yellow until the image loads), then wear on
+      // top. Alpha nudged per tile so the texture doesn't tile too obviously.
+      const alpha = 0.5 * (0.9 + 0.2 * tileHash(tx * 3 + 7, ty * 3 + 2));
+      this.drawTexturedQuad(corners, SEA_TEX, shadeHex(YELLOW, shade), null, 'multiply', Math.min(0.68, alpha));
       this.drawLiminalWear(tx, ty, corners);
     }
     this.diamondPath(corners);
@@ -1439,50 +1458,63 @@ export class Renderer {
       if (o.type !== 'lamp') continue;
       const s = worldToScreen(o.x + 0.5, o.y + 0.5);
       const bright = this._lampFlicker(o.seed || 0);
-      const R = 44;
+      const R = 38;
       const glow = ctx.createRadialGradient(s.x, s.y, 3, s.x, s.y, R);
-      glow.addColorStop(0, `rgba(236,240,214,${(0.2 * bright).toFixed(3)})`);
-      glow.addColorStop(1, 'rgba(236,240,214,0)');
+      glow.addColorStop(0, `rgba(214,196,110,${(0.11 * bright).toFixed(3)})`); // dim liminal yellow
+      glow.addColorStop(1, 'rgba(214,196,110,0)');
       ctx.fillStyle = glow;
       ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, Math.PI * 2); ctx.fill();
     }
     ctx.restore();
   }
 
-  // A single floor lamp: a base standing on the tile, a thin pole, and a
-  // shaded head at about waist-to-shoulder height, glowing at its own
-  // flicker brightness. Non-solid — you can walk past it.
+  // A single underworld floor lamp, drawn from the liminal-lamp sprite and
+  // anchored by its foot to the tile centre. The fixture itself is steady; the
+  // emitted light flickers (per-lamp, out of step) — a warm halo behind the
+  // shade, an additive bloom over it, and a faint dip in the sprite's own
+  // brightness on the stutter. Non-solid: you can walk past it.
   drawLamp(obj) {
     const ctx = this.ctx;
     const s = worldToScreen(obj.x + 0.5, obj.y + 0.5);
     const bright = this._lampFlicker(obj.seed || 0);
-    const baseY = s.y;
-    const headY = s.y - 34; // shade height, standing off the floor
-    // Ground shadow.
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath(); ctx.ellipse(s.x, baseY + 2, 7, 3, 0, 0, Math.PI * 2); ctx.fill();
-    // Weighted foot.
-    ctx.fillStyle = 'rgba(35,32,24,0.9)';
-    ctx.beginPath(); ctx.ellipse(s.x, baseY, 5.5, 2.4, 0, 0, Math.PI * 2); ctx.fill();
-    // The pole.
-    ctx.strokeStyle = 'rgba(40,36,26,0.85)';
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(s.x, baseY - 1); ctx.lineTo(s.x, headY + 7); ctx.stroke();
-    // A soft halo right at the shade.
-    const halo = ctx.createRadialGradient(s.x, headY, 1, s.x, headY, 18);
-    halo.addColorStop(0, `rgba(244,248,224,${(0.55 * bright).toFixed(3)})`);
-    halo.addColorStop(1, 'rgba(244,248,224,0)');
+    const H = 78;                                  // on-screen height of the whole sprite
+    const aspect = (LAMP_SPRITE.naturalWidth / LAMP_SPRITE.naturalHeight) || 1.833;
+    const W = H * aspect;
+    // Where the lamp sits inside its (mostly transparent) sprite, as fractions
+    // of the drawn box: foot near the bottom, centred horizontally, bulb up in
+    // the shade. Anchor the foot to the tile centre.
+    const FOOT = 0.885, CX = 0.50, BULB = 0.20;
+    const drawX = s.x - W * CX, drawY = s.y - H * FOOT;
+    const bulbX = s.x, bulbY = drawY + H * BULB;
+    // A soft, dim liminal-yellow halo behind the shade (glows out around and
+    // through the fabric). Deliberately restrained — this is a sickly, low
+    // light, not a warm lamp.
+    const halo = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 22);
+    halo.addColorStop(0, `rgba(220,200,120,${(0.32 * bright).toFixed(3)})`);
+    halo.addColorStop(1, 'rgba(220,200,120,0)');
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(s.x, headY, 18, 0, Math.PI * 2); ctx.fill();
-    // The shade itself: a small dark trapezoid, flared at the base.
-    ctx.fillStyle = 'rgba(42,38,30,0.92)';
-    ctx.beginPath();
-    ctx.moveTo(s.x - 4, headY - 7); ctx.lineTo(s.x + 4, headY - 7);
-    ctx.lineTo(s.x + 7.5, headY + 6); ctx.lineTo(s.x - 7.5, headY + 6);
-    ctx.closePath(); ctx.fill();
-    // A sliver of glowing bulb showing under the shade's rim.
-    ctx.fillStyle = `rgba(248,250,230,${(0.35 + 0.6 * bright).toFixed(3)})`;
-    ctx.beginPath(); ctx.ellipse(s.x, headY + 5.5, 5, 1.8, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bulbX, bulbY, 22, 0, Math.PI * 2); ctx.fill();
+    if (LAMP_SPRITE.complete && LAMP_SPRITE.naturalWidth) {
+      ctx.save();
+      ctx.globalAlpha = 0.85 + 0.15 * bright; // the fixture dims a touch on the stutter
+      ctx.drawImage(LAMP_SPRITE, drawX, drawY, W, H);
+      ctx.restore();
+      // Faint additive bloom over the shade so the bulb reads as flickering on.
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const bloom = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 15);
+      bloom.addColorStop(0, `rgba(226,206,128,${(0.2 * bright).toFixed(3)})`);
+      bloom.addColorStop(1, 'rgba(226,206,128,0)');
+      ctx.fillStyle = bloom;
+      ctx.beginPath(); ctx.arc(bulbX, bulbY, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    } else {
+      // Placeholder until the sprite loads: base dot + pole.
+      ctx.fillStyle = 'rgba(35,32,24,0.9)';
+      ctx.beginPath(); ctx.ellipse(s.x, s.y, 5.5, 2.4, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(40,36,26,0.85)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x, s.y - H * 0.5); ctx.stroke();
+    }
   }
 
   // Procedural wear for the underworld's bare-colour lino floor: worn patches,

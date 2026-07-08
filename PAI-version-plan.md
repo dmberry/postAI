@@ -22,7 +22,15 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.17)
+## Where we are (v1.18)
+
+### v1.18 — lamp sprite, NW exit door, sea texture, cassette credits
+
+- **Floor-lamp sprite.** `drawLamp` now draws `assets/textures/liminal-lamp.png` (shade + glowing bulb + pole + round base), anchored by its foot to the tile via normalized fracs (foot 0.885, centre 0.50, bulb 0.20). On-screen height 78px (shrunk from an initial 92). Fixture is steady; the *light* flickers via `_lampFlicker`.
+- **Dimmer, yellow (liminal) glow.** The lamp halo/bloom and the `drawLampGlows` floor pool were toned right down and recoloured from warm white to a sickly liminal yellow (halo `rgba(220,200,120)` @0.32, bloom `rgba(226,206,128)` @0.2, floor pool `rgba(214,196,110)` @0.11, radii reduced) — "too fierce" → restrained.
+- **EXIT door on the NW wall.** `carveWorld` places the exit door on the spawn room's **west wall** (`exitTX = spawn.x, exitTY = spawn.cy`) — the back-left wall from the iso camera — so it and the green EXIT sign read square-on as you cross the room, instead of the near south wall.
+- **Sea floor texture** (from v1.17 batch, shipped here): the open yellow sea uses `misc-ring-bottoms.jpg` multiplied over the yellow base + wear.
+- **Cassette credits in the About box.** Music section now lists each tape's artist, album and A/B sides (meme — compilation, meme — maieutics, WARD — bare stanhope) with a small styled list, replacing the stale "three alternate tracks" line.
 
 ### v1.17 — stale-save crash fix (the "broken in Chrome" bug)
 

@@ -134,9 +134,11 @@ function carveWorld(map, rng) {
   }
 
   const spawn = rooms[0];
-  // A plain door in the spawn room's south wall — the way out. Mundane, which
-  // is exactly what makes it wrong.
-  const exitTX = spawn.cx, exitTY = spawn.y + spawn.h - 1;
+  // A plain door set into the room's west wall — the back-left wall from the
+  // isometric camera (screen north-west), so you cross the room toward it and
+  // see the door and its EXIT sign square-on, rather than a near wall where it
+  // reads as an afterthought. Mundane, which is exactly what makes it wrong.
+  const exitTX = spawn.x, exitTY = spawn.cy;
 
   // Yellow supply boxes: one guaranteed in the spawn room, holding the WARD
   // "bare stanhope" tape, plus a sparse scatter through the other rooms with
