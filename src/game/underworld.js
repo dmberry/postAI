@@ -117,20 +117,24 @@ function carveWorld(map, rng) {
     }
   }
 
-  // Lamps: little hanging fixtures, the only light down here — drawn as real
+  // Lamps: standing floor lamps, the only light down here — drawn as real
   // objects (renderer drawLamp), non-solid so you pass beneath them, each
-  // flickering rarely on its own clock. One or two per room, a sparse scatter
-  // through the sea.
+  // flickering rarely on its own clock. `warm` (0..1) varies the glow colour
+  // per lamp so some read paler and some a deeper, sicklier yellow. One or two
+  // per room, and a generous scatter across the open sea so the expanse isn't
+  // a dead flat void.
+  const lampAt = (lx, ly) => {
+    if (!map.objectAt(lx, ly)) map.addObject('lamp', lx, ly, { seed: Math.floor(rng() * 997), warm: rng() });
+  };
   for (const r of rooms) {
     const n = 1 + Math.floor(rng() * 2);
     for (let k = 0; k < n; k++) {
-      const lx = r.x + 2 + Math.floor(rng() * (r.w - 4)), ly = r.y + 2 + Math.floor(rng() * (r.h - 4));
-      if (!map.objectAt(lx, ly)) map.addObject('lamp', lx, ly, { seed: Math.floor(rng() * 997) });
+      lampAt(r.x + 2 + Math.floor(rng() * (r.w - 4)), r.y + 2 + Math.floor(rng() * (r.h - 4)));
     }
   }
-  for (let n = 0; n < 22; n++) {
+  for (let n = 0; n < 40; n++) {
     const lx = 4 + Math.floor(rng() * (W - 8)), ly = 4 + Math.floor(rng() * (W - 8));
-    if (tex[ly * W + lx] === TEX_SEA && !map.objectAt(lx, ly)) map.addObject('lamp', lx, ly, { seed: Math.floor(rng() * 997) });
+    if (tex[ly * W + lx] === TEX_SEA) lampAt(lx, ly);
   }
 
   const spawn = rooms[0];

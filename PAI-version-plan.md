@@ -22,7 +22,12 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.18)
+## Where we are (v1.19)
+
+### v1.19 — sea floor in blocks, more/varied lamps
+
+- **Sea floor as blocks of sameness.** The first pass textured every sea tile from a random pool → read as noise ("too messy"). Now `drawLiminalFloor` picks a texture per coarse **6×6 block** (`SEA_BLOCK`) via `tileHash(bx,by)`, with a per-block opacity and only a whisper of per-tile jitter, so the expanse breaks into coherent patches that change every several tiles. Pool tightened to four tonally-similar muted floors (ring-bottoms, pavingstone, dirt, secret) — dropped the green grassdirt and brown boards that clashed. Block seams are **dithered**: within a 2-tile band of a boundary a tile can borrow the neighbouring block's texture+opacity, with probability rising toward the seam (~0.45 at the edge), so patches interleave instead of butting up in a hard grid line.
+- **More, warmth-varied lamps.** Open-sea lamp scatter raised 22 → 40 attempts; each lamp carries a `warm` (0..1) that lerps its glow (halo, bloom, floor pool) from pale to a deeper sickly yellow, so they don't all match. Lamp sprite shrunk 78 → 64px.
 
 ### v1.18 — lamp sprite, NW exit door, sea texture, cassette credits
 

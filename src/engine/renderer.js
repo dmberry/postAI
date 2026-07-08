@@ -17,11 +17,16 @@ const LIMINAL_TEX = [
   'floor-pavingstone.jpg', 'floor-road.jpg', 'floor-secret.jpg',
 ].map((file) => { const img = new Image(); img.src = `assets/textures/${file}`; return img; });
 
-// The open "sea" of the underworld (sentinel 255) gets its own worn, ring-
-// stained lino photo laid over the yellow base, so the endless expanse reads
-// as a real floor rather than flat colour. Loaded here to keep this file
-// self-contained (also used as CAR_RUIN_TEXTURE in textures.js).
-const SEA_TEX = new Image(); SEA_TEX.src = 'assets/textures/misc-ring-bottoms.jpg';
+// The open "sea" of the underworld (sentinel 255): a few tonally-similar worn
+// floor photos, chosen not per-tile (which reads as noise) but in coarse
+// contiguous BLOCKS, so the expanse breaks into patches of sameness that shift
+// texture every so often rather than flickering every tile. All multiplied
+// over the yellow base so it still reads as one sickly liminal floor. Loaded
+// here to keep this file self-contained.
+const SEA_TEXES = [
+  'misc-ring-bottoms.jpg', 'floor-pavingstone.jpg', 'floor-dirt.jpg', 'floor-secret.jpg',
+].map((file) => { const img = new Image(); img.src = `assets/textures/${file}`; return img; });
+const SEA_BLOCK = 6; // tiles per texture patch
 
 // The underworld floor lamp, a hand-drawn sprite (shade + glowing bulb + pole +
 // round base) on a transparent field. Drawn by drawLamp, anchored by its foot;
@@ -1424,11 +1429,33 @@ export class Renderer {
       ctx.fill();
       this.drawLiminalWear(tx, ty, corners);
     } else {
-      // The open yellow sea: the ring-stained lino photo laid over the yellow
-      // base (falls back to flat yellow until the image loads), then wear on
-      // top. Alpha nudged per tile so the texture doesn't tile too obviously.
-      const alpha = 0.5 * (0.9 + 0.2 * tileHash(tx * 3 + 7, ty * 3 + 2));
-      this.drawTexturedQuad(corners, SEA_TEX, shadeHex(YELLOW, shade), null, 'multiply', Math.min(0.68, alpha));
+      // The open yellow sea: pick one worn photo per coarse BLOCK (not per
+      // tile), so neighbours mostly match and the floor reads as patches of
+      // sameness rather than random noise. Then dither the block seams: within
+      // a two-tile band of a boundary, a tile can borrow the neighbouring
+      // block's texture (and its opacity) with a probability that rises toward
+      // the edge, so patches interleave into each other instead of butting up
+      // in a hard grid line. Opacity is per block; wear on top; falls back to
+      // flat yellow until the image loads.
+      const B = SEA_BLOCK;
+      const idxOf = (X, Y) => Math.floor(tileHash(X * 13 + 2, Y * 13 + 5) * SEA_TEXES.length) % SEA_TEXES.length;
+      let ubx = Math.floor(tx / B), uby = Math.floor(ty / B);
+      const lx = tx - ubx * B, ly = ty - uby * B;
+      const dxE = Math.min(lx, B - 1 - lx), dyE = Math.min(ly, B - 1 - ly); // dist to nearest V/H edge
+      const EDGE = 2;
+      const edgeDist = Math.min(dxE, dyE);
+      if (edgeDist <= EDGE) {
+        // the block just across the nearest edge
+        let nbx = ubx, nby = uby;
+        if (dxE <= dyE) nbx = lx < B - 1 - lx ? ubx - 1 : ubx + 1;
+        else nby = ly < B - 1 - ly ? uby - 1 : uby + 1;
+        const p = ((EDGE + 1 - edgeDist) / (EDGE + 2)) * 0.6; // ~0.45 at the seam, fading in
+        if (tileHash(tx * 3 + 1, ty * 3 + 7) < p) { ubx = nbx; uby = nby; }
+      }
+      const pick = SEA_TEXES[idxOf(ubx, uby)];
+      const blockA = 0.42 + tileHash(ubx * 5 + 1, uby * 5 + 9) * 0.2;   // 0.42..0.62 per (used) block
+      const alpha = Math.max(0.14, blockA + (tileHash(tx, ty) - 0.5) * 0.06);
+      this.drawTexturedQuad(corners, pick, shadeHex(YELLOW, shade), null, 'multiply', Math.min(0.66, alpha));
       this.drawLiminalWear(tx, ty, corners);
     }
     this.diamondPath(corners);
@@ -1458,10 +1485,13 @@ export class Renderer {
       if (o.type !== 'lamp') continue;
       const s = worldToScreen(o.x + 0.5, o.y + 0.5);
       const bright = this._lampFlicker(o.seed || 0);
-      const R = 38;
+      const warm = o.warm != null ? o.warm : 0.5;
+      const gr = Math.round(230 - warm * 24), gg = Math.round(210 - warm * 34), gb = Math.round(150 - warm * 80);
+      const rgb = `${gr},${gg},${gb}`;
+      const R = 34;
       const glow = ctx.createRadialGradient(s.x, s.y, 3, s.x, s.y, R);
-      glow.addColorStop(0, `rgba(214,196,110,${(0.11 * bright).toFixed(3)})`); // dim liminal yellow
-      glow.addColorStop(1, 'rgba(214,196,110,0)');
+      glow.addColorStop(0, `rgba(${rgb},${(0.11 * bright).toFixed(3)})`); // dim liminal yellow, per-lamp warmth
+      glow.addColorStop(1, `rgba(${rgb},0)`);
       ctx.fillStyle = glow;
       ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, Math.PI * 2); ctx.fill();
     }
@@ -1477,7 +1507,7 @@ export class Renderer {
     const ctx = this.ctx;
     const s = worldToScreen(obj.x + 0.5, obj.y + 0.5);
     const bright = this._lampFlicker(obj.seed || 0);
-    const H = 78;                                  // on-screen height of the whole sprite
+    const H = 64;                                  // on-screen height of the whole sprite
     const aspect = (LAMP_SPRITE.naturalWidth / LAMP_SPRITE.naturalHeight) || 1.833;
     const W = H * aspect;
     // Where the lamp sits inside its (mostly transparent) sprite, as fractions
@@ -1486,14 +1516,17 @@ export class Renderer {
     const FOOT = 0.885, CX = 0.50, BULB = 0.20;
     const drawX = s.x - W * CX, drawY = s.y - H * FOOT;
     const bulbX = s.x, bulbY = drawY + H * BULB;
-    // A soft, dim liminal-yellow halo behind the shade (glows out around and
-    // through the fabric). Deliberately restrained — this is a sickly, low
-    // light, not a warm lamp.
-    const halo = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 22);
-    halo.addColorStop(0, `rgba(220,200,120,${(0.32 * bright).toFixed(3)})`);
-    halo.addColorStop(1, 'rgba(220,200,120,0)');
+    // Per-lamp glow colour: `warm` (0..1) lerps from a pale bulb to a deeper,
+    // sicklier liminal yellow, so lamps don't all glow the same. Halo behind
+    // the shade (soft, dim — this is a low, wrong light, not a cosy lamp).
+    const warm = obj.warm != null ? obj.warm : 0.5;
+    const gr = Math.round(232 - warm * 20), gg = Math.round(214 - warm * 34), gb = Math.round(160 - warm * 84);
+    const glowRGB = `${gr},${gg},${gb}`;
+    const halo = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 20);
+    halo.addColorStop(0, `rgba(${glowRGB},${(0.32 * bright).toFixed(3)})`);
+    halo.addColorStop(1, `rgba(${glowRGB},0)`);
     ctx.fillStyle = halo;
-    ctx.beginPath(); ctx.arc(bulbX, bulbY, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bulbX, bulbY, 20, 0, Math.PI * 2); ctx.fill();
     if (LAMP_SPRITE.complete && LAMP_SPRITE.naturalWidth) {
       ctx.save();
       ctx.globalAlpha = 0.85 + 0.15 * bright; // the fixture dims a touch on the stutter
@@ -1502,11 +1535,11 @@ export class Renderer {
       // Faint additive bloom over the shade so the bulb reads as flickering on.
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const bloom = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 15);
-      bloom.addColorStop(0, `rgba(226,206,128,${(0.2 * bright).toFixed(3)})`);
-      bloom.addColorStop(1, 'rgba(226,206,128,0)');
+      const bloom = ctx.createRadialGradient(bulbX, bulbY, 1, bulbX, bulbY, 13);
+      bloom.addColorStop(0, `rgba(${glowRGB},${(0.2 * bright).toFixed(3)})`);
+      bloom.addColorStop(1, `rgba(${glowRGB},0)`);
       ctx.fillStyle = bloom;
-      ctx.beginPath(); ctx.arc(bulbX, bulbY, 15, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(bulbX, bulbY, 13, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     } else {
       // Placeholder until the sprite loads: base dot + pole.
