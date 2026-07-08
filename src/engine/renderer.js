@@ -5,6 +5,7 @@ import { drawAnimal } from '../game/animals.js';
 import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
 import { drawWaterDroid } from '../game/waterdroids.js';
+import { drawUnderworldCreature } from '../game/underworld.js';
 import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS, TREE_SHEET, TREE_SPRITES, EDGE_TEXTURE, CAR_SPRITES, CAR_MODEL_KEYS, CAR_DIR_KEYS, CAR_RUIN_TEXTURE, FACTORY_TEXTURE, GRAFFITI_TEXTURES } from './textures.js';
 
 // Maps a facing vector to one of 8 pre-rendered screen-compass directions
@@ -255,6 +256,10 @@ export class Renderer {
       if (b.x < range.minX || b.x > range.maxX + 1 || b.y < range.minY || b.y > range.maxY + 1) continue;
       drawables.push({ depth: b.x + b.y - 0.02, bomb: b });
     }
+    for (const uc of hud.uwCreatures || []) {
+      if (uc.x < range.minX || uc.x > range.maxX + 1 || uc.y < range.minY || uc.y > range.maxY + 1) continue;
+      drawables.push({ depth: uc.x + uc.y, uwCreature: uc });
+    }
     // Objects draw at depth x+y+1 so a wall occludes what's behind it. That
     // wrongly hides the player standing ON TOP of a wall (the block they're
     // on, and the ones a tile or two in front, would paint over their legs).
@@ -286,6 +291,7 @@ export class Renderer {
         : d.robot ? elevOf(d.robot.x, d.robot.y)
         : d.droid ? elevOf(d.droid.x, d.droid.y)
         : d.bomb ? elevOf(d.bomb.x, d.bomb.y)
+        : d.uwCreature ? elevOf(d.uwCreature.x, d.uwCreature.y)
         : d.groundItem ? elevOf(d.groundItem.x, d.groundItem.y)
         : d.edgeRock ? 0 // draws its own height from the tile base
         // Objects sit on the terrain height only — NOT effectiveHeightAt.
@@ -302,6 +308,7 @@ export class Renderer {
       else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 48); }
       else if (d.droid) { drawWaterDroid(this.ctx, d.droid, worldToScreen); this.creatureHealthBar(d.droid, player, 40); }
       else if (d.bomb) this.drawBomb(d.bomb);
+      else if (d.uwCreature) drawUnderworldCreature(this.ctx, d.uwCreature, worldToScreen);
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
@@ -532,6 +539,11 @@ export class Renderer {
       this.drawSightCone(px, py, ang, z);
     }
 
+    // The underworld: a sickly, jaundiced wash over the whole play area with
+    // a slow, uneven fluorescent flicker — the tell that reality here is
+    // thin, distinct from the ordinary day/night veil.
+    if (hud.underworld) this.drawUnderworldVeil();
+
     if (hud.minimap) {
       const mmX = this.w - MINIMAP_SIZE - 12, mmY = 12;
       hud.minimap.draw(ctx, map, player, mmX, mmY, MINIMAP_SIZE);
@@ -646,6 +658,21 @@ export class Renderer {
     ctx.font = '12px system-ui, sans-serif';
     ctx.fillText('time is passing', this.w / 2, playH / 2 + 22);
     ctx.restore();
+  }
+
+  // A flat sepia-yellow wash plus an uneven fluorescent flicker (two
+  // overlapping slow sine phases rather than one clean pulse, so it never
+  // reads as a deliberate light show) — cheap, screen-space, and enough on
+  // its own to make the underworld read as somewhere else without needing
+  // per-tile texture work.
+  drawUnderworldVeil() {
+    const ctx = this.ctx;
+    const playH = this.h - DASH_H;
+    const flicker = 0.5 + 0.5 * Math.sin(performance.now() / 340) * 0.6 + 0.4 * Math.sin(performance.now() / 970 + 1.7);
+    ctx.fillStyle = `rgba(150,132,60,${(0.16 + 0.05 * flicker).toFixed(3)})`;
+    ctx.fillRect(0, 0, this.w, playH);
+    ctx.fillStyle = `rgba(30,26,10,${(0.12 - 0.04 * flicker).toFixed(3)})`;
+    ctx.fillRect(0, 0, this.w, playH);
   }
 
   // The weapon chart (V): every weapon in the game, with a power rating.
@@ -1378,6 +1405,15 @@ export class Renderer {
     ctx.lineWidth = 1;
     ctx.stroke();
     if (type === 'grass' || type === 'tallgrass') this.drawGrassBlades(tx, ty, corners, def.color, shade);
+    // The maze's "way out" trail: once solved, a lit floor-stud on each tile of
+    // the solution path (a green guide, so it never reads as danger). Textured
+    // like every glow, and rolled along the trail so it looks like it's flowing
+    // back toward the door.
+    if (map.mazeGuideLit && map.mazeGuide && map.mazeGuide.has(ty * map.w + tx)) {
+      const cx = (corners[0].x + corners[2].x) / 2, cy = (corners[0].y + corners[2].y) / 2;
+      const wave = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(performance.now() / 520 - (tx + ty) * 0.5));
+      this.texturedGlow(cx, cy, 5, 2.6, `rgba(90,240,150,${wave.toFixed(3)})`, 7, 0.5, 'aigrate');
+    }
   }
 
   // A handful of small blade strokes per tile so grass reads as textured
@@ -1435,7 +1471,34 @@ export class Renderer {
       case 'fortdoor': this.drawFortDoor(obj); break;
       case 'gateterm': this.drawGateTerm(obj); break;
       case 'mainframe': this.drawMainframe(obj); break;
+      case 'uplink': this.drawUplink(obj); break;
     }
+  }
+
+  // The red uplink mast: a tall dark spar with a red-caged beacon at its head,
+  // wiring the fortress into SKYLINK. Wrecked once hammered down.
+  drawUplink(obj) {
+    const ctx = this.ctx;
+    const s = worldToScreen(obj.x + 0.5, obj.y + 0.5);
+    if (obj.destroyed) {
+      ctx.fillStyle = '#2a1416';
+      ctx.beginPath(); ctx.moveTo(s.x - 8, s.y); ctx.lineTo(s.x + 8, s.y); ctx.lineTo(s.x + 4, s.y - 10); ctx.lineTo(s.x - 5, s.y - 8); ctx.closePath(); ctx.fill();
+      return;
+    }
+    const H = 62;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath(); ctx.ellipse(s.x, s.y + 2, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+    // Mast: a narrow dark red-black spar.
+    ctx.fillStyle = '#3a1416';
+    ctx.beginPath();
+    ctx.moveTo(s.x - 4, s.y); ctx.lineTo(s.x + 4, s.y);
+    ctx.lineTo(s.x + 2.5, s.y - H); ctx.lineTo(s.x - 2.5, s.y - H); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1; ctx.stroke();
+    // Cross-strut near the top, and the red beacon (textured glow, slow pulse).
+    ctx.strokeStyle = '#521a1c'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(s.x - 7, s.y - H + 14); ctx.lineTo(s.x + 7, s.y - H + 14); ctx.stroke();
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 620);
+    this.texturedGlow(s.x, s.y - H + 2, 4.5, 5.5, `rgba(255,42,32,${(0.5 + 0.45 * pulse).toFixed(3)})`, 12, 0.5, 'aigrate');
   }
 
   // --- Adamantine's fortress (southern annex) ------------------------------
@@ -1488,7 +1551,10 @@ export class Renderer {
     // Riveted metal for the outer rampart; darker "AI" panel/grate/vent designs
     // for the inner maze, each with its own dim base tint.
     const tex = WALL_TEXTURES[obj.material] || WALL_TEXTURES.metal;
-    const WALL_BASE_TINT = { darkstone: [34, 33, 38], aiwall: [40, 46, 56], aigrate: [28, 29, 33], aivent: [44, 48, 52] };
+    // liminal: the underworld's damp, jaundiced drywall — no image texture of
+    // its own, so it rides the 'metal' fallback tex heavily tinted toward
+    // this colour (drawTexturedQuad's multiply pass dominates at this alpha).
+    const WALL_BASE_TINT = { darkstone: [34, 33, 38], aiwall: [40, 46, 56], aigrate: [28, 29, 33], aivent: [44, 48, 52], liminal: [150, 132, 68] };
     const base = WALL_BASE_TINT[obj.material] || [46, 50, 56];
     this.drawTexturedQuad([g.left, g.bottom, r.bottom, r.left], tex, rgbScale(base, 0.7), rgbScale(base, 0.7), 'multiply', 0.85);
     this.drawTexturedQuad([g.bottom, g.right, r.right, r.bottom], tex, rgbScale(base, 0.5), rgbScale(base, 0.5), 'multiply', 0.85);
@@ -2052,7 +2118,9 @@ export class Renderer {
     // Signal light: a dim, occasional blink at rest; when it has sensed
     // someone close (obj.alert) it flares a bright, fast-blinking red and
     // throws a soft halo — unmistakable that it's found you.
-    const alert = obj.alert || 0;
+    // A fortress breach "stirs" the whole network: a stirred obelisk flares its
+    // alert red regardless of whether it has personally sensed the player.
+    const alert = Math.max(obj.alert || 0, obj.stirred ? 1 : 0);
     const flash = obj.blinkFlash || 0;
     const ly = c.y - H + 8;
     // RON-ML `loop`: an infinite loop pinned into it burns CPU instead of
@@ -2485,6 +2553,36 @@ export class Renderer {
 
   // Miniature vector art per item, centred on (cx, cy), so things look like
   // the thing they are — in slots, on the ground, and held in hand.
+  // A compact cassette, drawn in the current (translated/scaled) icon space:
+  // shell, label strip in the tape's own colour, window, and the two reels.
+  // `spin` is the reel angle in radians — 0 for a static icon; the walkman
+  // deck passes a clock-driven angle so the reels visibly turn during play.
+  drawCassette(itemDef, spin = 0) {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#26282d'; // shell
+    ctx.fillRect(-11, -7, 22, 14);
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-11, -7, 22, 14);
+    ctx.fillStyle = itemDef.color || '#c9a44a'; // label strip
+    ctx.fillRect(-9, -5.5, 18, 3);
+    ctx.fillStyle = '#1a1b1f'; // tape window
+    ctx.fillRect(-7.5, -1, 15, 6);
+    for (const rx of [-4, 4]) { // two reels, spokes at the shared spin angle
+      ctx.fillStyle = '#e8e2d0';
+      ctx.beginPath(); ctx.arc(rx, 2, 2.6, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#26282d';
+      ctx.lineWidth = 0.9;
+      for (let k = 0; k < 3; k++) {
+        const a = spin + (k * Math.PI * 2) / 3;
+        ctx.beginPath();
+        ctx.moveTo(rx, 2);
+        ctx.lineTo(rx + Math.cos(a) * 2.6, 2 + Math.sin(a) * 2.6);
+        ctx.stroke();
+      }
+    }
+  }
+
   drawItemIcon(itemDef, cx, cy, s = 1) {
     const ctx = this.ctx;
     if (!itemDef) return;
@@ -2541,6 +2639,11 @@ export class Renderer {
       ctx.fillRect(6, -9, 2, 18); // page edge
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.fillRect(-8, -10, 2.5, 20); // spine
+      ctx.restore();
+      return;
+    }
+    if (itemDef.kind === 'tape') {
+      this.drawCassette(itemDef, 0); // static reels: it only spins in the walkman
       ctx.restore();
       return;
     }
@@ -3344,6 +3447,40 @@ export class Renderer {
       ctx.font = '9px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(207,216,195,0.7)';
       ctx.fillText(`${used}/16`, bpX, top + 66);
+    }
+
+    // The walkman, on its carry strap: a deck slot that takes cassettes.
+    // Clicking the tape cycles side A -> side B -> stop (player.equipSlot);
+    // while its current side is actually what the music system is playing,
+    // the reels visibly turn, like the real thing through a cracked window.
+    {
+      const wmX = pocketsX + player.pockets.length * 42 + 10 + (player.backpack ? 92 : 0);
+      // Strap: a worn leather line rising off both shoulders of the slot.
+      ctx.strokeStyle = 'rgba(139,108,60,0.85)';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(wmX + 5, top + 21); ctx.lineTo(wmX - 3, top + 6); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(wmX + 31, top + 21); ctx.lineTo(wmX + 39, top + 6); ctx.stroke();
+      this.drawLabel('WALKMAN', wmX, top + 14);
+      this.drawSlot(wmX, top + 20, 36, null, 0);
+      this.uiSlots.push({ x: wmX, y: top + 20, w: 36, h: 36, kind: 'walkman' });
+      if (player.walkman) {
+        const tapeDef = ITEMS[player.walkman.item];
+        const sideMode = player.walkmanSide
+          ? (player.walkmanSide === 'A' ? tapeDef.sideA : tapeDef.sideB) : null;
+        const spinning = sideMode && hud.musicMode === sideMode;
+        ctx.save();
+        ctx.translate(wmX + 18, top + 38);
+        ctx.scale(1.25, 1.25);
+        this.drawCassette(tapeDef, spinning ? performance.now() / 300 : 0);
+        ctx.restore();
+        ctx.font = '7px system-ui, sans-serif';
+        ctx.fillStyle = spinning ? '#e8d27a' : 'rgba(207,216,195,0.6)';
+        ctx.textAlign = 'center';
+        ctx.fillText(
+          spinning ? `▶ ${player.walkmanSide}: ${sideMode}` : player.walkmanSide ? `${player.walkmanSide} (quiet)` : 'stopped',
+          wmX + 18, top + 66, 44);
+        ctx.textAlign = 'left';
+      }
     }
 
     // Stats block, right-aligned

@@ -8,7 +8,7 @@ import { makeRng } from './game/rng.js';
 import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
 import { spawnBirds, updateBirds } from './game/birds.js';
-import { spawnRobots, updateRobots, spawnW1s, spawnW3, spawnW4, spawnW5, drawRobot } from './game/robots.js';
+import { spawnRobots, updateRobots, spawnW1s, spawnW3, spawnW4, spawnW5, spawnM6, drawRobot } from './game/robots.js';
 import { resolveBodyOverlaps } from './game/collision.js';
 import { spawnWaterDroids, updateWaterDroids, drawWaterDroid } from './game/waterdroids.js';
 import { Lore, FRAGMENTS } from './game/lore.js';
@@ -17,6 +17,7 @@ import { sfx } from './engine/sound.js';
 import { worldToScreen } from './engine/iso.js';
 import { runRonml } from './game/ronml.js';
 import { createFortress } from './game/fortress.js';
+import { createUnderworldPocket, spawnUnderworldCreature, updateUnderworldCreatures } from './game/underworld.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
 // Note onsets split into four pitch registers, so each singing machine can be
@@ -47,14 +48,15 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.12';
+const VERSION = '1.13';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
 const input = new Input(window, canvas);
-const { map, spawn } = buildWorld(WORLD_SEED);
+let { map, spawn } = buildWorld(WORLD_SEED);
+const overworldMap = map; // stable handle: `map` gets reassigned to the underworld pocket and back
 const player = new Player(spawn.x, spawn.y);
-player.map = map; // for death drops when damage comes from animals
+player.map = map; // for death drops when damage comes from animals (kept in sync on underworld enter/exit)
 const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 });
 
 // Scatter loot: torches and tinned food in building interiors (night and
@@ -356,6 +358,25 @@ for (const ob of obeliskObjs) {
 // so the existing map overlay marks it; `fortress` owns the gate/door logic.
 const fortress = createFortress(map, WORLD_SEED, spawn);
 const mainframe = fortress.core; // { x, y } of the core, for the RON-ML map star
+// The quad's standing patrol: five M6 guards (3 sentinels + 2 marksmen).
+robots.push(...fortress.spawnGuards(spawnM6));
+// "Red starlink": when the fortress breach reaches the world (alarm + uplink
+// intact), every overworld obelisk flares red (its `stirred` flag forces the
+// alert glow, HUD untouched) and the W-factory throws a W4 toward the doorway.
+// `calm` clears the flare when the fortress stands down or the uplink is cut.
+const worldStir = {
+  stir() {
+    for (const o of obeliskObjs) if (!o.destroyed) o.stirred = true;
+    if (factoryLive()) {
+      const w4 = spawnW4(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
+      if (w4) { robots.push(w4); }
+    }
+    player.say('Red light runs the length of the SKYLINK — the whole network knows where you are.');
+  },
+  calm() {
+    for (const o of obeliskObjs) o.stirred = false;
+  },
+};
 
 // Character persona and learned skills persist across sessions and deaths.
 const SAVE_KEY = 'postai-character';
@@ -390,6 +411,7 @@ try {
       }
       if (Array.isArray(st.pockets)) player.pockets = st.pockets;
       if (st.backpack) player.backpack = st.backpack;
+      if (st.walkman !== undefined) player.walkman = st.walkman; // null = tape moved out, respected across reload
     }
   }
 } catch { /* corrupt save: start fresh */ }
@@ -417,7 +439,7 @@ const persist = () => {
       state: {
         health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
         wifiPower: player.wifiPower, x: player.x, y: player.y, hands: player.hands,
-        pockets: player.pockets, backpack: player.backpack,
+        pockets: player.pockets, backpack: player.backpack, walkman: player.walkman,
       },
     }));
     localStorage.setItem(IDENTITY_KEY, JSON.stringify({ name: player.name, gender: player.gender }));
@@ -532,6 +554,48 @@ const UBIK_PATCH_LIFE = 75; // seconds a sprayed patch stays brightened before f
 const UBIK_PORTAL_LIFE = 260; // portals hold much longer than a plain patch before fading
 const UBIK_TELEPORT_RANGE = 0.9; // how close to a linked portal's centre triggers a jump
 const UBIK_TELEPORT_COOLDOWN = 1.5; // seconds before another jump can fire (stops instant ping-pong)
+
+// The underworld: a Ubik tear no longer links to another overworld spot —
+// it drops you into a single shared liminal pocket instead (see
+// game/underworld.js). Built lazily on first entry, then kept for the rest
+// of the session; entering/exiting swaps the outer `map` binding itself,
+// which every system (player.update, updateRobots, renderer.draw, ...) reads
+// fresh each call, so no other wiring is needed beyond keeping `player.map`
+// and `window.__game.map` in sync.
+let underworld = null;
+let inUnderworld = false;
+let overworldReturn = null;
+let uwCreatures = [];
+let uwAmbienceClock = 0, uwAmbienceNext = 8 + Math.random() * 10;
+
+function enterUnderworld() {
+  if (!underworld) {
+    underworld = createUnderworldPocket((WORLD_SEED ^ 0x0b1c) >>> 0);
+    uwCreatures = [spawnUnderworldCreature((WORLD_SEED ^ 0x1e57) >>> 0, underworld.spawnX + 4, underworld.spawnY + 4)];
+  }
+  overworldReturn = { x: player.x, y: player.y };
+  map = underworld.map;
+  player.map = map;
+  window.__game.map = map;
+  player.x = underworld.spawnX;
+  player.y = underworld.spawnY;
+  camera.snap(player.x, player.y);
+  inUnderworld = true;
+  sfx.setDrone(0.8);
+  player.say('The tear swallows you. The air in here is wrong — flat, yellow, humming.');
+}
+
+function exitUnderworld() {
+  map = overworldMap;
+  player.map = map;
+  window.__game.map = map;
+  player.x = overworldReturn.x;
+  player.y = overworldReturn.y;
+  camera.snap(player.x, player.y);
+  inUnderworld = false;
+  sfx.setDrone(0);
+  player.say('You come up through the tear. Ordinary daylight, ordinary weight. You are back.');
+}
 
 // Fog of war: the minimap only shows where you have been.
 map.explored = new Uint8Array(map.w * map.h);
@@ -1456,6 +1520,30 @@ function update(dt) {
     drag = null; // released outside any slot: cancel the drag
   }
 
+  // The underworld runs its own much smaller update: the player, the one
+  // lurking creature, the camera, and the way back up — everything else in
+  // this function (obelisks, the W-factory, animals, day/night, RON resupply,
+  // lore terminals...) belongs to the overworld and simply holds still while
+  // you're not there to see it.
+  if (inUnderworld) {
+    player.update(dt, input, map, [], [], mouseWorld);
+    updateUnderworldCreatures(dt, uwCreatures, player, map);
+    camera.follow(player.x, player.y, dt);
+    if (player._ubikTeleportCooldown > 0) player._ubikTeleportCooldown -= dt;
+    else if (Math.hypot(player.x - underworld.exitX, player.y - underworld.exitY) < UBIK_TELEPORT_RANGE) {
+      exitUnderworld();
+      player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
+      sfx.play('zap');
+    }
+    uwAmbienceClock += dt;
+    if (uwAmbienceClock > uwAmbienceNext) {
+      uwAmbienceClock = 0;
+      uwAmbienceNext = 8 + Math.random() * 14;
+      sfx.play(Math.random() < 0.5 ? 'shriek' : 'hiss');
+    }
+    return;
+  }
+
   // Weapons target robots and water droids alike (a combined foe list, only
   // for the player's own targeting — each still updates on its own array).
   const foes = waterdroids.length ? robots.concat(waterdroids) : robots;
@@ -1507,31 +1595,20 @@ function update(dt) {
   // Ubik's brightening is a temporary win, not a permanent one: each patch
   // ages and fades back to the ordinary, decayed world over UBIK_PATCH_LIFE
   // (portals hold much longer, UBIK_PORTAL_LIFE), rather than lifting a spot
-  // of ground forever.
+  // of ground forever. A portal no longer links to another overworld spot —
+  // every tear is a way down into the one shared underworld pocket instead
+  // (see game/underworld.js and enterUnderworld() above).
   if (map.ubikPatches && map.ubikPatches.length) {
     for (const p of map.ubikPatches) p.t += dt;
     map.ubikPatches = map.ubikPatches.filter((p) => p.t < (p.portal ? UBIK_PORTAL_LIFE : UBIK_PATCH_LIFE));
-    // Portals always link the oldest surviving one to the newest — recomputed
-    // fresh every frame from whatever's still alive, so closing the current
-    // oldest (it simply ages out above) hands the link on to the next one in
-    // with no special-casing: the pair just falls out of this filter+index.
     const portals = map.ubikPatches.filter((p) => p.portal);
-    for (const p of portals) p.linkedTo = null;
-    if (portals.length >= 2) {
-      portals[0].linkedTo = portals[portals.length - 1];
-      portals[portals.length - 1].linkedTo = portals[0];
-    }
-    // Step through a linked portal to jump to its partner. Cooldown on the
-    // player (not the portal) so arriving at the far end doesn't immediately
-    // bounce back through it.
+    for (const p of portals) p.linkedTo = true; // always usable — the flame-speed tell in renderer.js
     if (player._ubikTeleportCooldown <= 0) {
       for (const p of portals) {
-        if (!p.linkedTo) continue;
         if (Math.hypot(p.x - player.x, p.y - player.y) > UBIK_TELEPORT_RANGE) continue;
-        player.x = p.linkedTo.x; player.y = p.linkedTo.y;
+        enterUnderworld();
         player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
         sfx.play('zap');
-        player.say('The torn place swallows you and sets you down somewhere else that is also real.');
         break;
       }
     }
@@ -1653,7 +1730,11 @@ function update(dt) {
   }
   resolveBodyOverlaps(player, animals, robots);
   map.updateShakes(dt);
-  fortress.update(dt, player); // swings the grand doorway open once you carry the key up to it
+  // Fortress: swings the doorway, lights the maze way-out, and runs the breach
+  // alarm. On alarm (with the uplink intact) `stir` rouses the overworld — the
+  // obelisks flare red and the W-factory sends a W4 toward the doorway; `calm`
+  // unwinds it when the fortress stands down or the uplink is cut.
+  fortress.update(dt, player, robots, worldStir);
   dayNight.update(dt);
   // Time's up: SKYLINK-9000 comes online. Every obelisk lights up and links
   // to every other in a web of lasers, and the factory throws wave after
@@ -1807,15 +1888,19 @@ function frame(now) {
 
   if (now - lastRenderTime >= MIN_RENDER_MS) {
     lastRenderTime = now;
-    renderer.draw(camera, map, player, animals, {
+    renderer.draw(camera, map, player, inUnderworld ? [] : animals, {
       fps,
       version: VERSION,
-      light: dayNight.light(),
+      // Fluorescent-lit down there regardless of the overworld's clock — the
+      // underworld veil (below) carries the mood instead of day/night darkness.
+      light: inUnderworld ? 1 : dayNight.light(),
       timeLabel: dayNight.countdownLabel,
-      minimap,
-      birds,
-      robots,
-      waterdroids,
+      minimap: inUnderworld ? null : minimap,
+      birds: inUnderworld ? [] : birds,
+      robots: inUnderworld ? [] : robots,
+      waterdroids: inUnderworld ? [] : waterdroids,
+      underworld: inUnderworld,
+      uwCreatures: inUnderworld ? uwCreatures : [],
       lore,
       torch: player.pockets.some((s) => s && s.item === 'torch'),
       showBackpack,
@@ -1836,6 +1921,7 @@ function frame(now) {
       ubikFlicker: player.ubikFlickerT || 0,
       ubikFlickerX: player.ubikFlickerX || player.x,
       ubikFlickerY: player.ubikFlickerY || player.y,
+      musicMode: sfx.musicMode, // the walkman's reels spin only while its side is what's actually playing
     });
     frameCount += 1;
   }

@@ -113,6 +113,32 @@ const W4_DAMAGE = 9;
 const W4_BODY = '#4a1408';      // dull furnace red-black
 const W4_HEAD = '#2c0c05';
 
+// M6s: Adamantine's fortress guards (see docs/fortress-guards-plan.md). Two
+// variants: the m6 heavy melee sentinel and the m6r marksman. Unlike every
+// overworld hunter they acquire by GENUINE SIGHT ONLY — line of sight, within
+// range, inside the sensor's forward cone — never by blind proximity, so a
+// careful player can ghost past behind cover. Hardened: not reprogrammable.
+// Their home is their muster post (they recharge standing at it). The fortress
+// controller reads r.aggro off them to run its report-timer/alarm logic.
+const M6_HP = 40;               // several sword-blows; a bow burst inside the report window still kills
+const M6_PATROL_SPEED = 1.0;
+const M6_CHASE_SPEED = 4.6;     // between your walk and sprint, same as a W1
+const M6_PATROL_RANGE = 2.6;    // a tight loop around its muster post
+const M6_VISION = 9;
+const M6_CONE_DOT = 0.05;       // forward cone ~87° either side of facing
+const M6_HIT_RANGE = 0.65;
+const M6_HIT_DAMAGE = 14;
+const M6_HIT_COOLDOWN = 1.0;
+const M6R_HP = 28;              // the marksman is lighter-built
+const M6R_RANGE = 7.5;          // holds and fires from here, W4-style
+const M6R_MIN_RANGE = 4;
+const M6R_FIRE_COOLDOWN = 1.9;
+const M6R_DAMAGE = 8;
+const M6_BODY = '#232833';      // gunmetal blue-black armour
+const M6_HEAD = '#141821';
+const M6R_BODY = '#2c2430';     // violet-tinged marksman
+const M6R_HEAD = '#191320';
+
 // Robots must never overlap: the minimum distance any two live (non-fused)
 // machines are allowed to close to, enforced every tick after their own AI
 // has moved them, so a swarm spreads out around its target instead of
@@ -202,6 +228,8 @@ const DRAIN_FRIENDLY = 0.2;     // battery per second in the player's service
 const RECHARGE_RANGE = 1.6;     // tiles from home within which the charger reaches
 const RECHARGE_RATE = 12;       // battery per second at the obelisk
 const RECHARGE_TRAVEL_SPEED = 2.0; // unhurried low-power trudge home
+const HP_FLEE_FRAC = 0.2;       // below this fraction of maxHp a machine breaks off to mend
+const REPAIR_RATE = 1.5;        // hp per second at the charger — deliberately slow (a T2 from 20% is ~13s)
 
 // Friendly (reprogrammed) behaviour.
 const FOLLOW_MAX = 4;           // start moving when the player is further than this...
@@ -427,6 +455,21 @@ export function spawnW5(map, seed, fx, fy) {
   return r;
 }
 
+// One fortress guard seated at its muster post (mx, my). `ranged` picks the
+// m6r marksman variant. `fromFactory` adds the materialisation flicker for
+// alarm-wave dispatches; the standing patrol spawns without it.
+export function spawnM6(map, seed, mx, my, ranged = false, fromFactory = false) {
+  const rng = makeRng(seed >>> 0);
+  const used = new Set();
+  const avoid = { x: mx, y: my, r: 0 };
+  const spot = seatNear(map, Math.floor(mx), Math.floor(my), avoid, used, rng, SPAWN_MAX_R_FALLBACK);
+  if (!spot) return null;
+  const r = baseRobot(ranged ? 'm6r' : 'm6', spot[0], spot[1], ranged ? M6R_HP : M6_HP, rng);
+  r.hardened = true; // cannot be reprogrammed — drain one and it's only scrap
+  if (fromFactory) r.spawnT = FACTORY_SPAWN_T;
+  return r;
+}
+
 // ---- Movement helpers -----------------------------------------------------
 
 const CORNERS = [
@@ -566,14 +609,19 @@ function drainBattery(r, rate, dt) {
 
 // Recharge state: trudge home, ignoring the player entirely, and drink from
 // the obelisk once in range. The T1 keeps its never-uphill rule on the way,
-// so one trapped below its charger drains flat instead.
+// so one trapped below its charger drains flat instead. The charger mends
+// the chassis too, at a much slower rate than it fills the battery — a
+// machine that fled the fight badly damaged (see the low-HP break-off in
+// updateRobots) is out of the picture for a genuinely long beat, not just
+// the few seconds a battery top-up takes. It only returns to its rounds
+// once BOTH are fully restored.
 function updateRecharge(r, dt, map) {
   const dHome = Math.hypot(r.home.x - r.x, r.home.y - r.y);
   if (dHome <= RECHARGE_RANGE) {
     r.battery = Math.min(BATTERY_MAX, r.battery + RECHARGE_RATE * dt);
-    if (r.battery >= BATTERY_MAX) {
-      r.battery = BATTERY_MAX;
-      r.recharging = false; // topped up: back to the rounds
+    r.hp = Math.min(r.maxHp, r.hp + REPAIR_RATE * dt);
+    if (r.battery >= BATTERY_MAX && r.hp >= r.maxHp) {
+      r.recharging = false; // topped up and mended: back to the rounds
     }
     return;
   }
@@ -620,13 +668,17 @@ export function updateRobots(dt, robots, player, map) {
       }
       // A W4 is the toughest thing the factory builds — bringing one down is
       // a proper win, so it drops a generous spoil of war on top of the
-      // usual scrap: a stack of batteries, bonus scrap, and a heavy bomb
-      // (rarely the insane one), deterministic from its wreck position.
+      // usual scrap: a stack of batteries and bonus scrap. A wreck only ever
+      // sheds what the machine actually carried — a laser platform holds
+      // cells and boards, not ordnance (it never threw a bomb in its life,
+      // so it doesn't drop one in death); rarely its targeting boards
+      // survive as extra chip fragments, deterministic from the wreck spot.
       if (r.type === 'w4') {
         map.groundItems.push({ item: 'battery', qty: 6, x: r.x + 0.3, y: r.y });
         map.groundItems.push({ item: 'scrap', qty: 4, x: r.x - 0.3, y: r.y - 0.2 });
-        const rareBomb = Math.floor(r.x * 53 + r.y * 29) % 5 === 0;
-        map.groundItems.push({ item: rareBomb ? 'bomb_insane' : 'bomb_large', qty: 1, x: r.x, y: r.y + 0.3 });
+        if (Math.floor(r.x * 53 + r.y * 29) % 5 === 0) {
+          map.groundItems.push({ item: 'chip_fragment', qty: 2, x: r.x, y: r.y + 0.3 });
+        }
       }
       continue;
     }
@@ -729,7 +781,12 @@ export function updateRobots(dt, robots, player, map) {
     }
 
     // Low battery: break off the hunt and head for the home obelisk.
-    if (r.battery < BATTERY_LOW) {
+    // Critically damaged (below HP_FLEE_FRAC of maxHp): same retreat — the
+    // machine values its own chassis and limps home to mend at the charger,
+    // slowly (see updateRecharge/REPAIR_RATE), before rejoining the fight.
+    // Zombies are excluded: an OB-corrupted machine has no self-preservation
+    // left in it.
+    if (r.battery < BATTERY_LOW || (!r.zombie && r.hp < r.maxHp * HP_FLEE_FRAC)) {
       r.recharging = true;
       r.aggro = false;
       r.stuck = false;
@@ -760,6 +817,7 @@ export function updateRobots(dt, robots, player, map) {
     else if (r.type === 'w3') updateW3(r, dt, map, robots);
     else if (r.type === 'w4') updateW4(r, dt, player, map);
     else if (r.type === 'w5') updateW5(r, dt, map);
+    else if (r.type === 'm6' || r.type === 'm6r') updateM6(r, dt, player, map);
     else updateT2(r, dt, player, map);
   }
   separateRobots(robots, map, dt, player);
@@ -1205,6 +1263,77 @@ function updateW4(r, dt, player, map) {
   }
 }
 
+// ---- M6 fortress guards ----------------------------------------------------
+
+// Sight test: LOS + vision range + the sensor's forward cone. A jammed Wi-Fi
+// block blinds it entirely (being struck still wakes it, via the generic hurt
+// handling in updateRobots).
+function m6Sees(r, player, map) {
+  if (player.invisibleToRobots) return false;
+  const d = Math.hypot(player.x - r.x, player.y - r.y);
+  if (d > M6_VISION || d < 1e-4) return false;
+  if (!map.hasLineOfSight(r.x, r.y, player.x, player.y)) return false;
+  const dot = ((player.x - r.x) / d) * r.facing.x + ((player.y - r.y) / d) * r.facing.y;
+  return dot > M6_CONE_DOT;
+}
+
+function updateM6(r, dt, player, map) {
+  r.attackTimer = Math.max(0, r.attackTimer - dt);
+  const ease = player.threatEase ? player.threatEase() : 1;
+  drainBattery(r, r.aggro ? DRAIN_CHASE : DRAIN_PATROL, dt);
+  if (r.drained) return;
+
+  if (!r.aggro) {
+    if (!(r.loseInterestT > 0) && m6Sees(r, player, map)) {
+      r.aggro = true; // spotted — the fortress controller starts its report clock
+    } else if (r.returning) {
+      moveToward(r, r.home.x, r.home.y, M6_CHASE_SPEED * 0.5, dt, map);
+      if (Math.hypot(r.home.x - r.x, r.home.y - r.y) < 1) r.returning = false;
+      return;
+    } else {
+      patrol(r, M6_PATROL_SPEED, M6_PATROL_RANGE, dt, map);
+      return;
+    }
+  }
+
+  const d = distTo(r, player);
+  if (r.type === 'm6r') {
+    // The marksman: hold firing range, back off if crowded, fire on a clear
+    // line — the W4 pattern with a lighter bolt.
+    const canSee = map.hasLineOfSight(r.x, r.y, player.x, player.y);
+    if (d > M6R_RANGE) {
+      moveToward(r, player.x, player.y, M6_CHASE_SPEED, dt, map);
+    } else if (d < M6R_MIN_RANGE && d > 1e-4) {
+      const dx = r.x - player.x, dy = r.y - player.y;
+      moveToward(r, r.x + (dx / d) * 2, r.y + (dy / d) * 2, M6_CHASE_SPEED, dt, map);
+    }
+    if (d <= M6R_RANGE && d > 1e-4 && canSee) {
+      r.facing = { x: (player.x - r.x) / d, y: (player.y - r.y) / d };
+      if (r.attackTimer <= 0) {
+        r.attackTimer = M6R_FIRE_COOLDOWN;
+        (map.projectiles ??= []).push({ x0: r.x, y0: r.y, x1: player.x, y1: player.y, prog: 0, kind: 'laser' });
+        const block = player.blockRangedShot ? player.blockRangedShot(r.x, r.y) : null;
+        if (block === 'reflect') {
+          r.hp -= 999; r.hurt = true;
+          map.projectiles.push({ x0: player.x, y0: player.y, x1: r.x, y1: r.y, prog: 0, kind: 'laser' });
+        } else if (!block) {
+          player.takeDamage(M6R_DAMAGE * ease, 'machine');
+        }
+      }
+    }
+    return;
+  }
+
+  // The heavy sentinel: run the player down and strike. Damage checks the
+  // real, live distance (not distTo, which a Wi-Fi block forces to Infinity).
+  if (d > M6_HIT_RANGE * 0.8) moveToward(r, player.x, player.y, M6_CHASE_SPEED, dt, map);
+  const realD = Math.hypot(player.x - r.x, player.y - r.y);
+  if (realD < M6_HIT_RANGE && r.attackTimer <= 0) {
+    r.attackTimer = M6_HIT_COOLDOWN;
+    player.takeDamage(M6_HIT_DAMAGE * ease, 'machine');
+  }
+}
+
 // ---- Friendly (reprogrammed) ----------------------------------------------
 
 // A reprogrammed machine serves the player: never attacks, never aggros,
@@ -1515,8 +1644,8 @@ function drawT2(ctx, r, c) {
   ctx.fillRect(-4 + swing, -10, 3, 10);
   ctx.fillRect(1 - swing, -10, 3, 10);
 
-  const bodyBase = r.type === 'w1' ? W1_BODY : r.type === 'w3' ? W3_BODY : r.type === 'w4' ? W4_BODY : r.type === 'w5' ? W5_BODY : T2_BODY;
-  const headBase = r.type === 'w1' ? W1_HEAD : r.type === 'w3' ? W3_HEAD : r.type === 'w4' ? W4_HEAD : r.type === 'w5' ? W5_HEAD : T2_HEAD;
+  const bodyBase = r.type === 'w1' ? W1_BODY : r.type === 'w3' ? W3_BODY : r.type === 'w4' ? W4_BODY : r.type === 'w5' ? W5_BODY : r.type === 'm6' ? M6_BODY : r.type === 'm6r' ? M6R_BODY : T2_BODY;
+  const headBase = r.type === 'w1' ? W1_HEAD : r.type === 'w3' ? W3_HEAD : r.type === 'w4' ? W4_HEAD : r.type === 'w5' ? W5_HEAD : r.type === 'm6' ? M6_HEAD : r.type === 'm6r' ? M6R_HEAD : T2_HEAD;
   ctx.fillStyle = bodyTone(bodyBase, r); // blocky torso, roughly player height overall
   ctx.fillRect(-6, -25, 12, 16);
   if (!r.fused) {
@@ -1566,7 +1695,7 @@ function drawT3(ctx, r, c) {
   const tremor = r.fused ? 0 : Math.sin((r.animT || 0) * 9) * 0.012;
   if (r.fused) ctx.rotate(0.16);
   else if (r.ubikConfusedT > 0) ctx.rotate(performance.now() / 140);
-  else ctx.rotate(0.22 + tremor); // permanent hunch: reads as mid-lunge whether frozen or closing in
+  else ctx.rotate(tremor); // stands up straight — just the faint live-machine tremor
   ctx.scale(T3_SCALE, T3_SCALE);
 
   // Legs scissor with the walk phase exactly like the T2's — a jagged knee

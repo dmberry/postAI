@@ -20,6 +20,8 @@ export const AI_ROSTER = ['Adamantine', 'Behemoth', 'Colossus', 'Demiurge'];
 const ANNEX_H = 64;        // rows of fortress grown below the overworld
 const RAMPART_MAT = 'metal';
 const DOOR_W = 3;          // a three-tile grand doorway
+const REPORT_DELAY = 3.5;  // seconds a guard must survive watching you to report the breach
+const STANDDOWN_DELAY = 90; // seconds of quiet before an alarmed fortress stands back down
 
 // Grow the map's grid southward, in place, by `rows`. A tile's linear index is
 // y*w+x and the width is unchanged, so every existing (x,y) keeps its index —
@@ -99,6 +101,27 @@ function buildMaze(map, rng, cfg) {
       });
     }
   }
+
+  // The way out: a breadth-first shortest path through the open tiles from the
+  // entrance gap down to the exit corridor. Stored (single-tile-wide) on the
+  // map so that, once you've solved the maze, the floor can light this trail to
+  // guide you back out (see fortress.update + renderer.drawFloor).
+  const START = idx(gx + 1, my0 - 1), GOAL = idx(gx + 1, bandBottom + 4);
+  const prev = new Map(); const bq = [START]; prev.set(START, -1);
+  let found = false;
+  for (let h = 0; h < bq.length && !found; h++) {
+    const cur = bq[h], cx2 = cur % w, cy2 = (cur - cx2) / w;
+    if (cur === GOAL) { found = true; break; }
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = cx2 + dx, ny = cy2 + dy, ni = idx(nx, ny);
+      if (nx < 0 || ny < 0 || nx >= w || prev.has(ni) || !open.has(ni)) continue;
+      prev.set(ni, cur); bq.push(ni);
+    }
+  }
+  const guide = new Set();
+  if (found) { for (let n = GOAL; n !== -1; n = prev.get(n)) guide.add(n); }
+  map.mazeGuide = guide;      // tile indices of the way out
+  map.mazeGuideLit = false;   // lit only once the maze is solved
   return bandBottom;
 }
 
@@ -163,6 +186,18 @@ export function createFortress(map, seed, spawn) {
 
   const coreCx = coreX + CORE / 2, coreCy = coreY + CORE / 2;
 
+  // The red uplink mast beside the core: wires Adamantine into the overworld
+  // SKYLINK. While it stands, tripping the alarm stirs the world; hammer it
+  // down and a breach stays contained to the fortress. Placed just off the
+  // core's western face on the sanctum deck.
+  let uplinkObj = null;
+  {
+    const ux = coreX - 2, uy = coreY + 1;
+    if (map.inBounds(ux, uy) && !map.objectAt(ux, uy)) {
+      uplinkObj = map.addObject('uplink', ux, uy, { hp: 90, maxHp: 90, destroyed: false });
+    }
+  }
+
   // The labyrinth: a full-width band between the doorway and the sanctum. Its
   // entrance/exit column is aligned to the doorway/core so the raid runs on a
   // straight north-south axis, but the only route through is the maze solution.
@@ -174,8 +209,31 @@ export function createFortress(map, seed, spawn) {
     mx0: MAZE_MX0, my0: seamY + 3, cols: mazeCols, rows: 9, gateCol, wallH: 40,
   });
 
+  // The quad: the open paved killing-ground between the maze and the sanctum,
+  // where Adamantine's guards muster. Low pillars are scattered for cover (they
+  // break line of sight, so you can cross unseen), leaving the central approach
+  // to the core clear. Guard muster points are returned for the guard system.
+  const quadTop = mazeBottom + 2, quadBottom = coreY - 4;
+  for (let y = quadTop; y <= quadBottom; y++) {
+    for (let x = 2; x < w - 2; x++) {
+      if (map.inBounds(x, y) && !map.objectAt(x, y)) map.setFloor(x, y, 'quad');
+    }
+  }
+  const muster = [];
+  for (let y = quadTop + 1; y < quadBottom; y += 3) {
+    for (let x = 6; x < w - 6; x += 5) {
+      if (Math.abs(x - coreCx) < 5) { muster.push({ x: x + 0.5, y: y + 0.5 }); continue; } // clear central approach: a muster spot, not a pillar
+      if (mazeRng() < 0.5 && !map.objectAt(x, y)) {
+        map.addObject('fortwall', x, y, { material: mazeRng() < 0.5 ? 'aiwall' : 'aigrate', wallH: 22 });
+      }
+    }
+  }
+
   // ---- controller ---------------------------------------------------------
-  const state = { hacked: false, open: false, announced: false };
+  const state = {
+    hacked: false, open: false, announced: false, mazeSolved: false,
+    alarm: false, reportT: 0, quietT: 0, uplinkAlive: !!uplinkObj,
+  };
 
   const nearTerminal = (px, py, r = 1.9) =>
     Math.hypot(px - (termX + 0.5), py - (termY + 0.5)) <= r;
@@ -193,10 +251,27 @@ export function createFortress(map, seed, spawn) {
     door: { x0: doorX0, x1: doorX0 + DOOR_W - 1, y: seamY, cx: doorX0 + DOOR_W / 2 },
     terminal: { x: termX, y: termY, obj: terminal },
     core: { obj: core, x: coreCx, y: coreCy, tx: coreX, ty: coreY, fw: CORE, fh: CORE },
+    quad: { top: quadTop, bottom: quadBottom, muster }, // the guard courtyard + muster points
+    uplink: uplinkObj,
+    get alarm() { return state.alarm; },
+    get reportProgress() { return Math.min(1, state.reportT / REPORT_DELAY); }, // 0..1 toward the breach report
+    get uplinkAlive() { return state.uplinkAlive; },
     get hacked() { return state.hacked; },
     get open() { return state.open; },
 
     nearTerminal,
+
+    // The standing patrol: five M6 guards seated at the quad's muster points —
+    // three heavy sentinels and two marksmen (m6r). Called from main.js with
+    // robots.js's spawner passed in, so this module never imports robots.js.
+    spawnGuards(spawnM6) {
+      const guards = [];
+      muster.slice(0, 5).forEach((m, i) => {
+        const g = spawnM6(map, (seed ^ (0x6a11 + i * 977)) >>> 0, m.x, m.y, i >= 3);
+        if (g) guards.push(g);
+      });
+      return guards;
+    },
 
     // RON-ML `unlock`, run at the gate console. Requires the AI key (one AI's
     // key cracks the next AI's gate) and drops a single fortress key.
@@ -217,12 +292,54 @@ export function createFortress(map, seed, spawn) {
     },
 
     // Per-frame: once you carry the key up to the doorway, it swings open.
-    update(dt, player) {
+    update(dt, player, robots, world) {
       if (!state.open && player.hasItem('fortress_key')) {
         if (Math.abs(player.y - seamY) <= 2.5 && player.x >= doorX0 - 1.5 && player.x <= doorX0 + DOOR_W + 0.5) {
           openDoor();
           player.say(`The fortress key turns. ${AI_NAME}'s doorway grinds open.`);
           if (!state.announced) { state.announced = true; player.addScore?.(40); }
+        }
+      }
+      // Break through the maze into the quad and the way out lights up behind
+      // you — the floor kindles a trail along the solution so you never have to
+      // solve it twice on the way back.
+      if (!state.mazeSolved && player.y >= quadTop) {
+        state.mazeSolved = true;
+        map.mazeGuideLit = true;
+        player.say('You break into the quad. Behind you a line of floor-lights kindles — the way back out.');
+      }
+
+      // The uplink: hammer it down and the fortress is cut off. If it falls
+      // while the world is already stirred, the world calms at once.
+      if (uplinkObj && uplinkObj.destroyed && state.uplinkAlive) {
+        state.uplinkAlive = false;
+        player.say(`${AI_NAME}'s red uplink goes dark. The fortress is cut off — the world can't hear it now.`);
+        if (state.alarm && world && world.calm) world.calm();
+      }
+
+      // The breach mechanic. A guard that has acquired you (aggro) is reporting;
+      // survive its report window (REPORT_DELAY) and the alarm trips. Kill the
+      // watchers fast and the report clock cools back down. Once alarmed, a long
+      // quiet spell (no guard sees you) stands the fortress back down.
+      const guards = robots ? robots.filter((r) => (r.type === 'm6' || r.type === 'm6r') && !r.dead) : [];
+      const watched = guards.some((g) => g.aggro);
+      if (!state.alarm) {
+        if (watched) {
+          state.reportT += dt;
+          if (state.reportT >= REPORT_DELAY) {
+            state.alarm = true; state.quietT = 0;
+            player.say(`A guard reports the breach. ${AI_NAME} rouses — every factory in the core spins up.`);
+            if (state.uplinkAlive && world && world.stir) world.stir();
+          }
+        } else {
+          state.reportT = Math.max(0, state.reportT - dt * 1.5);
+        }
+      } else {
+        state.quietT = watched ? 0 : state.quietT + dt;
+        if (state.quietT >= STANDDOWN_DELAY) {
+          state.alarm = false; state.reportT = 0;
+          player.say('The fortress loses your trail. The alarm subsides — the core factories fall quiet.');
+          if (world && world.calm) world.calm();
         }
       }
     },

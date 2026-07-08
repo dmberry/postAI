@@ -484,6 +484,19 @@ export const ITEMS = {
     color: '#b8ac82',
     text: 'A water-stained page from an operator’s manual. One block survives: "scan |> nearest — lists the wire, takes the closest. can’t crash blind: hack first for the key. type help at the console for the rest."',
   },
+  // Cassette tapes: play in the walkman, the dedicated dashboard slot on the
+  // carry strap. sideA/sideB name music modes in sound.js's FILE_TRACKS;
+  // clicking the tape while it sits in the walkman cycles side A -> side B
+  // -> stopped. More tapes get seeded into the world later — this first one
+  // is the pair of found recordings the music system already carries.
+  tape_meme: {
+    name: 'a cassette — meme',
+    kind: 'tape',
+    stack: 1,
+    color: '#c9a44a',
+    sideA: 'resonance',
+    sideB: 'slip',
+  },
 };
 
 // Each def keeps a self-reference to its own key, so any code holding a

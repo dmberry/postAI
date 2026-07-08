@@ -137,6 +137,13 @@ export class Player {
     this.pockets = [null, null, null, null]; // {item, qty} or null
     this.backpack = null;                    // {slots: [16], weapon} once found; dropped on death
     this.selectedPocket = null;              // 0-3 (pockets), 'bw' (backpack weapon), or null
+    // The walkman, worn on a carry strap: its own dashboard slot that only
+    // takes kind:'tape' items. You start with one cassette already in it —
+    // stopped; clicking it cycles side A -> side B -> stopped (equipSlot).
+    // The side is deliberately NOT persisted: every session starts with the
+    // tape stopped, so the saved music setting isn't fought over on load.
+    this.walkman = { item: 'tape_meme', qty: 1 };
+    this.walkmanSide = null;                 // 'A', 'B', or null (stopped)
     this.swingTimer = 0;
     this.hurtTimer = 0;   // brief red flash after taking damage
     this.message = null;  // {text, ttl} transient HUD line
@@ -358,6 +365,7 @@ export class Player {
     if (slot.kind === 'bw') return this.backpack && this.backpack.weapon ? { item: this.backpack.weapon, qty: 1 } : null;
     if (slot.kind === 'pocket') return this.pockets[slot.i] || null;
     if (slot.kind === 'bpstore') return this.backpack ? (this.backpack.slots[slot.i] || null) : null;
+    if (slot.kind === 'walkman') return this.walkman || null;
     return null;
   }
 
@@ -366,6 +374,13 @@ export class Player {
     if (slot.kind === 'bw') { if (!this.backpack) return false; this.backpack.weapon = val ? val.item : null; return true; }
     if (slot.kind === 'pocket') { this.pockets[slot.i] = val; return true; }
     if (slot.kind === 'bpstore') { if (!this.backpack) return false; this.backpack.slots[slot.i] = val; return true; }
+    if (slot.kind === 'walkman') {
+      // Any change of tape stops playback — the new one starts stopped and
+      // wants a click, same as a real deck after a swap.
+      this.walkman = val || null;
+      if (this.walkmanSide) { this.walkmanSide = null; sfx.setMusicMode('off'); }
+      return true;
+    }
     return false;
   }
 
@@ -384,6 +399,10 @@ export class Player {
       this.say("Can't swap that into the hand.");
       return;
     }
+    if (to.kind === 'walkman' && ITEMS[a.item].kind !== 'tape') {
+      this.say('Only a cassette fits the walkman.');
+      return;
+    }
     this.setSlot(to, a);
     this.setSlot(from, b || null);
     this.say(`Moved ${ITEMS[a.item].name.toLowerCase()}.`);
@@ -397,6 +416,27 @@ export class Player {
   // place — you never need to hold them, since they work the moment they're
   // carried and armed.
   equipSlot(slot) {
+    // The walkman is a deck, not a stow slot: a click on the tape in it
+    // cycles play side A -> flip to side B -> stop, driving the same music
+    // system as the M key (which still works, and simply overrides this).
+    if (slot.kind === 'walkman') {
+      if (!this.walkman) { this.say('The walkman is empty. A cassette would fit.'); return; }
+      const def = ITEMS[this.walkman.item];
+      if (this.walkmanSide === 'A') {
+        this.walkmanSide = 'B';
+        sfx.setMusicMode(def.sideB);
+        this.say(`You flip the tape over. Side B — "${def.sideB}".`);
+      } else if (this.walkmanSide === 'B') {
+        this.walkmanSide = null;
+        sfx.setMusicMode('off');
+        this.say('The walkman clunks to a stop.');
+      } else {
+        this.walkmanSide = 'A';
+        sfx.setMusicMode(def.sideA);
+        this.say(`The spools catch and turn. Side A — "${def.sideA}".`);
+      }
+      return;
+    }
     const held = this.getSlot(slot);
     if (held && held.item === 'forcefield') {
       this.forcefieldArmed = !this.forcefieldArmed;
@@ -749,6 +789,11 @@ export class Player {
   read(robots = []) {
     const bot = robots.find((r) => !r.dead && !r.fused && r.drained
       && Math.hypot(r.x - this.x, r.y - this.y) < 1.3);
+    if (bot && bot.hardened) {
+      // Fortress guards (M6) are hardened: their orders can't be rewritten.
+      this.say('Its firmware is sealed — a fortress guard takes no new orders. Scrap it or leave it.');
+      return;
+    }
     if (bot) {
       let batterySlots = this.pockets;
       let i = this.pockets.findIndex((s) => s && s.item === 'battery');
@@ -975,6 +1020,10 @@ export class Player {
     // The W-factory: hammer at its 8x8 hull. Many blows bring it down and it
     // drops an AI key.
     if (obj && obj.type === 'wfactory') { this.hitFactory(obj, map, tool); return; }
+
+    // The fortress red uplink: hammer it down to cut Adamantine off from the
+    // overworld SKYLINK (the fortress controller watches obj.destroyed).
+    if (obj && obj.type === 'uplink') { this.hitUplink(obj, map, tool); return; }
 
     // Shovel: dig a pit in the open ground ahead. A steep pit (height -2)
     // is a trap — a wheeled T1 rolls in and can't climb out, and you can
@@ -1254,6 +1303,24 @@ export class Player {
   }
 
   // A melee blow on the W-factory hull.
+  // Hammer the red uplink mast down. Fewer blows than the factory; when it
+  // gives, clear its tile and mark it destroyed for the fortress to react to.
+  hitUplink(obj, map, tool) {
+    if (obj.destroyed) { this.say('The uplink is already wrecked.'); return; }
+    this.swingTimer = tool.swingCooldown || 0.5;
+    this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
+    sfx.play('chop');
+    this.sparkAt(map, obj.x + 0.5, obj.y + 0.5);
+    obj.shake = 0.2;
+    obj.hp = (obj.hp ?? obj.maxHp ?? 90) - ((tool.robotDamage ?? 1) + this.xpLevel('melee'));
+    if (obj.hp > 0) return;
+    obj.destroyed = true;
+    if (map.objectGrid[obj.y * map.w + obj.x] === obj) map.objectGrid[obj.y * map.w + obj.x] = null;
+    for (let s = 0; s < 6; s++) this.sparkAt(map, obj.x + 0.5 + (s - 3) * 0.15, obj.y + 0.5);
+    map.groundItems.push({ item: 'scrap', qty: 4, x: obj.x + 0.5, y: obj.y + 0.5 });
+    this.addScore(30);
+  }
+
   hitFactory(obj, map, tool) {
     if (obj.destroyed) { this.say('The factory is already a smoking ruin.'); return; }
     this.swingTimer = tool.swingCooldown || 0.5;
@@ -1473,7 +1540,7 @@ export class Player {
     // The beam stops dead at the first solid object in its path — it
     // doesn't cut through walls to hit whatever's cowering behind one.
     const maxAlong = this.beamRange(map, rng);
-    let zombified = false;
+    let wiped = false;
     // Everything within a narrow corridor ahead, up to the beam's actual
     // (possibly wall-shortened) reach, gets hit.
     const hit = (e, robot) => {
@@ -1483,13 +1550,15 @@ export class Player {
       if (along < 0 || along > maxAlong) return;
       const perp = Math.abs(dx * -this.facing.y + dy * this.facing.x);
       if (perp > 0.8) return;
-      // The OB-gun's own beam doesn't kill a machine outright — it corrupts
-      // it into a zombie, immune to everything but a bow or the wave gun.
-      // W1s are already the AI's own revenge squad, dispatched hostile from
-      // the moment they're deployed — they can't be corrupted any further.
-      if (robot && tool.effect === 'burn' && !e.zombie && e.type !== 'w1') {
-        e.zombie = true; e.hurt = true; zombified = true;
+      // The beam that fells towers doesn't wound a mere machine — it wipes
+      // it out where it stands, whatever the class (the old corrupt-into-a-
+      // zombie behaviour is gone; existing zombies still fall to it too).
+      if (robot && tool.effect === 'burn') {
+        e.hp = 0; e.hurt = true; wiped = true;
+        e.scrapPenalty = true; // gunfire ruins the salvage, this most of all
         this.sparkAt(map, e.x, e.y);
+        this.gainXp('guns', 2);
+        this.addScore(SCORE.robot);
         return;
       }
       if (robot && zombieImmune(e, tool)) return;
@@ -1505,8 +1574,8 @@ export class Player {
     // A long tracer to the end of the beam (or the wall that stopped it).
     map.projectiles = map.projectiles || [];
     map.projectiles.push({ x0: this.x + this.facing.x * 0.4, y0: this.y + this.facing.y * 0.4, x1: this.x + this.facing.x * maxAlong, y1: this.y + this.facing.y * maxAlong, prog: 0, kind: 'fuse' });
-    this.say(zombified
-      ? "The beam doesn't kill the machine — it corrupts it into a lurching husk. Only a bow or the wave gun will finish it now."
+    this.say(wiped
+      ? 'The beam takes the machine apart where it stands.'
       : 'The beam cuts a line clean through them.');
   }
 

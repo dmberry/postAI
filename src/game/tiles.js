@@ -18,6 +18,10 @@ export const FLOORS = {
   panel:  { color: '#3c4045', solid: false },
   quad:   { color: '#55575c', solid: false },
   sanctum:{ color: '#26282c', solid: false },
+  // The underworld (a Ubik tear's liminal pocket): a faded, damp-carpet
+  // yellow-beige, all walkable — no FLOOR_TEXTURES entry exists for it, so
+  // drawFloor falls back to this flat colour automatically.
+  liminal:{ color: '#b9a862', solid: false },
 };
 
 export const OBJECTS = {
@@ -49,6 +53,9 @@ export const OBJECTS = {
   // its inner maze can't be double-jumped, so the hacked doorway is the only
   // way in. `material` ('metal' | 'darkstone') selects the wall texture.
   fortwall: { solid: true },
+  // The red uplink mast: wires the fortress into the overworld SKYLINK. Hammer
+  // it down to cut the fortress off, so a breach no longer stirs the world.
+  uplink: { solid: true },
   // The grand doorway in the rampart: solid until the terminal hack drops a
   // fortress key and the key throws its bolts. Removed from the grid when open.
   fortdoor: { solid: true },
