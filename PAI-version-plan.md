@@ -22,7 +22,15 @@ We're both pushing to `main`, so a few conventions keep merges painless:
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)
 - **Vary texture opacity per tile.** Floors jitter their texture alpha deterministically per tile (`drawFloor`) so a large expanse of one floor reads as worn/varied rather than a flat repeat.
 
-## Where we are (v1.21)
+## Where we are (v1.22)
+
+### v1.22 — mobile Walkman gate, numbered tape folders, minimap rectangle
+
+- **Mobile gate** (`src/game/mobile-gate.js`, new). On a touch device the index bootstrap loads this instead of `main.js` — the game never boots (no render loop draining battery). It shows a "not on a phone" note, a working Walkman for the soundtrack, and uses the game's OWN draw code for authenticity: `Renderer.drawCassette` for the deck + rack tapes, `robots.js drawRobot` for a dancing T1/T2/W4 troupe (bob + tilt, reels/limbs animate while playing). Extras: **World/Backspace/Fortress** colour themes (CSS vars), a cosmetic **SKYLINK UPLINK OPERATIVE** doomsday clock, a **"Try and play it anyway…"** link that dismisses the gate and dynamic-imports `main.js` (for a touch laptop mis-detected as mobile), deck reel spin slowed to a lazy turn.
+- **Minimap** turned to a bar-free rectangle matching the real **128×192** world (the fortress annex extends the map south, so it's portrait, not square — that's why the square panel had black bars). Panel takes the rotated aspect; river along the top; **]** toggles; printed-map overlay shows obelisks/factory/mainframe through fog.
+- **Numbered tape folders.** Renamed `assets/audio/Tape-<artist>-<title>` → `Tape-01`…`Tape-04` and updated `TAPES[].dir`, so an artist/title with hyphens or spaces (e.g. "Meme vs Xan — 24 EP") can't make the folder ambiguous. Human-readable metadata lives only in the manifest; `docs/tapes.md` updated. Tape 4 metadata corrected (artist "Meme vs Xan", title "24 EP").
+- **Graffiti** posters: frequency 14% → 34% of tagged walls, opacity 0.92 → 0.5.
+- **HUD icons / keys / repair drones / tape 4** — see v1.21 (these shipped there; the mobile gate + numbering are the new work here).
 
 ### v1.21 — minimap orientation, repair drones, key cards, tape 4, HUD icons
 

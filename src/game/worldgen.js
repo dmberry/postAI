@@ -672,7 +672,7 @@ function paintGraffiti(map, rng) {
     // A minority of tagged walls carry an actual weathered poster/mural photo
     // instead of painted text — an older, different register (see
     // Renderer.drawGraffitiPoster). Mutually exclusive with the text tags.
-    if (rng() < 0.14) { obj.graffitiImage = Math.floor(rng() * GRAFFITI_IMAGE_COUNT); continue; }
+    if (rng() < 0.34) { obj.graffitiImage = Math.floor(rng() * GRAFFITI_IMAGE_COUNT); continue; }
     const r = rng();
     if (r < 0.29) {
       obj.graffiti = pick(GRAFFITI_GENERIC);

@@ -264,7 +264,7 @@
     <p>"Vector theory" and the Magnifica Humanitas fragments draw on David's own writing (stunlaw).</p>
     <p>Character and animal art: Kenney (kenney.nl), CC0.</p>
 
-    <div class="foot">v1.21 &middot; github.com/dmberry/postAI</div>
+    <div class="foot">v1.22 &middot; github.com/dmberry/postAI</div>
   </div>
 </div>
 <div id="help">
@@ -485,6 +485,12 @@
     <div class="nb-hint">&larr; &rarr; to flip &middot; click outside to close</div>
   </div>
 </div>
-<script type="module" src="src/main.js"></script>
+<script type="module">
+  // On a phone, don't load the game at all — show the Walkman gate instead
+  // (see mobile-gate.js). On desktop, boot the game as normal.
+  import { isMobile, initMobileGate } from './src/game/mobile-gate.js';
+  if (isMobile()) initMobileGate();
+  else import('./src/main.js');
+</script>
 </body>
 </html>

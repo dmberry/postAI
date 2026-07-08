@@ -1,6 +1,6 @@
 # postAI
 
-**Version:** 1.21 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.22 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 *(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
@@ -8,7 +8,7 @@ An isometric 2D survival game set in a world devastated by an AI takeover. Civil
 
 Inspired by Project Zomboid: knowledge is the real progression, scarcity drives movement, every fight is optional and risky, and the world tells the story.
 
-## Current build (v1.21)
+## Current build (v1.22)
 
 **The world:** a seeded 128x128 isometric map — a river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, and roads. Away from the towns the terrain gets properly rugged: steep hills and deep hollows, always climbable one step at a time. Rubble and rocks are low enough to step straight over; a **wall block** is taller, so it takes a **double jump** (press jump again in mid-air) to get on top — once up there you move a little slower for control, can roam the block tops, and just walk off any edge to drop back down and carry on. **Up on a block you're safe from ground attacks** — machines and animals can't reach you, so a block top is high ground to catch your breath (a bomb blast still finds you, and the flying machines to come will too). Building walls still stop you on foot, so a town or house is a real boundary until you deliberately climb it. The forests are drawn with proper hand-drawn tree art — mostly full leafy trees, with the odd small or bare/dead one — and a chopped tree shows a damage bar so you can see how many swings it has left. The map is ringed by impassable dark-gravel rock cliffs at its edge — drawn semi-transparent so you still see yourself if one stands between you and the camera. Streams can be waded; the river can be swum (only your head and shoulders show above the water), slowly and at a cost — both now carry a slow, gently travelling opacity ripple along the watercourse, a cheap stand-in for current without an actual scrolling texture. Day and night cycle, with genuinely dark nights and torches to push them back.
 
@@ -33,6 +33,7 @@ Created by David and Henrik.
 Full technical detail (root causes, exact numbers) lives in [PAI-version-plan.md](PAI-version-plan.md); this is the one-line summary.
 
 | Version | Summary |
+| v1.22 | **Mobile gate**: on a phone the game no longer loads — instead a dedicated page renders the real cassettes and machines (T1/T2/W4 dancing to the tune via the game's own draw code), a HUD-style Walkman deck, a **World/Backspace/Fortress** theme switch, a cosmetic **SKYLINK UPLINK OPERATIVE** countdown, and a "Try and play it anyway…" escape hatch. Minimap redrawn as a bar-free rectangle matching the 128×192 world; ] toggles it; printed-map overlay. Tape folders **renamed to numbers** (`Tape-01`…`Tape-04`) so artist/title names can't make the folder ambiguous. Graffiti posters more common + lower opacity. |
 | v1.21 | **Minimap** kept square but turned a quarter-turn so the river runs along the top (north-up), with a **]** show/hide toggle and a **downloaded-map overlay** — carry a printed AI-territory map and its obelisks/factory/mainframe show through the fog. HUD slot icons (hands/pockets/backpack) drawn larger to fill their boxes. **Repair drones** actually come out now (they were skipped by the off-screen cull, so they never travelled to mend a tower). AI + fortress **keys** redrawn as electronic access cards. Fourth tape (**Meme — Versus Xan**), and every tape is now guaranteed to appear in the underworld. Graffiti **posters** stretch to the whole block face. A couple of **gardener drones** now roam from the start. |
 | v1.20 | **Crickets** now sing in intermittent bouts (short spells with longer silences between) rather than droning the whole dusk window — quiet more than half the time, still silenced near machines. |
 | v1.19 | Underworld sea floor no longer one repeating stamp: each 6×6 **block** of the open expanse picks one of four tonally-similar worn floors at a per-block opacity, so it reads as patches of sameness rather than per-tile noise. More **floor lamps** scattered through the open spaces, each with a per-lamp glow warmth (some pale, some a deeper sickly yellow); lamps shrunk a touch more. |

@@ -2118,7 +2118,7 @@ export class Renderer {
     // backing from bleeding past the diamond edge. Un-mirrored + right-way-up
     // via the same high->low bounds convention as drawGraffiti.
     const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.98, 0.02, 0.98, 0.04);
-    this.drawTexturedQuad(quad, tex, '#1c1a16', 'rgba(30,22,14,0.3)', 'multiply', 0.92);
+    this.drawTexturedQuad(quad, tex, '#1c1a16', 'rgba(30,22,14,0.3)', 'multiply', 0.5);
   }
 
   // A wall is an extruded diamond prism: two visible faces plus a top.
@@ -2811,18 +2811,23 @@ export class Renderer {
   // rotate+scale transform so they always line up. Toggle with ].
   drawMinimap(map, player, mm, animals, x, y, size) {
     const ctx = this.ctx;
-    const cx = x + size / 2, cy = y + size / 2;
-    const k = size / Math.max(map.w, map.h); // tile -> px; a 90° turn keeps it square, filling the box
+    const k = size / Math.max(map.w, map.h); // tile -> px
+    // A 90° turn swaps the map's axes on screen, so the panel takes the map's
+    // ROTATED aspect (map.h wide, map.w tall) and fills it exactly — no black
+    // bars for a non-square world (the map is 128x192). Right-aligned within
+    // the size-wide corner slot.
+    const pw = map.h * k, ph = map.w * k;
+    const px = x + size - pw, py = y;
+    const cx = px + pw / 2, cy = py + ph / 2;
     ctx.save();
-    // Backing + border stay axis-aligned (the panel is a square).
     ctx.fillStyle = 'rgba(11,14,10,0.6)';
-    ctx.fillRect(x, y, size, size);
+    ctx.fillRect(px, py, pw, ph);
     ctx.strokeStyle = 'rgba(207,216,195,0.6)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
-    ctx.beginPath(); ctx.rect(x, y, size, size); ctx.clip();
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+    ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
     // Into rotated tile space: (0..w, 0..h) turned 90° clockwise (west edge to
-    // the top) then scaled to fill the square.
+    // the top) then scaled to fill the rectangle.
     ctx.translate(cx, cy);
     ctx.rotate(Math.PI / 2);
     ctx.scale(k, k);

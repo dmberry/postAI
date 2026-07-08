@@ -496,22 +496,22 @@ export const ITEMS = {
 // play in order and loop; a single-track side just loops. Mirror of docs/tapes.md.
 export const TAPES = [
   {
-    num: 1, artist: 'meme', title: 'compilation', dir: 'Tape-meme-compilation', color: '#c9a44a',
+    num: 1, artist: 'meme', title: 'compilation', dir: 'Tape-01', color: '#c9a44a',
     a: { label: 'resonance', tracks: ['resonance.mp3'] },
     b: { label: 'eliza · slip', tracks: ['eliza.mp3', 'slip.mp3'] },
   },
   {
-    num: 2, artist: 'meme', title: 'maieutics', dir: 'Tape-meme-Maieutics', color: '#9aa45a',
+    num: 2, artist: 'meme', title: 'maieutics', dir: 'Tape-02', color: '#9aa45a',
     a: { label: 'maieutics 1 · 2', tracks: ['maieutics 1.mp3', 'maieutics 2.mp3'] },
     b: { label: 'maieutics 3', tracks: ['maieutics 3.mp3'] },
   },
   {
-    num: 3, artist: 'WARD', title: 'bare stanhope', dir: 'Tape-WARD-bare-stanhope', color: '#b06a4a',
+    num: 3, artist: 'WARD', title: 'bare stanhope', dir: 'Tape-03', color: '#b06a4a',
     a: { label: 'five', tracks: ['01 five.mp3'] },
     b: { label: 'glock', tracks: ['02 glock.mp3'] },
   },
   {
-    num: 4, artist: 'Meme', title: 'Versus Xan', dir: 'Tape-Meme-Versus-Xan-24-EP', color: '#7a8fb0',
+    num: 4, artist: 'Meme vs Xan', title: '24 EP', dir: 'Tape-04', color: '#7a8fb0',
     a: { label: '24 · High', tracks: ['01-01- 24.mp3', '01-02- High.mp3'] },
     b: { label: 'Release · Världen · Incognito', tracks: ['01-03- Release.mp3', '01-04- Världen.mp3', '01-05- Incognito.mp3'] },
   },
