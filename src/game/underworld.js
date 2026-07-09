@@ -20,10 +20,13 @@ import { ANIMAL_SPRITE_SETS } from '../engine/textures.js';
 // boundless liminal space rather than one enclosed dungeon. The way home is a
 // plain door set in the first room's wall. One pale thing lurks in the far
 // rooms.
-const UW_SIZE = 128;
+// Bigger than it was (128 → 176): the Backspace now holds a yellow box for
+// EVERY deleted book and record (the whole shelf the machines pushed down here),
+// so it needs the floor space and the extra rooms to spread them through.
+const UW_SIZE = 176;
 const UW_WALL_H = 40;
 const UW_ROOM_MIN = 10, UW_ROOM_MAX = 26;   // room side length, tiles
-const UW_MAX_ROOMS = 15;
+const UW_MAX_ROOMS = 24;
 const UW_MARGIN = 6;
 // Values stored per tile in map.liminalTex; the renderer maps 0..6 to the
 // seven floor images (see renderer.js LIMINAL_TEX), and treats these two
@@ -51,7 +54,7 @@ function carveWorld(map, rng) {
   const rooms = [];
 
   // Scatter non-overlapping rooms of varying sizes.
-  for (let t = 0; t < 90 && rooms.length < UW_MAX_ROOMS; t++) {
+  for (let t = 0; t < 240 && rooms.length < UW_MAX_ROOMS; t++) {
     const rw = UW_ROOM_MIN + Math.floor(rng() * (UW_ROOM_MAX - UW_ROOM_MIN + 1));
     const rh = UW_ROOM_MIN + Math.floor(rng() * (UW_ROOM_MAX - UW_ROOM_MIN + 1));
     const rx = UW_MARGIN + Math.floor(rng() * (W - rw - UW_MARGIN * 2));
@@ -191,12 +194,22 @@ function carveWorld(map, rng) {
     return false;
   };
   if (deletedKeys.length) {
-    for (let i = 1; i < rooms.length; i++) {
-      if (rng() >= 0.5) continue;
-      const r = rooms[i];
-      const key = deletedKeys[Math.floor(rng() * deletedKeys.length)];
-      for (let tries = 0; tries < 12; tries++) {
-        if (boxItemAt(r.x + 2 + Math.floor(rng() * (r.w - 4)), r.y + 2 + Math.floor(rng() * (r.h - 4)), key)) break;
+    // Guarantee EVERY deleted book and record gets its own yellow box — the
+    // machines pushed the whole shelf down here, so a determined player can
+    // recover all of it. Shuffle the list, then deal them across the further
+    // rooms round-robin (several to a room), spreading them through the
+    // Backspace rather than piling them in one place.
+    const shuffled = deletedKeys.slice();
+    for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+    const dealRooms = rooms.length > 1 ? rooms.slice(1) : rooms; // keep the spawn room clearer
+    let ri = 0;
+    for (const key of shuffled) {
+      let placed = false;
+      for (let room = 0; room < dealRooms.length && !placed; room++) {
+        const r = dealRooms[(ri++) % dealRooms.length];
+        for (let tries = 0; tries < 24 && !placed; tries++) {
+          placed = boxItemAt(r.x + 2 + Math.floor(rng() * Math.max(1, r.w - 4)), r.y + 2 + Math.floor(rng() * Math.max(1, r.h - 4)), key);
+        }
       }
     }
   }

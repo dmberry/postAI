@@ -15,8 +15,9 @@ map, not a schedule.
   animation + a WOUNDED tag so the player can read it.
 - **Persist fog of war across reload/death** (like skills already do), so map
   knowledge survives.
-- **Walkman tape covers**: the WARD tape folder already ships a cover image;
-  show the current tape's cover art on the walkman deck.
+- **Walkman deck cover art**: tapes now carry a `cover` (v1.56 — the WARD tape's
+  *bear stanhope* sleeve shows in the Scrapbook). Remaining: render that cover on
+  the walkman deck itself while a tape is loaded.
 - **Tapes as a runtime manifest**: tapes are already data-driven (`items.js`
   `TAPES` + `docs/tapes.md`). Optional next step: read the list from a markdown/
   JSON file at startup so a non-coder can add a tape without touching JS.

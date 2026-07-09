@@ -223,6 +223,17 @@
     display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px;
     background: rgba(42,36,24,0.1); color: #2a2418; font: 20px/1 Georgia, serif; cursor: pointer; padding: 0; }
   #ronnotebook .nb-x:hover { background: rgba(42,36,24,0.2); }
+  /* Quick page nav on the top bar too — the notes fill up fast, so prev/next
+     sit up here (left of the ✕) as well as in the footer. */
+  #ronnotebook .nb-topnav { position: absolute; top: 8px; right: 48px; display: flex; align-items: center; gap: 6px; z-index: 2; }
+  #ronnotebook .nb-navbtn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(40,30,10,0.3); border-radius: 5px; background: rgba(40,30,10,0.08); color: #2a2418;
+    font: 700 18px/1 Georgia, serif; cursor: pointer; padding: 0; }
+  #ronnotebook .nb-navbtn:hover { background: rgba(40,30,10,0.18); }
+  #ronnotebook .nb-navbtn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+  #ronnotebook #ronnotebook-page-top { font: 11px ui-monospace, monospace; color: #6b6350; min-width: 42px; text-align: center; }
+  /* Reserve room on the title so a long name doesn't slide under the top nav. */
+  #ronnotebook-title { padding-right: 150px; }
   /* AI OS — the machine's own console, unreadable and alive. */
   #aios { display: none; position: fixed; inset: 0; z-index: 21;
     background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
@@ -286,6 +297,7 @@
     <p>The soundtrack is a set of <b>cassette tapes</b> you find and play on the walkman. Each has an A and a B side:</p>
     <ul class="tapes" id="aboutTapes"></ul>
     <p class="meta">The WARD tape waits in a yellow box where you land in the Backspace; the others turn up out in the ruins. In-game music otherwise is a quiet synth bed (<kbd>M</kbd> to toggle).</p>
+    <p class="meta">Down in the Backspace you can also recover <b>deleted records</b> — real sleeves the machines took out of the world (Van Morrison's <i>Astral Weeks</i>, Nick Drake's <i>Five Leaves Left</i>, Bowie's <i>Hunky Dory</i>, Boards of Canada's <i>Music Has the Right to Children</i>) — filed to the Scrapbook as covers, not playable, just remembered.</p>
 
     <h2>Ideas &amp; influences</h2>
     <p><b>Ubik</b> and its reality-spray, after Philip K. Dick.</p>
@@ -295,7 +307,7 @@
     <p>The shape of it — a long way home across a hostile world to someone still waiting — after Homer's <b>Odyssey</b> and Joyce's <b>Ulysses</b>. The one-eyed machines, the trick of being <b>no one</b>, the song of the towers, the dog that waited: quiet echoes, never spelled out.</p>
     <p>Character and animal art: Kenney (kenney.nl), CC0.</p>
 
-    <div class="foot">Game designed in the UK &middot; v1.55 &middot; github.com/dmberry/postAI</div>
+    <div class="foot">Game designed in the UK &middot; v1.56 &middot; github.com/dmberry/postAI</div>
   </div>
 </div>
 <div id="help">
@@ -508,6 +520,11 @@
   <div class="page">
     <div class="spine"></div>
     <button class="nb-x" id="ronnotebook-close" type="button" aria-label="Close">&times;</button>
+    <div class="nb-topnav">
+      <button class="nb-navbtn" id="ronnotebook-prev-top" type="button" aria-label="Previous page">&lsaquo;</button>
+      <span id="ronnotebook-page-top">1 / 1</span>
+      <button class="nb-navbtn" id="ronnotebook-next-top" type="button" aria-label="Next page">&rsaquo;</button>
+    </div>
     <div id="ronnotebook-title">NOTEPAD</div>
     <div id="ronnotebook-body"></div>
     <div id="ronnotebook-footer">

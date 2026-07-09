@@ -1310,6 +1310,20 @@ const notebookBodyEl = document.getElementById('ronnotebook-body');
 const notebookPageLabelEl = document.getElementById('ronnotebook-page-label');
 const notebookPrevBtn = document.getElementById('ronnotebook-prev');
 const notebookNextBtn = document.getElementById('ronnotebook-next');
+// Duplicate prev/next + page counter up on the top bar, so you can flip fast
+// without reaching for the footer — the notes fill up quickly.
+const notebookPageTopEl = document.getElementById('ronnotebook-page-top');
+const notebookPrevTopBtn = document.getElementById('ronnotebook-prev-top');
+const notebookNextTopBtn = document.getElementById('ronnotebook-next-top');
+// Keep the footer and top-bar nav in lockstep.
+function syncNotebookNav(label, prevDisabled, nextDisabled) {
+  notebookPageLabelEl.textContent = label;
+  notebookPageTopEl.textContent = label;
+  notebookPrevBtn.disabled = prevDisabled;
+  notebookNextBtn.disabled = nextDisabled;
+  notebookPrevTopBtn.disabled = prevDisabled;
+  notebookNextTopBtn.disabled = nextDisabled;
+}
 let notebookEntries = [];
 let notebookIdx = 0;
 function renderNotebookPage() {
@@ -1317,9 +1331,7 @@ function renderNotebookPage() {
     notebookTitleEl.textContent = 'NOTEPAD';
     notebookBodyEl.innerHTML = '<span id="ronnotebook-empty">Nothing yet. Pages worth keeping are ' +
       'scattered through the ruins — walk over one to read it, and it copies itself in here.</span>';
-    notebookPageLabelEl.textContent = '0 / 0';
-    notebookPrevBtn.disabled = true;
-    notebookNextBtn.disabled = true;
+    syncNotebookNav('0 / 0', true, true);
     return;
   }
   const f = notebookEntries[notebookIdx];
@@ -1339,9 +1351,8 @@ function renderNotebookPage() {
   const body = (f.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   html += `<div class="nb-text">${body}</div>`;
   notebookBodyEl.innerHTML = html;
-  notebookPageLabelEl.textContent = `${notebookIdx + 1} / ${notebookEntries.length}`;
-  notebookPrevBtn.disabled = notebookIdx <= 0;
-  notebookNextBtn.disabled = notebookIdx >= notebookEntries.length - 1;
+  syncNotebookNav(`${notebookIdx + 1} / ${notebookEntries.length}`,
+    notebookIdx <= 0, notebookIdx >= notebookEntries.length - 1);
 }
 function notebookPrev() { if (notebookIdx > 0) { notebookIdx--; renderNotebookPage(); } }
 function notebookNext() { if (notebookIdx < notebookEntries.length - 1) { notebookIdx++; renderNotebookPage(); } }
@@ -1369,6 +1380,8 @@ notebookEl.addEventListener('click', (e) => { if (e.target === notebookEl) close
 document.getElementById('ronnotebook-close').addEventListener('click', closeNotebook);
 notebookPrevBtn.addEventListener('click', notebookPrev);
 notebookNextBtn.addEventListener('click', notebookNext);
+notebookPrevTopBtn.addEventListener('click', notebookPrev);
+notebookNextTopBtn.addEventListener('click', notebookNext);
 // Capture-phase on window, ahead of both the still-focused terminal input's
 // own key handling and the game's WASD/arrow movement listener, so paging
 // the notebook can never leak an arrow key into a text caret or a step.

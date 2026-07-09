@@ -48,6 +48,19 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.56 — whole deleted shelf in the Backspace, album art wired in, top-bar note nav
+- **Every deleted book + record gets its own yellow box.** `underworld.js` now
+  shuffles all `pbook_*`/`record_*` keys and deals them round-robin across the
+  rooms (guaranteed placement, several to a room) instead of a random ~50% scatter.
+  Map enlarged (`UW_SIZE` 128→176, `UW_MAX_ROOMS` 15→24, scatter attempts 90→240)
+  to hold ~35 boxes. Verified: all 23 books + 5 records present on a test seed.
+- **Unused album art wired in.** Four new `DELETED_RECORDS` (Astral Weeks, Five
+  Leaves Left, Hunky Dory, Music Has the Right to Children — the last renamed to
+  add its missing `.webp` extension); the WARD cassette (`tape_3`) gets a `cover`
+  (bear stanhope.png), and the tape ITEM now carries `cover` so the notepad shows it.
+- **Notepad top-bar nav.** `‹ page ›` added to the notepad header (index.html) beside
+  the ✕; `main.js syncNotebookNav()` keeps top + footer counters/disabled in lockstep.
+
 ### v1.55 — flat seas, responsive HUD, ruined temples, RON-ML primer
 - **Sea always flat.** `coast.js stampCoast` zeroes terrain height on every tile
   it turns to `sea` (coast runs after the height pass, so edge hills were keeping

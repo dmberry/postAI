@@ -570,6 +570,7 @@ export const TAPES = [
   },
   {
     num: 3, artist: 'WARD', title: 'bear stanhope', dir: 'Tape-03 WARD - bear stanhope', color: '#b06a4a',
+    cover: 'album-covers/bear stanhope.jpg',
     a: { label: 'five · glock', tracks: ['01 five.mp3', '02 glock.mp3'] },
     b: { label: 'tau bootis', tracks: ['03 tau bootis.mp3'] },
   },
@@ -591,7 +592,7 @@ for (const t of TAPES) {
     name: `a cassette — ${t.artist}, ${t.title}`,
     short: `${t.artist} — ${t.title}`,
     kind: 'tape', stack: 1, color: t.color || '#c9a44a',
-    artist: t.artist, tapeNum: t.num, author: t.artist,
+    artist: t.artist, tapeNum: t.num, author: t.artist, cover: t.cover || null,
     sideA: sA, sideB: sB,
     // Filed to the Scrapbook on pickup — an album leaves a page, like a book.
     abstract: `A cassette for the Walkman. Slot it in the deck (click the tape) and flip A/B. ` +
@@ -637,6 +638,10 @@ export const DELETED_BOOKS = [
 ];
 export const DELETED_RECORDS = [
   ['album-covers/It-Might-Be-Useful-For-Us-To-Know.webp', 'It Might Be Useful For Us To Know', '', 'A salvaged recording — analogue, unnetworked, played on nothing that reports back. The kind of thing they backspaced first.'],
+  ['album-covers/Astral Weeks.webp', 'Astral Weeks', 'Van Morrison', 'Van Morrison, 1968 — cut in a couple of nights, more incantation than song. The kind of thing that was never meant to be counted or optimised.'],
+  ['album-covers/Five Leaves Left.webp', 'Five Leaves Left', 'Nick Drake', 'Nick Drake’s first, 1969 — quiet, unhurried, barely heard in its own time. Music for one pair of ears, off any network.'],
+  ['album-covers/Hunky Dory.webp', 'Hunky Dory', 'David Bowie', 'David Bowie, 1971 — changes, and a song for a son. Analogue, played on a machine that reported to no one.'],
+  ['album-covers/Music Has The Right To Children.webp', 'Music Has the Right to Children', 'Boards of Canada', 'Boards of Canada, 1998 — half-remembered childhood on degraded tape. The machines had no use for a nostalgia they couldn’t index.'],
 ];
 DELETED_BOOKS.forEach(([cover, title, author, abstract], i) => {
   ITEMS[`pbook_${i + 1}`] = {
