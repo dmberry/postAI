@@ -38,6 +38,16 @@ Right now the fortress key is a plain `unlock` at the gate. Make obtaining it re
 ### Three SIRENs inside the fortress
 The overworld has exactly one SIREN (a singular landmark). The **fortress** should have **three** SIREN-class towers as an interior hazard cluster — a wall of song to cross. (Kept as a note per request; the `cls:'siren'` + render + lure already support it, just needs fortress placement.)
 
+## Where we are (v1.42)
+
+### v1.42 — unlock-k fortress key, electro-gun on factory, re-garrison, About links, mobile hint
+
+- **Fortress key via `unlock k`.** `ronml.js unlock` is now arity 1 (`unlock k`): the arg must be a key from `hack`; it calls `ctx.unlock(id)`, which validates the id is in `player.ronmlKeys` and drops one fortress key at the player's feet. Reverted the v1.40 crash-drop (crash just knocks a tower dark again). Fortress gate opens on approach with the key (already in fortress.js); its terminal banner updated to point you to `let k = hack OB-XXXX in unlock k`. Verified in isolation: the program dispatches recordHack→unlock; bare/typed-wrong args give the teaching error.
+- **Electro-gun vs W-factory.** `player.js` firePierce/beam path: for `effect==='fuse'`, a `facTarget` (nearest factory-hull edge in front, closer than any machine/obelisk) takes the shot and calls `damageFactory(fac, map, 14)` — a slow self-charging siege without bombs.
+- **Factory re-garrisons undefended obelisks.** New `spawnGuard(map, seed, fx, fy, type, home)` in robots.js builds a T1/T2 at the factory with `home` = the tower's seat, so it walks over and patrols it. main.js factory loop (new `wFactoryGuardClock`, ~40–80s) finds the live obelisk with the fewest home-guards (< 2) and dispatches one to re-garrison it, prioritising the most exposed.
+- **About links.** ML → Wikipedia (ML programming language), ELIZA → Wikipedia, `target="_blank"`.
+- **Mobile hint.** Dropped "Press H for help" on touch/narrow (no H key) — now "Hold to move · tap to act · ? for help".
+
 ## Where we are (v1.41)
 
 ### v1.41 — mobile HUD, Backspace lag, Ubik hints

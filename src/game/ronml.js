@@ -244,11 +244,18 @@ function makeBuiltins() {
         return { tag: 'unit' };
       },
     },
-    // Hack a fortress gate open. Only meaningful at a fortress gate terminal;
-    // ctx.unlockGate reports back why if it can't (wrong terminal, no AI key).
+    // Extract a fortress key from the network using a node key you hacked — the
+    // program that actually earns its keep: `let k = hack OB-XXXX in unlock k`.
+    // The argument must be a key from hack; it drops a single fortress key.
     unlock: {
-      arity: 0,
-      fn: (_args, ctx) => { ctx.unlockGate(); return { tag: 'unit' }; },
+      arity: 1,
+      fn: ([key], ctx) => {
+        if (!key || key.tag !== 'key') {
+          throw new RonmlError('unlock needs a hacked key. try: let k = hack OB-XXXX in unlock k');
+        }
+        ctx.unlock(key.id);
+        return { tag: 'unit' };
+      },
     },
   };
 }
@@ -330,6 +337,7 @@ const USAGE_HINTS = {
   nearest: 'nearest needs a list. try: scan |> nearest',
   sleep: 'sleep needs a number of minutes. try: sleep 30',
   rewind: 'rewind needs a number of hours. try: rewind 3',
+  unlock: 'unlock needs a hacked key. try: let k = hack OB-XXXX in unlock k',
 };
 
 // `help` reference, shown when the operator types it at the terminal. Per-verb
@@ -346,7 +354,7 @@ const HELP_VERBS = [
   ['repel', 'unit -> unit', 'nearby machines turn tail and flee you', 'needs AI key'],
   ['map', 'unit -> unit', 'show the territory map (obelisks, machines, mainframe)', ''],
   ['print', 'unit -> unit', 'print a carryable map that drops at your feet', ''],
-  ['unlock', 'unit -> unit', 'hack a fortress gate open (drops a fortress key)', 'at a gate; needs AI key'],
+  ['unlock k', 'key -> unit', 'extract a fortress key from the network using a hacked node key', 'needs k from hack'],
   ['notes', 'unit -> unit', 'open the notepad — browse the pages you\'ve found worth keeping', ''],
   ['help', 'unit -> unit', 'this reference, or `help <verb>` for one verb', ''],
 ];

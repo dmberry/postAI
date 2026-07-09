@@ -1,6 +1,6 @@
 # postAI
 
-**Version:** 1.41 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.42 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Repo:** https://github.com/dmberry/postAI · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 *(Versioning policy: 0.01 increments from v0.3 onwards.)*
 
@@ -8,7 +8,7 @@ An isometric 2D survival game set in a world devastated by an AI takeover. Civil
 
 Inspired by Project Zomboid: knowledge is the real progression, scarcity drives movement, every fight is optional and risky, and the world tells the story.
 
-## Current build (v1.41)
+## Current build (v1.42)
 
 **The world:** a seeded 128x128 isometric map — a river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, and roads. Away from the towns the terrain gets properly rugged: steep hills and deep hollows, always climbable one step at a time. Rubble and rocks are low enough to step straight over; a **wall block** is taller, so it takes a **double jump** (press jump again in mid-air) to get on top — once up there you move a little slower for control, can roam the block tops, and just walk off any edge to drop back down and carry on. **Up on a block you're safe from ground attacks** — machines and animals can't reach you, so a block top is high ground to catch your breath (a bomb blast still finds you, and the flying machines to come will too). Building walls still stop you on foot, so a town or house is a real boundary until you deliberately climb it. The forests are drawn with proper hand-drawn tree art — mostly full leafy trees, with the odd small or bare/dead one — and a chopped tree shows a damage bar so you can see how many swings it has left. The map is ringed by impassable dark-gravel rock cliffs at its edge — drawn semi-transparent so you still see yourself if one stands between you and the camera. Streams can be waded; the river can be swum (only your head and shoulders show above the water), slowly and at a cost — both now carry a slow, gently travelling opacity ripple along the watercourse, a cheap stand-in for current without an actual scrolling texture. Day and night cycle, with genuinely dark nights and torches to push them back.
 
@@ -33,6 +33,7 @@ Created by David and Henrik.
 Full technical detail (root causes, exact numbers) lives in [PAI-version-plan.md](PAI-version-plan.md); this is the one-line summary.
 
 | Version | Summary |
+| v1.42 | **Fortress key via `let k = hack OB-XXXX in unlock k`** — `unlock` now takes a hacked node key and drops the fortress key (carry it to the door, which opens on approach); `crash` goes back to just knocking a tower dark. **Electro-gun now sieges the W-factory** (its arc bites the hull, ~14/shot off the self-charging cell). **Factory re-garrisons undefended obelisks** — when a tower loses its T1/T2 guards, the factory builds a fresh one and sends it to guard and patrol that specific tower. **ML** and **ELIZA** in the About box link to Wikipedia (new tab). On mobile the "Press H for help" hint is gone (there's no H) — replaced with tap guidance. |
 | v1.41 | **Mobile HUD fixed** — on a phone the dashboard was a desktop layout whose slots ran off the edge and collided with the status text; it now uses a compact two-row layout (short vitals + Score/countdown on top, then hands · pockets · backpack · walkman below), all visible and reachable. **Backspace lag fixed** — lamp glows were rendered for every lamp in the whole 128×192 pocket each frame; now culled to near the camera. Overworld already freezes while you're down there. **New overworld hints** teach the Ubik trick — three sprays on one spot tears the hole into the Backspace. |
 | v1.40 | **Fix:** SKYLINK network lights no longer bleed into the Backspace. **Fortress key via ML:** properly composing `let k = hack OB-XXXX in crash OB-XXXX k` against a node now makes it cough up the **fortress key** (once) — the language finally earns its keep. **Backspace lore split:** the Backspace now shows *only* Backspace-themed fragments (its own realm), including four new ones on **why** the machines delete — the world must stay fully modelled, so anything unwatched (a book read alone, a record off the wire) is un-predicted, and moved off the board rather than destroyed. |
 | v1.39 | **Background video now plays everywhere** — transcoded the source `.mov` to a 7.2 MB H.264 **MP4** (from 32 MB), so the drifting game-world backdrop shows in Chrome, not just Safari. **Robots no longer jam on the factory**: `moveToward` now wall-follows (a perpendicular sidestep with a consistent preferred side) when the direct path is blocked, so bots pinned against the 8×8 hull slide around it. Planning notes added for the **TOR / HERMES** resistance stations, the fortress-key ML program, and three fortress SIRENs. |

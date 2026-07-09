@@ -8,7 +8,7 @@ import { makeRng } from './game/rng.js';
 import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
 import { spawnBirds, updateBirds } from './game/birds.js';
-import { spawnRobots, updateRobots, spawnW1s, spawnW3, spawnW4, spawnW5, spawnM6, drawRobot } from './game/robots.js';
+import { spawnRobots, updateRobots, spawnW1s, spawnW3, spawnW4, spawnW5, spawnM6, spawnGuard, drawRobot } from './game/robots.js';
 import { resolveBodyOverlaps } from './game/collision.js';
 import { spawnWaterDroids, updateWaterDroids, drawWaterDroid } from './game/waterdroids.js';
 import { Lore, FRAGMENTS } from './game/lore.js';
@@ -48,7 +48,7 @@ function loadOrCreateSeed() {
   return seed;
 }
 const WORLD_SEED = loadOrCreateSeed();
-const VERSION = '1.41';
+const VERSION = '1.42';
 
 const canvas = document.getElementById('game');
 const renderer = new Renderer(canvas);
@@ -802,17 +802,7 @@ function ronmlCtx() {
         const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
         if (drone) robots.push(drone);
       }
-      // A properly-composed crash (`let k = hack OB in crash OB k` — the point
-      // where the language actually earns its keep) is what prises a fortress
-      // key out of the network. Just the once: crash the first node correctly
-      // and the key is yours.
-      if (!fortressKeyFromCrash && !player.hasItem('fortress_key')) {
-        fortressKeyFromCrash = true;
-        map.groundItems.push({ item: 'fortress_key', qty: 1, x: o.x + 0.5, y: o.y + 0.9, keep: true });
-        player.say(`${id} dies and coughs up a fortress key — the composed hack held. A way into ${fortress.AI_NAME}'s fortress lies in the wreck.`);
-      } else {
-        player.say(`${id} goes dark. A repair drone is already inbound to raise it.`);
-      }
+      player.say(`${id} goes dark. A repair drone is already inbound to raise it.`);
     },
     nodeFrozen: (id) => { const o = findObelisk(id); return !!(o && o.frozen); },
     // RON-ML `loop`: the easy hack. No AI key, no hack/crash two-step —
@@ -891,10 +881,24 @@ function ronmlCtx() {
       map.groundItems.push({ item: 'printed_map', qty: 1, x: player.x, y: player.y + 0.3 });
       player.say('The terminal chatters and spits out a printed map. It lands at your feet.');
     },
-    unlockGate: () => {
-      // RON-ML `unlock`, run at the fortress gate terminal: the fortress vets
-      // proximity + AI key and drops the fortress key on success.
-      player.say(fortress.hack(player).msg);
+    unlock: (nodeId) => {
+      // RON-ML `unlock k` at an obelisk: the key `k` must be one you actually
+      // hacked from a live node (recordHack put its id in ronmlKeys). Given a
+      // genuine hacked key, the network gives up a single fortress key. The
+      // AI-key gate is upstream (hack needs it), so this is the reward for
+      // composing `let k = hack OB-XXXX in unlock k` correctly. Carry the
+      // fortress key to the fortress door and it opens on approach (fortress.js).
+      if (!player.ronmlKeys.has(nodeId)) {
+        player.say('That key was never hacked from a live node. try: let k = hack OB-XXXX in unlock k');
+        return;
+      }
+      if (fortressKeyFromCrash || player.hasItem('fortress_key')) {
+        player.say('A fortress key is already yours — one is all the network will give up.');
+        return;
+      }
+      fortressKeyFromCrash = true;
+      map.groundItems.push({ item: 'fortress_key', qty: 1, x: player.x + 0.4, y: player.y + 0.6, keep: true });
+      player.say(`The composed hack holds. ${nodeId}'s key turns in the network and a fortress key drops at your feet — a way into ${fortress.AI_NAME}'s fortress.`);
     },
     // `notes`: opens the browsable notebook (see openNotebook below) rather
     // than dumping text into the console — Tab-to-autocomplete is one thing,
@@ -1099,16 +1103,18 @@ function openGateTerminal() {
   replLog = [];
   replHistory = [];
   replHistoryIdx = -1;
-  const keyed = player.hasItem('ai_key');
+  const hasFortKey = player.hasItem('fortress_key');
   replPrint(
     `${fortress.AI_NAME.toUpperCase()} — OUTER GATE TERMINAL`,
     'TIRESIAS 1.0  //  RON-DOS 4.11  (c) Reality Or Nothing',
     '',
     `> gate ............ ${fortress.terminal.obj.code}`,
-    `> rampart ......... ${fortress.open ? 'OPEN' : fortress.hacked ? 'UNLOCKED' : 'SEALED'}`,
-    `> ai key .......... ${keyed ? 'DETECTED' : 'NOT HELD (unlock will fail)'}`,
+    `> rampart ......... ${fortress.open ? 'OPEN' : 'SEALED'}`,
+    `> fortress key .... ${hasFortKey ? 'HELD — carry it to the door' : 'NOT HELD'}`,
     '',
-    'The doorway is bolted from within. type: unlock   (type help for commands)',
+    hasFortKey
+      ? 'The doorway is bolted from within. Bring the fortress key up to it and it swings open.'
+      : 'The doorway is bolted from within. Get a fortress key first: at any obelisk, let k = hack OB-XXXX in unlock k.',
     '_',
   );
   obTermInput.value = '';
@@ -1206,10 +1212,12 @@ aiosEl.addEventListener('click', (e) => { if (e.target === aiosEl) closeAiOs(); 
 // The control hint is only for new players: fade it out after two minutes
 // of play so it stops cluttering the screen once the controls have sunk in.
 const hintEl = document.getElementById('hint');
-// On a touch device (someone trying it from the gate) spell out the tap
-// controls instead of the keyboard hint.
-if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-  hintEl.textContent = 'Hold to move · tap to act';
+// On a phone/touch device there's no H key, so drop "Press H for help" — spell
+// out the tap controls instead (help is still reachable via the ? button).
+const touchLike = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+  || Math.min(window.innerWidth, window.innerHeight) < 560;
+if (touchLike) {
+  hintEl.textContent = 'Hold to move · tap to act · ? for help';
 }
 const HINT_LIFETIME = 120; // seconds of played time
 let playTime = 0;
@@ -1379,6 +1387,7 @@ let ronResupplyClock = 0, ronResupplyNext = 90 + Math.random() * 60;
 let wFactoryClock = 0, wFactoryNext = 60 + Math.random() * 60;
 let wFactoryW1Clock = 0, wFactoryW1Next = 100 + Math.random() * 80;
 let wFactoryW5Clock = 0, wFactoryW5Next = 30 + Math.random() * 40;
+let wFactoryGuardClock = 0, wFactoryGuardNext = 40 + Math.random() * 40;
 let lastW4GameHour = dayNight.totalHours; // ticks a W4 every 30 game-minutes, not real time
 
 // SKYLINK's final purge: once the clock runs out, every obelisk lights up
@@ -1752,6 +1761,35 @@ function update(dt) {
         if (wave.length) { robots.push(...wave); player.say('The W-factory dispatches a hunting wave.'); }
       }
     }
+    // Re-garrison: when an obelisk realises it has no guards left (its home
+    // T1/T2s destroyed), the factory builds a fresh T1 or T2 and sends it over
+    // to guard and patrol that specific tower. Prioritises the most exposed
+    // (fewest guards), one at a time on a slow clock.
+    wFactoryGuardClock += dt;
+    if (wFactoryGuardClock > wFactoryGuardNext) {
+      wFactoryGuardClock = 0;
+      wFactoryGuardNext = 40 + Math.random() * 40;
+      const MIN_GUARDS = 2, HOME_R = 8;
+      const guardsOf = (ob) => robots.filter((r) => !r.dead && !r.friendly
+        && (r.type === 't1' || r.type === 't2')
+        && Math.hypot(r.home.x - (ob.x + 0.5), r.home.y - (ob.y + 0.5)) < HOME_R).length;
+      let worst = null, worstCount = MIN_GUARDS;
+      for (const ob of obeliskObjs) {
+        if (ob.destroyed) continue;
+        const g = guardsOf(ob);
+        if (g < worstCount) { worstCount = g; worst = ob; }
+      }
+      if (worst) {
+        const type = Math.random() < 0.5 ? 't1' : 't2';
+        const guard = spawnGuard(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy(),
+          type, { x: worst.x + 0.5, y: worst.y + 0.5 });
+        if (guard) {
+          robots.push(guard);
+          player.say(`The W-factory builds a ${type.toUpperCase()} and sends it to re-garrison ${worst.code}.`);
+        }
+      }
+    }
+
     if (wFactoryW4Cooldown > 0) wFactoryW4Cooldown = Math.max(0, wFactoryW4Cooldown - dt);
 
     // A W4 also rolls off the factory floor every 30 minutes of game time

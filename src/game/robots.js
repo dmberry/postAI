@@ -414,6 +414,21 @@ export function spawnW1s(map, seed, ox, oy, count = 3) {
   return squad;
 }
 
+// A fresh T1 or T2 the factory builds to re-garrison an obelisk that's lost its
+// guards. Spawns at the factory (fx,fy), flickers in, and takes the tower's
+// seat as `home` — so it walks over there and patrols around it (patrol/updateT1
+// wander around `home`), exactly like an original garrison.
+export function spawnGuard(map, seed, fx, fy, type, home) {
+  const rng = makeRng(seed >>> 0);
+  const used = new Set();
+  const spot = seatNear(map, fx, fy, { x: fx, y: fy, r: 0 }, used, rng, SPAWN_MAX_R_FALLBACK);
+  if (!spot) return null;
+  const r = baseRobot(type, spot[0], spot[1], type === 't1' ? T1_HP : T2_HP, rng);
+  r.home = { x: home.x, y: home.y }; // its posting: the undefended tower
+  r.spawnT = FACTORY_SPAWN_T;         // flicker into existence out of the factory
+  return r;
+}
+
 // A W4 laser hunter-killer, dispatched from the factory the instant the
 // player attacks an obelisk. `seed` should vary per call.
 export function spawnW4(map, seed, fx, fy) {

@@ -1655,11 +1655,27 @@ export class Player {
     // than the OB-gun, but it works. If one's in front and no closer than any
     // machine, it takes the shot instead.
     let obTarget = null;
+    let facTarget = null;
     if (tool.effect === 'fuse') {
       const ob = this.obeliskInFront(map, range);
+      let obD = Infinity;
       if (ob) {
-        const od = Math.hypot(ob.x + 0.5 - this.x, ob.y + 0.5 - this.y);
-        if (od <= best) obTarget = ob;
+        obD = Math.hypot(ob.x + 0.5 - this.x, ob.y + 0.5 - this.y);
+        if (obD <= best) obTarget = ob;
+      }
+      // The arc scorches the W-factory hull too — a slow, self-charging way to
+      // bring the foundry down without spending bombs. Measure to its nearest
+      // edge (the footprint is huge). It only takes the shot if it's the closest
+      // thing in front (nearer than any machine and than an obelisk).
+      const fac = map.objects.find((o) => o.type === 'wfactory' && !o.destroyed);
+      if (fac) {
+        const nx = Math.max(fac.x, Math.min(this.x, fac.x + (fac.fw || 1)));
+        const ny = Math.max(fac.y, Math.min(this.y, fac.y + (fac.fh || 1)));
+        const fdx = nx - this.x, fdy = ny - this.y, fd = Math.hypot(fdx, fdy);
+        if (fd <= range && (fdx * this.facing.x + fdy * this.facing.y) >= 0 && fd <= best && fd <= obD) {
+          facTarget = { fac, x: nx + 0.5, y: ny };
+          obTarget = null; // the factory is nearer — it takes the shot
+        }
       }
     }
 
@@ -1693,6 +1709,20 @@ export class Player {
     }
     this.swingTimer = tool.swingCooldown;
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
+
+    // W-factory in the arc's path (electro-gun only): the bolt flies to its
+    // hull and chews into it, a slow siege off the self-charging cell.
+    if (facTarget) {
+      map.projectiles = map.projectiles || [];
+      map.projectiles.push({
+        x0: this.x + this.facing.x * 0.4, y0: this.y + this.facing.y * 0.4,
+        x1: facTarget.x, y1: facTarget.y, prog: 0, kind: 'fuse',
+      });
+      sfx.play('zap');
+      this.sparkBurst(map, facTarget.x, facTarget.y);
+      this.damageFactory(facTarget.fac, map, 14);
+      return;
+    }
 
     // Obelisk in the arc's path (electro-gun only): the bolt flies to it and
     // scorches it, same as an OB-gun burn but from the electro-gun's cell.
