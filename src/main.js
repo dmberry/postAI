@@ -1289,6 +1289,14 @@ player.onReadNote = (key) => {
   openNotebook();
 };
 
+// A book read leaves a title/author/abstract summary page in the notepad — but
+// silently (no pop-up), since you usually read a skill book mid-scavenge and
+// don't want the book flung open in your face. Press N to browse it later.
+player.onFileNote = (title, text, cover = null, cat = 'Document') => {
+  if (!title) return;
+  if (!printedDocs.some((d) => d.title === title)) printedDocs.push({ title, text, cover, cat });
+};
+
 // The Notepad (`notes`, or press N anywhere): a real paper page you flip
 // through with whatever lore fragments were flagged worth keeping (lore.js,
 // `notepad: true`) — not RON-ML-specific, just the pages worth flipping back
@@ -1316,7 +1324,21 @@ function renderNotebookPage() {
   }
   const f = notebookEntries[notebookIdx];
   notebookTitleEl.textContent = f.title;
-  notebookBodyEl.textContent = f.text;
+  // A category tag (Field record / Book / Album) plus, for books and albums,
+  // the cover art as a thumbnail — so the page reads as the thing you found,
+  // not just text. Built as HTML so the cover and tag sit above the body.
+  const cat = f.cat || 'Document';
+  const tag = cat === 'Book' ? 'BOOK' : cat === 'Album' ? 'ALBUM' : 'FIELD RECORD';
+  let html = `<div class="nb-cat nb-cat-${cat.toLowerCase()}">${tag}</div>`;
+  if (f.cover) {
+    // esc the path just in case; covers live under assets/media.
+    const src = ('assets/media/' + f.cover).replace(/"/g, '&quot;');
+    html += `<img class="nb-cover" src="${src}" alt="" ` +
+      `onerror="this.style.display='none'">`;
+  }
+  const body = (f.text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  html += `<div class="nb-text">${body}</div>`;
+  notebookBodyEl.innerHTML = html;
   notebookPageLabelEl.textContent = `${notebookIdx + 1} / ${notebookEntries.length}`;
   notebookPrevBtn.disabled = notebookIdx <= 0;
   notebookNextBtn.disabled = notebookIdx >= notebookEntries.length - 1;
@@ -1324,14 +1346,27 @@ function renderNotebookPage() {
 function notebookPrev() { if (notebookIdx > 0) { notebookIdx--; renderNotebookPage(); } }
 function notebookNext() { if (notebookIdx < notebookEntries.length - 1) { notebookIdx++; renderNotebookPage(); } }
 function openNotebook() {
-  // Documents printed off HERMES relays come first, then the scattered pages.
-  notebookEntries = [...printedDocs, ...FRAGMENTS.filter((f) => f.notepad && lore.found.has(f.id))];
+  // Gather every page — printed docs, filed book/album summaries, and the
+  // scattered field records worth keeping — then group them into sections so
+  // the Scrapbook reads as an ordered book (Field records, then Books, then
+  // Albums) rather than a shuffled heap. Stable within each section: first
+  // found, first shown.
+  const scattered = FRAGMENTS
+    .filter((f) => f.notepad && lore.found.has(f.id))
+    .map((f) => ({ title: f.title, text: f.text, cat: 'Document', cover: null }));
+  const all = [...printedDocs.map((d) => ({ cat: 'Document', cover: null, ...d })), ...scattered];
+  const order = { Document: 0, Book: 1, Album: 2 };
+  notebookEntries = all
+    .map((e, i) => [e, i])
+    .sort((a, b) => (order[a[0].cat] ?? 0) - (order[b[0].cat] ?? 0) || a[1] - b[1])
+    .map((p) => p[0]);
   notebookIdx = 0;
   renderNotebookPage();
   notebookEl.style.display = 'flex';
 }
 function closeNotebook() { notebookEl.style.display = 'none'; }
 notebookEl.addEventListener('click', (e) => { if (e.target === notebookEl) closeNotebook(); });
+document.getElementById('ronnotebook-close').addEventListener('click', closeNotebook);
 notebookPrevBtn.addEventListener('click', notebookPrev);
 notebookNextBtn.addEventListener('click', notebookNext);
 // Capture-phase on window, ahead of both the still-focused terminal input's

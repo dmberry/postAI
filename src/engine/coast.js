@@ -101,4 +101,18 @@ export function stampCoast(map, spawn = null) {
     }
   }
   for (const [x, y] of toRiver) map.setFloor(x, y, 'water');
+  // The sea is always flat. Coast conversion runs after the terrain height
+  // pass, so an edge hill can end up flagged 'sea' while keeping its elevation.
+  // Renderer.drawSeaTile draws the tile top flat at height 0, but the generic
+  // floor path still draws hillside skirts for any elevated tile BEFORE the sea
+  // branch returns — so an un-zeroed sea tile leaks dark, sea-coloured faces
+  // that float as triangles over the water. Zero every sea tile's height so the
+  // ocean can never stack or cast a skirt.
+  if (map.setHeight && map.heightAt) {
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (map.floorAt(x, y) === 'sea' && map.heightAt(x, y) !== 0) map.setHeight(x, y, 0);
+      }
+    }
+  }
 }

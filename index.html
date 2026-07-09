@@ -199,6 +199,15 @@
   #ronnotebook-body { flex: 1; min-height: 0; overflow-y: auto; font: 14px/28px 'Courier New', monospace;
     color: #2f2a1c; white-space: pre-wrap; }
   #ronnotebook-empty { font: italic 14px/1.5 Georgia, serif; color: #6b6350; }
+  /* Section tag + cover art, so a filed book/album reads as the thing found. */
+  #ronnotebook .nb-cat { display: inline-block; font: 700 10px/1 ui-monospace, monospace;
+    letter-spacing: 0.14em; color: #5a4a2a; background: rgba(90,74,42,0.12);
+    border: 1px solid rgba(90,74,42,0.3); border-radius: 3px; padding: 4px 7px; margin-bottom: 10px; }
+  #ronnotebook .nb-cat-book { color: #5a3a2a; background: rgba(120,60,40,0.12); border-color: rgba(120,60,40,0.32); }
+  #ronnotebook .nb-cat-album { color: #2a4a52; background: rgba(40,90,100,0.12); border-color: rgba(40,90,100,0.32); }
+  #ronnotebook .nb-cover { display: block; float: right; width: 96px; height: auto; max-height: 150px;
+    margin: 0 0 8px 12px; border: 1px solid rgba(40,30,10,0.4); box-shadow: 2px 3px 6px rgba(0,0,0,0.28); }
+  #ronnotebook .nb-text { white-space: pre-wrap; }
   #ronnotebook-footer { display: flex; align-items: center; justify-content: space-between;
     margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(40,30,10,0.35); }
   #ronnotebook-page-label { font: 12px ui-monospace, monospace; color: #6b6350; }
@@ -208,6 +217,12 @@
   .nb-btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
   #ronnotebook .nb-hint { position: absolute; bottom: -22px; right: 4px;
     color: rgba(230,225,205,0.65); font: 11px ui-monospace, monospace; }
+  /* Close (✕) — the reliable way out on touch, where there's no Esc key and a
+     tap-outside on a near-full-screen page is fiddly. */
+  #ronnotebook .nb-x { position: absolute; top: 6px; right: 8px; width: 32px; height: 32px;
+    display: flex; align-items: center; justify-content: center; border: none; border-radius: 6px;
+    background: rgba(42,36,24,0.1); color: #2a2418; font: 20px/1 Georgia, serif; cursor: pointer; padding: 0; }
+  #ronnotebook .nb-x:hover { background: rgba(42,36,24,0.2); }
   /* AI OS — the machine's own console, unreadable and alive. */
   #aios { display: none; position: fixed; inset: 0; z-index: 21;
     background: rgba(0,0,0,0.8); align-items: center; justify-content: center; }
@@ -280,7 +295,7 @@
     <p>The shape of it — a long way home across a hostile world to someone still waiting — after Homer's <b>Odyssey</b> and Joyce's <b>Ulysses</b>. The one-eyed machines, the trick of being <b>no one</b>, the song of the towers, the dog that waited: quiet echoes, never spelled out.</p>
     <p>Character and animal art: Kenney (kenney.nl), CC0.</p>
 
-    <div class="foot">Game designed in the UK &middot; v1.53 &middot; github.com/dmberry/postAI</div>
+    <div class="foot">Game designed in the UK &middot; v1.55 &middot; github.com/dmberry/postAI</div>
   </div>
 </div>
 <div id="help">
@@ -492,6 +507,7 @@
 <div id="ronnotebook">
   <div class="page">
     <div class="spine"></div>
+    <button class="nb-x" id="ronnotebook-close" type="button" aria-label="Close">&times;</button>
     <div id="ronnotebook-title">NOTEPAD</div>
     <div id="ronnotebook-body"></div>
     <div id="ronnotebook-footer">
@@ -499,7 +515,7 @@
       <span id="ronnotebook-page-label"></span>
       <button class="nb-btn" id="ronnotebook-next" type="button">next &rarr;</button>
     </div>
-    <div class="nb-hint">&larr; &rarr; to flip &middot; click outside to close</div>
+    <div class="nb-hint">&larr; &rarr; to flip &middot; &times; or click outside to close</div>
   </div>
 </div>
 <script type="module">

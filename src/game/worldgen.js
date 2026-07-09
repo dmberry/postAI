@@ -669,6 +669,10 @@ function paintGraffiti(map, rng) {
   for (const obj of map.objects) {
     if (obj.type !== 'wall') continue;
     if (rng() < 0.92) continue; // sparse: a mark here and there, not every wall
+    // Roughly two in five tagged walls carry the mark on the south-west (left)
+    // face instead of the default south-east — both faces are visible in the
+    // iso view, so this just spreads the graffiti around (Renderer reads the flag).
+    if (rng() < 0.4) obj.graffitiFace = 'sw';
     // A minority of tagged walls carry an actual weathered poster/mural photo
     // instead of painted text — an older, different register (see
     // Renderer.drawGraffitiPoster). Mutually exclusive with the text tags.

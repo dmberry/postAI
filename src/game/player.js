@@ -895,20 +895,49 @@ export class Player {
       this.gainXp('knowledge', def.tip ? 3 : 8);
       this.readManuals ??= new Set();
       if (!this.readManuals.has(itemKey)) { this.addScore(SCORE.book); this.readManuals.add(itemKey); }
-      this.say(`You read ${def.name}. ${def.text}`);
+      this._fileBookNote(def);
+      this.say(`You read ${def.name}. ${def.text} (Summary filed in your notepad, N.)`);
       return;
     }
+    this._fileBookNote(def);
     if (this.skills.has(def.skill)) {
       this.gainXp('knowledge', 2); // re-reading still teaches a little
-      this.say(`You have already read ${def.name}.`);
+      this.say(`You have already read ${def.name}. (It's summarised in your notepad, N.)`);
     } else {
       this.skills.add(def.skill);
       this.skillLog.push({ skill: def.skill });
       this.gainXp('knowledge', 10);
       this.addScore(SCORE.book);
-      this.say(`You read "${def.name}". ${def.skillText}`);
+      this.say(`You read "${def.name}". ${def.skillText} Summary filed in your notepad (N).`);
       if (this.onSkillLearned) this.onSkillLearned(def.skill);
     }
+  }
+
+  // File a one-page summary of a book into the notepad — title, author, and a
+  // short abstract of what it is — so a read book leaves a record you can flip
+  // back to, not just a one-off message.
+  _fileBookNote(def) {
+    if (!this.onFileNote) return;
+    // A def can supply notepadText for a hand-written, literal page (used by
+    // the RON-ML manuals, which are complex enough to warrant a clean, fully
+    // spelled-out reference rather than an auto-assembled blurb).
+    let body;
+    if (def.notepadText) {
+      body = (def.author ? `by ${def.author}\n\n` : '') + def.notepadText;
+    } else {
+      const parts = [];
+      if (def.author) parts.push(`by ${def.author}`);
+      if (def.abstract) parts.push(def.abstract);
+      const effect = def.skillText || def.text;
+      if (effect && effect !== def.abstract) parts.push(effect);
+      body = parts.join('\n\n');
+    }
+    // cover: a media path (book/album art) the notepad can render as a thumbnail;
+    // cat sorts it into the Scrapbook's Books / Albums / Documents sections.
+    const cat = (def.kind === 'record' || def.kind === 'tape') ? 'Album'
+      : (def.kind === 'book' || def.kind === 'paperbook') ? 'Book'
+      : 'Document';
+    this.onFileNote(def.short || def.name, body, def.cover || null, cat);
   }
 
   // Eat the first edible thing in the pockets, then the backpack — a
@@ -1483,7 +1512,9 @@ export class Player {
       let n = 0;
       for (const id of obj.lore) if (this.onFindLore(id)) n++;
       obj.lore = []; // consumed — a re-stocked box won't re-grant them
-      if (n) this.say(`Tucked in with it: ${n} recovered document${n > 1 ? 's' : ''}, filed to your Scrapbook (J).`);
+      if (n) this.say(n > 1
+        ? `Wedged in beside it: a stack of papers, bound with wire. You unfold ${n} documents into your Scrapbook (J).`
+        : `Wedged in beside it: a single sheet, filed to your Scrapbook (J).`);
     }
   }
 
@@ -1914,6 +1945,10 @@ export class Player {
       if (stored <= 0) continue;
       gi.qty -= stored;
       this.discoverWeapon(gi.item);
+      // A recovered book or album leaves a page in the Scrapbook (cover +
+      // what it is), the same way a read skill-book does — you carry the object
+      // AND a record of it. onFileNote dedupes, so re-grabbing won't double it.
+      if (def.kind === 'paperbook' || def.kind === 'record' || def.kind === 'tape') this._fileBookNote(def);
       // Numbered circuit boards go toward the wave gun.
       if (gi.item === 'circuit' && gi.num != null) this.circuitNums.add(gi.num);
       // A found Wi-Fi block comes with a charge — a genuine reward, and

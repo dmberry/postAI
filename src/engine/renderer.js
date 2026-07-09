@@ -1437,6 +1437,11 @@ export class Renderer {
   drawFloor(map, tx, ty, type, shade) {
     const ctx = this.ctx;
     const def = FLOORS[type];
+    // The sea is always flat — draw it (deep-ocean texture at height 0) and
+    // return before any elevation handling, so an edge tile that ended up as
+    // sea while still carrying terrain height can never lift into a block or
+    // cast a dark, sea-coloured hillside skirt floating over the water.
+    if (type === 'sea') { this.drawSeaTile(tx, ty); return; }
     const h = map.heightAt ? map.heightAt(tx, ty) : 0;
     const corners = this.tileCorners(tx, ty, h * ELEV);
     // Skirts: visible hillside faces wherever the south/east neighbour sits
@@ -1843,6 +1848,38 @@ export class Renderer {
     }
   }
 
+  // A squat marble block — a fallen entablature / altar stone that sits among
+  // the broken columns of a ruined temple. Drawn as a short iso cuboid on an
+  // inset footprint (grass shows around it), the white-marble photo clipped over
+  // light/mid/dark faces the same way the columns and walls are textured.
+  drawMarbleBlock(obj) {
+    const ctx = this.ctx;
+    const map = this.hudMap;
+    const h = (map && map.heightAt) ? map.heightAt(obj.x, obj.y) : 0;
+    const hh = tileHash(obj.x * 3 + 2, obj.y * 3 + 5);
+    const BH = 20 + hh * 12; // block height, px
+    const LIGHT = '#efece4', MID = '#d8d3c8', DARK = '#b3ad9f', EDGE = '#8f897b';
+    const tex = MARBLE_TEXTURE, marbleOK = tex && tex.complete && tex.naturalWidth;
+    const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
+    // Inset footprint: lerp each tile corner toward the tile centre so the block
+    // reads as an object standing on the tile, not a floor-filling wall.
+    const k = 0.8;
+    const base = this.tileCorners(obj.x, obj.y, h * ELEV)
+      .map((p) => ({ x: c.x + (p.x - c.x) * k, y: c.y + (p.y - c.y) * k }));
+    const topq = base.map((p) => ({ x: p.x, y: p.y - BH }));
+    const [b0, b1, b2, b3] = base;
+    const [t0, t1, t2, t3] = topq;
+    // soft ground shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(c.x, (b0.y + b2.y) / 2 + 3, 15, 6, 0, 0, Math.PI * 2); ctx.fill();
+    // two visible faces + top, textured like the walls
+    this.drawTexturedQuad([b3, b2, t2, t3], tex, DARK, marbleOK ? DARK : null, 'multiply', marbleOK ? 0.5 : 1); // SW
+    this.drawTexturedQuad([b1, b2, t2, t1], tex, EDGE, marbleOK ? EDGE : null, 'multiply', marbleOK ? 0.5 : 1); // SE
+    this.drawTexturedQuad([t0, t1, t2, t3], tex, LIGHT, null, null, marbleOK ? 0.35 : 1);                        // top
+    this.diamondPath([t0, t1, t2, t3]);
+    ctx.strokeStyle = 'rgba(90,86,76,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+  }
+
   drawObject(obj) {
     switch (obj.type) {
       case 'wall':
@@ -1851,6 +1888,7 @@ export class Renderer {
       case 'tree': this.drawTree(obj); break;
       case 'column': this.drawColumn(obj); break;
       case 'colfall': this.drawColumn(obj); break;
+      case 'marbleblock': this.drawMarbleBlock(obj); break;
       case 'rock': this.drawRock(obj.x, obj.y); break;
       case 'rubble': this.drawRubble(obj.x, obj.y); break;
       case 'obelisk': this.drawObelisk(obj); break;
@@ -2295,7 +2333,7 @@ export class Renderer {
   // unwarped text at a fixed screen offset, so as the camera panned the
   // wall's face perspective shifted under it while the text didn't,
   // reading as floating in front of the block rather than on it.
-  drawGraffiti(obj, seFace) {
+  drawGraffiti(obj, face, side = 'se') {
     const ctx = this.ctx;
     // Rendered once per object onto a small offscreen canvas and cached —
     // it's static text, no need to re-rasterize it every frame.
@@ -2314,6 +2352,10 @@ export class Renderer {
       obj._graffitiCanvas = c;
     }
     const jitter = (tileHash(obj.x, obj.y) - 0.5) * 0.12;
+    // The SW face's u basis (b3 -> b2) runs the opposite screen direction from
+    // the SE face's (b1 -> b2), so its un-mirror bounds are flipped (0.06 ->
+    // 0.94 instead of 0.94 -> 0.06) to keep the text reading left-to-right.
+    const [uLo, uHi] = side === 'sw' ? [0.06, 0.94] : [0.94, 0.06];
     // Orientation on the wall's SE face. subQuad's basis is u along b1 -> b2
     // and v along b1 -> t1. drawTexturedQuad maps the text canvas so its own
     // +x (left -> right of the text) follows p0 -> p1 and its own +y (top ->
@@ -2322,7 +2364,7 @@ export class Renderer {
     // its +y screen-downward, which means passing BOTH bounds high-then-low:
     // u 0.94 -> 0.06 (un-mirror) and v 0.62 -> 0.28 (right way up). Verified
     // in-game against "THE WIRES LIE".
-    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.94, 0.06, 0.62 + jitter, 0.28 + jitter);
+    const quad = this.subQuad(face[0], face[1], face[3], uLo, uHi, 0.62 + jitter, 0.28 + jitter);
     this.drawTexturedQuad(quad, obj._graffitiCanvas, null, null, null, 1);
   }
 
@@ -2334,13 +2376,15 @@ export class Renderer {
   // stuck-on poster, with a dark backing (torn paper) and a grimy multiply
   // tint so a bright old photo doesn't look pasted on straight out of a
   // camera roll.
-  drawGraffitiPoster(obj, seFace) {
+  drawGraffitiPoster(obj, face, side = 'se') {
     const tex = GRAFFITI_TEXTURES[obj.graffitiImage % GRAFFITI_TEXTURES.length];
     // Stretch the poster across (almost) the whole wall face — a mural covering
     // the block, not a small pasted photo. A hair of inset keeps the dark paper
     // backing from bleeding past the diamond edge. Un-mirrored + right-way-up
-    // via the same high->low bounds convention as drawGraffiti.
-    const quad = this.subQuad(seFace[0], seFace[1], seFace[3], 0.98, 0.02, 0.98, 0.04);
+    // via the same high->low bounds convention as drawGraffiti (flipped on the
+    // SW face, whose u basis runs the other way).
+    const [uLo, uHi] = side === 'sw' ? [0.02, 0.98] : [0.98, 0.02];
+    const quad = this.subQuad(face[0], face[1], face[3], uLo, uHi, 0.98, 0.04);
     this.drawTexturedQuad(quad, tex, '#1c1a16', 'rgba(30,22,14,0.3)', 'multiply', 0.5);
   }
 
@@ -2453,8 +2497,13 @@ export class Renderer {
       }
     }
 
-    if (obj.graffitiImage != null) this.drawGraffitiPoster(obj, [b1, b2, t2, t1]);
-    else if (obj.graffiti) this.drawGraffiti(obj, [b1, b2, t2, t1]);
+    // Graffiti sits on the SE face by default, but worldgen can flag a wall
+    // `graffitiFace: 'sw'` so marks also appear on the left-facing (south-west)
+    // face — the draw fns un-mirror per side so text still reads left-to-right.
+    const gSide = obj.graffitiFace === 'sw' ? 'sw' : 'se';
+    const gFace = gSide === 'sw' ? swFace : seFace;
+    if (obj.graffitiImage != null) this.drawGraffitiPoster(obj, gFace, gSide);
+    else if (obj.graffiti) this.drawGraffiti(obj, gFace, gSide);
   }
 
   drawTree(obj) {
@@ -4277,6 +4326,11 @@ export class Renderer {
       ctx.fillStyle = 'rgba(207,216,195,0.8)';
       ctx.fillText(hud.timeLabel, W - 12, top + 40);
     }
+    // rank, under the countdown — parity with the desktop status block
+    const rankC = deathRank(player.score ?? 0);
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    ctx.fillStyle = rankC.color;
+    ctx.fillText(rankC.title, W - 12, top + 56);
     ctx.textAlign = 'left';
 
     // --- Bottom row: the slot strip, full width — hands, pockets, backpack,
@@ -4306,7 +4360,12 @@ export class Renderer {
   }
 
   drawDashboard(player, hud) {
-    if (this.w < 560) { this.drawDashboardCompact(player, hud); return; }
+    // The full desktop dashboard uses fixed x-positions that only stop colliding
+    // once there's room for the whole left slot-strip (bars → hands → pockets →
+    // pack → walkman, ending ~620px) AND the right-aligned status block (name +
+    // deadline + score + rank, ~180px). Below that the walkman runs into the
+    // status text — so hand anything narrower to the reflowing compact layout.
+    if (this.w < 780) { this.drawDashboardCompact(player, hud); return; }
     const ctx = this.ctx;
     const top = this.h - DASH_H;
 

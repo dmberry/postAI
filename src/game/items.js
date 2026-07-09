@@ -439,6 +439,8 @@ export const ITEMS = {
     color: '#7d5a3c',
     skill: 'woodcraft',
     skillText: 'Woodcraft: your blade fells trees in half the swings.',
+    author: 'the Coppice Guild',
+    abstract: 'A pre-collapse manual of blades and green wood — reading the grain, notching, felling clean.',
   },
   book_herbs: {
     name: 'Hedgerow Remedies',
@@ -447,6 +449,8 @@ export const ITEMS = {
     color: '#5d7a3c',
     skill: 'herbalism',
     skillText: 'Herbalism: berries now purge venom and mend you a little.',
+    author: 'a hedge-witch, uncredited',
+    abstract: 'Field remedies from before the pharmacies: which berries draw poison, which close a wound.',
   },
   book_track: {
     name: 'Reading the Wild',
@@ -455,6 +459,8 @@ export const ITEMS = {
     color: '#8a4a3a',
     skill: 'tracking',
     skillText: 'Tracking: nearby animals show on your minimap.',
+    author: 'a gamekeeper',
+    abstract: 'Spoor, gait, and the signs a body leaves passing through country.',
   },
   book_run: {
     name: 'The Long Road',
@@ -463,6 +469,8 @@ export const ITEMS = {
     color: '#4a5a7a',
     skill: 'fleetfoot',
     skillText: 'Fleet foot: sprinting drains far less stamina.',
+    author: 'a long-distance runner',
+    abstract: 'On breath, cadence, and the economy of a body that has to keep going.',
   },
   // The RON-ML manual and its torn pages: readable like a skill book (kind
   // 'book' so R / walk-onto reads them), but flagged `manual` so they teach
@@ -471,18 +479,56 @@ export const ITEMS = {
     name: 'the RON-DOS Operator’s Manual',
     kind: 'book',
     manual: true,
+    author: 'RON',
     stack: 1,
     color: '#3fbf6a',
-    text: 'The obelisk console runs RON-ML. Verbs: scan (list the wire), nearest (closest of a list), hack a node for its key, crash it with that key, sleep, repel, map, print. Pipe with |> and bind with let … in. At any terminal, type help for the full reference.',
+    text: 'RON-ML is a small functional language — an old ML dialect — that the obelisks answer to. The full guide, with worked examples, is now in your notepad (N); type help at any console for the command list.',
+    // A proper little primer, filed to the notepad — RON-ML is fiddly, so the
+    // page explains how the language THINKS (functional, expression-based) and
+    // shows worked examples, not just a verb list.
+    notepadText:
+      'RON-ML is the language the black obelisks answer to. It is a small FUNCTIONAL language — an antique of the late twentieth century, a dialect of ML, the "meta-language" the old programmers built to reason about other programs. RON kept it alive to speak to the machines in their own idiom.\n\n' +
+      'HOW IT THINKS\n' +
+      'There are no steps, only expressions: every word returns a value, and you build a command by feeding small values into larger ones until one expression describes the result you want. Two joints hold it together:\n\n' +
+      '  a |> f            the PIPE — take value a and feed it to f.\n' +
+      '                    reads left to right, like handing something on.\n' +
+      '  let x = e in body   NAME a value — compute e, call it x, use x in body.\n\n' +
+      'THE VERBS (each is just a function that returns a value)\n' +
+      '  scan          the nodes on the wire in range, as a list\n' +
+      '  nearest xs    the closest node in a list\n' +
+      '  hack n        crack node n, hand back its key\n' +
+      '  crash n k     kill node n using key k\n' +
+      '  loop n        pin an infinite loop into n (no key needed)\n' +
+      '  sleep n       idle the machines near you for a while\n' +
+      '  repel         shove nearby machines back\n' +
+      '  map · print   reveal the territory · keep a copy of a value\n\n' +
+      'WORKED EXAMPLES\n' +
+      '  scan\n' +
+      '      → every node in range, as a list.\n' +
+      '  scan |> nearest\n' +
+      '      → feed that list to nearest: the closest node.\n' +
+      '  hack (scan |> nearest)\n' +
+      '      → crack the nearest node, hand back its key.\n' +
+      '  let n = scan |> nearest in\n' +
+      '  let k = hack n in\n' +
+      '      crash n k\n' +
+      '      → name the nearest node n, take its key k, crash it.\n\n' +
+      'You can’t crash blind — a node only dies to its own key, so hack first. Type help at any console for the whole list, or help <verb> for one.',
   },
   ronml_page: {
     name: 'a torn page of RON-ML',
     kind: 'book',
     manual: true,
+    author: 'RON',
     tip: true,
     stack: 1,
     color: '#b8ac82',
     text: 'A water-stained page from an operator’s manual. One block survives: "scan |> nearest — lists the wire, takes the closest. can’t crash blind: hack first for the key. type help at the console for the rest."',
+    notepadText:
+      'A water-stained page from an operator’s manual. One block survives:\n\n' +
+      '  scan |> nearest\n' +
+      '      list the wires, take the closest.\n\n' +
+      'You can’t crash blind: hack a node first for its key, then crash it with that key. Type help at the console for the rest.',
   },
   // The note the player starts with, folded in a pocket. Read it (R) and it
   // files itself into the notepad (Player.learnFromBook -> onReadNote), then
@@ -540,11 +586,17 @@ export const TAPES = [
 ];
 for (const t of TAPES) {
   const side = (s) => ({ label: s.label, tracks: s.tracks.map((f) => `assets/audio/${t.dir}/${s === t.a ? 'A' : 'B'}/${f}`) });
+  const sA = side(t.a), sB = side(t.b);
   ITEMS[`tape_${t.num}`] = {
     name: `a cassette — ${t.artist}, ${t.title}`,
+    short: `${t.artist} — ${t.title}`,
     kind: 'tape', stack: 1, color: t.color || '#c9a44a',
-    artist: t.artist, tapeNum: t.num,
-    sideA: side(t.a), sideB: side(t.b),
+    artist: t.artist, tapeNum: t.num, author: t.artist,
+    sideA: sA, sideB: sB,
+    // Filed to the Scrapbook on pickup — an album leaves a page, like a book.
+    abstract: `A cassette for the Walkman. Slot it in the deck (click the tape) and flip A/B. ` +
+      `Side A “${sA.label}” — ${sA.tracks.length} track${sA.tracks.length === 1 ? '' : 's'}; ` +
+      `Side B “${sB.label}” — ${sB.tracks.length} track${sB.tracks.length === 1 ? '' : 's'}.`,
   };
 }
 
@@ -555,44 +607,46 @@ for (const t of TAPES) {
 // nothing networked) turn up in the Backspace's yellow boxes. Each is a real
 // cover from assets/media; the icon is that cover — a portrait rectangle for a
 // book, a square sleeve for a record. Data-driven so more covers just drop in.
-// [cover file (under assets/media/), title, author/artist]
+// [cover file (under assets/media/), title, author/artist, one-line gloss]
+// The gloss files itself into the Scrapbook when you pick the book up, so a
+// recovered classic leaves a page (cover + what it is), not just an icon.
 export const DELETED_BOOKS = [
-  ['book-covers/Republic.jpg', 'The Republic', 'Plato'],
-  ['book-covers/Nicomachean-Ethics.jpg', 'Nicomachean Ethics', 'Aristotle'],
-  ['book-covers/The-Odyssey.jpg', 'The Odyssey', 'Homer'],
-  ['book-covers/Prince.jpg', 'The Prince', 'Machiavelli'],
-  ['book-covers/Leviathan.jpg', 'Leviathan', 'Thomas Hobbes'],
-  ['book-covers/wealth-of-nations.jpg', 'The Wealth of Nations', 'Adam Smith'],
-  ['book-covers/critique-of-pure-reason.jpg', 'Critique of Pure Reason', 'Immanuel Kant'],
-  ['book-covers/hegel-phenomenology.jpg', 'Phenomenology of Spirit', 'G. W. F. Hegel'],
-  ['book-covers/Zarathustra.jpg', 'Thus Spoke Zarathustra', 'Friedrich Nietzsche'],
-  ['book-covers/capital.jpg', 'Capital', 'Karl Marx'],
-  ['book-covers/War-And-Peace.jpg', 'War and Peace', 'Leo Tolstoy'],
-  ['book-covers/Process-and-Reality.jpg', 'Process and Reality', 'A. N. Whitehead'],
-  ['book-covers/understanding-media.jpg', 'Understanding Media', 'Marshall McLuhan'],
-  ['book-covers/ruleofmetaphor.jpg', 'The Rule of Metaphor', 'Paul Ricoeur'],
-  ['book-covers/Discipline-and-Punish.jpg', 'Discipline and Punish', 'Michel Foucault'],
-  ['book-covers/Anti-Oedipus.jpg', 'Anti-Oedipus', 'Deleuze & Guattari'],
-  ['book-covers/toadtoserfdom.jpg', 'The Road to Serfdom', 'F. A. Hayek'],
-  ['book-covers/capitalism.jpg', 'Capitalism', ''],
-  ['book-covers/Brave-New-World.jpg', 'Brave New World', 'Aldous Huxley'],
-  ['book-covers/Fahrenheit-451.jpg', 'Fahrenheit 451', 'Ray Bradbury'],
-  ['book-covers/postdigital.jpg', 'Postdigital', 'David M. Berry'],
-  ['book-covers/Cover CriticalTheory_Berry.jpg', 'Critical Theory and the Digital', 'David M. Berry'],
-  ['book-covers/Cover - DH .png', 'Digital Humanities', 'David M. Berry'],
+  ['book-covers/Republic.jpg', 'The Republic', 'Plato', 'Plato on justice, the ideal city, and the philosopher-king — the cave, the divided line, the soul writ large as the state.'],
+  ['book-covers/Nicomachean-Ethics.jpg', 'Nicomachean Ethics', 'Aristotle', 'Aristotle on the good life as virtue and habit: excellence is the mean, found by practice, aimed at flourishing.'],
+  ['book-covers/The-Odyssey.jpg', 'The Odyssey', 'Homer', 'Homer’s poem of Odysseus’s long way back from Troy — the founding story of nostos, the return home against every delay.'],
+  ['book-covers/Prince.jpg', 'The Prince', 'Machiavelli', 'Machiavelli’s cold handbook of power: how a ruler takes it, holds it, and loses it — better feared than loved.'],
+  ['book-covers/Leviathan.jpg', 'Leviathan', 'Thomas Hobbes', 'Hobbes on the social contract: without a sovereign, life is a war of all against all, nasty, brutish, and short.'],
+  ['book-covers/wealth-of-nations.jpg', 'The Wealth of Nations', 'Adam Smith', 'Smith on markets, the division of labour, and the invisible hand that turns private interest to public wealth.'],
+  ['book-covers/critique-of-pure-reason.jpg', 'Critique of Pure Reason', 'Immanuel Kant', 'Kant asks what the mind can know before experience — space, time, and the categories we bring to the world.'],
+  ['book-covers/hegel-phenomenology.jpg', 'Phenomenology of Spirit', 'G. W. F. Hegel', 'Hegel’s journey of consciousness toward absolute knowing, by way of the struggle of master and slave.'],
+  ['book-covers/Zarathustra.jpg', 'Thus Spoke Zarathustra', 'Friedrich Nietzsche', 'Nietzsche’s prophet comes down from the mountain to announce the death of God and the coming of the overman.'],
+  ['book-covers/capital.jpg', 'Capital', 'Karl Marx', 'Marx’s anatomy of capital: the commodity, surplus value wrung from labour, and the fetish that hides the work.'],
+  ['book-covers/War-And-Peace.jpg', 'War and Peace', 'Leo Tolstoy', 'Tolstoy’s vast novel of Russia under Napoleon — history not as great men but as the sum of ordinary lives.'],
+  ['book-covers/Process-and-Reality.jpg', 'Process and Reality', 'A. N. Whitehead', 'Whitehead’s metaphysics of becoming: the world is made of processes and events, not fixed substances.'],
+  ['book-covers/understanding-media.jpg', 'Understanding Media', 'Marshall McLuhan', 'McLuhan on media as extensions of the body — the medium, not its content, is the message that reshapes us.'],
+  ['book-covers/ruleofmetaphor.jpg', 'The Rule of Metaphor', 'Paul Ricoeur', 'Ricoeur on how metaphor makes new meaning rather than merely decorating it — language redescribing the world.'],
+  ['book-covers/Discipline-and-Punish.jpg', 'Discipline and Punish', 'Michel Foucault', 'Foucault on the birth of the prison: surveillance, the panopticon, and the making of docile, watched bodies.'],
+  ['book-covers/Anti-Oedipus.jpg', 'Anti-Oedipus', 'Deleuze & Guattari', 'Deleuze and Guattari’s schizoanalysis of desire as productive flow, set loose against capitalism and the family.'],
+  ['book-covers/toadtoserfdom.jpg', 'The Road to Serfdom', 'F. A. Hayek', 'Hayek’s warning that central planning, however well meant, slides toward the loss of freedom.'],
+  ['book-covers/capitalism.jpg', 'Capitalism', '', 'An account of capital as a total social form — not just an economy but a way of organising life.'],
+  ['book-covers/Brave-New-World.jpg', 'Brave New World', 'Aldous Huxley', 'Huxley’s engineered utopia of comfort, conditioning, and soma — a tyranny you are trained to enjoy.'],
+  ['book-covers/Fahrenheit-451.jpg', 'Fahrenheit 451', 'Ray Bradbury', 'Bradbury’s world where firemen burn books and the walls talk back — memory kept alive by people who become the texts.'],
+  ['book-covers/postdigital.jpg', 'Postdigital', 'David M. Berry', 'Berry on life after the digital’s novelty wears off, when computation stops being new and becomes the ground.'],
+  ['book-covers/Cover CriticalTheory_Berry.jpg', 'Critical Theory and the Digital', 'David M. Berry', 'Berry brings the Frankfurt School to bear on software, code, and the computational condition.'],
+  ['book-covers/Cover - DH .png', 'Digital Humanities', 'David M. Berry', 'Berry on what becomes of the humanities once they compute — method, knowledge, and the machine.'],
 ];
 export const DELETED_RECORDS = [
-  ['album-covers/It-Might-Be-Useful-For-Us-To-Know.webp', 'It Might Be Useful For Us To Know', ''],
+  ['album-covers/It-Might-Be-Useful-For-Us-To-Know.webp', 'It Might Be Useful For Us To Know', '', 'A salvaged recording — analogue, unnetworked, played on nothing that reports back. The kind of thing they backspaced first.'],
 ];
-DELETED_BOOKS.forEach(([cover, title, author], i) => {
+DELETED_BOOKS.forEach(([cover, title, author, abstract], i) => {
   ITEMS[`pbook_${i + 1}`] = {
-    name: author ? `${title} — ${author}` : title, short: title,
+    name: author ? `${title} — ${author}` : title, short: title, author, abstract,
     kind: 'paperbook', stack: 1, cover, color: '#6b5a3a', backspace: true,
   };
 });
-DELETED_RECORDS.forEach(([cover, title, artist], i) => {
+DELETED_RECORDS.forEach(([cover, title, artist, abstract], i) => {
   ITEMS[`record_${i + 1}`] = {
-    name: artist ? `${title} — ${artist}` : title, short: title,
+    name: artist ? `${title} — ${artist}` : title, short: title, author: artist, abstract,
     kind: 'record', stack: 1, cover, color: '#26242a', backspace: true,
   };
 });

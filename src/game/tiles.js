@@ -29,6 +29,7 @@ export const OBJECTS = {
   tree:    { solid: true, soft: true }, // `soft`: the PLAYER pushes through (a human edge in the woods), but it still blocks robots and blocks shots (cover)
   column:  { solid: true },  // ruined marble column: a pillar that blocks and gives shot-cover
   colfall: { solid: false }, // toppled column / drum lying in the grass: decorative, walk over it
+  marbleblock: { solid: true }, // fallen entablature / altar stone among the columns: blocks, gives cover
   // "climbable" objects are solid for everything except the player's own
   // climb check (Player.collides via GameMap.effectiveHeightAt), which
   // treats them as a raised step of `climbHeight` levels rather than an

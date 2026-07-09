@@ -26,11 +26,6 @@ map, not a schedule.
 
 ## Phase 2 — world & story depth (the atmospheric layer)
 
-- **ELIZA in the terminal**: an interactive DOCTOR/ELIZA conversational mode you
-  can open at an obelisk terminal — you type, it reflects your words back in
-  Weizenbaum's 1966 pattern-matching style. Ties directly to the ELIZA/
-  Weizenbaum lore already seeded. Its own small parser; unsettling, optional,
-  and thematically load-bearing.
 - **The phone / comms ("the browser")**: a mobile phone the player carries, with
   **RON text messages** arriving over time (guidance, warnings, lore), and
   possibly a dead-internet "browser" of cached pages from before the collapse.
@@ -47,10 +42,12 @@ map, not a schedule.
 - **The portal gun** (a separate item from the Ubik tear): the clean sci-fi
   paired-portal teleporter, a deliberate homage. The Ubik tear was restyled to
   clear this aesthetic; the item itself is unbuilt.
-- **The other three AIs**: Adamantine's fortress is in (+ Henrik's M6 guards).
-  Build Behemoth, Colossus, Demiurge as their own annexes/fortresses, plus the
-  deeper fortress content (mainframe raid, multiple internal factories, M5/M6
-  elite guards, breach escalation).
+- **The other three AIs**: the first fortress (its core still named *Adamantine*
+  in `fortress.js`, pending a rename to **ZEUS** to match the Odyssey naming) is
+  in, with Henrik's M6 guards. Build the other three crowns — **APOLLO**,
+  **ATHENA**, **HADES** — as their own annexes/fortresses, plus the deeper
+  fortress content (mainframe raid, multiple internal factories, M5/M6 elite
+  guards, breach escalation).
 - **Awareness meter + escalation event** (Henrik): chain raven-sightings and
   obelisk-proximity into a rising "AI awareness"; crossing a threshold flips
   the game into a short, brutal, retry-friendly escalation (fast converging

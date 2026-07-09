@@ -1189,9 +1189,19 @@ export class Lore {
     // small, varied handful rather than one box holding them all).
     const docs = overworld.filter((f) => f.kind !== 'ron');
     for (let i = docs.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [docs[i], docs[j]] = [docs[j], docs[i]]; }
+    // Not every crate is an archive. Deal the documents into a MINORITY of the
+    // boxes as fat "stacks of papers" (a bundle you unfold into the Scrapbook),
+    // leaving the rest as plain loot — so finding a paper cache is a real event,
+    // not something every box does. Shuffle the boxes, then take only as many as
+    // we need to hold the docs at DOCS_PER_CACHE apiece.
     const boxes = map.objects.filter((o) => o.type === 'box');
-    if (boxes.length) {
-      docs.forEach((f, i) => { const box = boxes[i % boxes.length]; (box.lore ??= []).push(f.id); });
+    if (boxes.length && docs.length) {
+      const shuffled = boxes.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]; }
+      const DOCS_PER_CACHE = 9;
+      const need = Math.min(shuffled.length, Math.max(1, Math.ceil(docs.length / DOCS_PER_CACHE)));
+      const caches = shuffled.slice(0, need);
+      docs.forEach((f, i) => { const box = caches[i % caches.length]; (box.lore ??= []).push(f.id); });
     }
     this.placed = []; // nothing hovering out in the world any more
   }
