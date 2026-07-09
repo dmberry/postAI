@@ -1307,22 +1307,39 @@ player.onFileNote = (title, text, cover = null, cat = 'Document') => {
 const notebookEl = document.getElementById('ronnotebook');
 const notebookTitleEl = document.getElementById('ronnotebook-title');
 const notebookBodyEl = document.getElementById('ronnotebook-body');
-const notebookPageLabelEl = document.getElementById('ronnotebook-page-label');
-const notebookPrevBtn = document.getElementById('ronnotebook-prev');
-const notebookNextBtn = document.getElementById('ronnotebook-next');
-// Duplicate prev/next + page counter up on the top bar, so you can flip fast
-// without reaching for the footer — the notes fill up quickly.
+// All navigation lives on the top bar now (the footer prev/next was dropped):
+// a page counter, ‹ ›, and a Contents drop-down to jump straight to any page.
 const notebookPageTopEl = document.getElementById('ronnotebook-page-top');
 const notebookPrevTopBtn = document.getElementById('ronnotebook-prev-top');
 const notebookNextTopBtn = document.getElementById('ronnotebook-next-top');
-// Keep the footer and top-bar nav in lockstep.
+const notebookJumpEl = document.getElementById('ronnotebook-jump');
 function syncNotebookNav(label, prevDisabled, nextDisabled) {
-  notebookPageLabelEl.textContent = label;
   notebookPageTopEl.textContent = label;
-  notebookPrevBtn.disabled = prevDisabled;
-  notebookNextBtn.disabled = nextDisabled;
   notebookPrevTopBtn.disabled = prevDisabled;
   notebookNextTopBtn.disabled = nextDisabled;
+  notebookJumpEl.disabled = notebookEntries.length === 0;
+  // reflect the current page in the drop-down without firing its change handler
+  if (notebookEntries.length) notebookJumpEl.value = String(notebookIdx);
+}
+// (Re)build the Contents drop-down: a placeholder plus every page, grouped by
+// section (Field records / Books / Albums), option value = page index.
+function buildNotebookJump() {
+  const labels = { Document: 'Field records', Book: 'Books', Album: 'Albums' };
+  notebookJumpEl.innerHTML = '';
+  const groups = {};
+  notebookEntries.forEach((e, i) => { (groups[e.cat || 'Document'] ??= []).push([i, e.title]); });
+  for (const c of ['Document', 'Book', 'Album']) {
+    if (!groups[c]) continue;
+    const og = document.createElement('optgroup');
+    og.label = labels[c] || c;
+    for (const [i, title] of groups[c]) {
+      const o = document.createElement('option');
+      o.value = String(i);
+      o.textContent = `${i + 1}. ${title}`;
+      og.appendChild(o);
+    }
+    notebookJumpEl.appendChild(og);
+  }
 }
 let notebookEntries = [];
 let notebookIdx = 0;
@@ -1372,16 +1389,21 @@ function openNotebook() {
     .sort((a, b) => (order[a[0].cat] ?? 0) - (order[b[0].cat] ?? 0) || a[1] - b[1])
     .map((p) => p[0]);
   notebookIdx = 0;
+  buildNotebookJump();
   renderNotebookPage();
   notebookEl.style.display = 'flex';
+}
+function notebookJumpTo(i) {
+  if (!notebookEntries.length) return;
+  notebookIdx = Math.max(0, Math.min(notebookEntries.length - 1, i | 0));
+  renderNotebookPage();
 }
 function closeNotebook() { notebookEl.style.display = 'none'; }
 notebookEl.addEventListener('click', (e) => { if (e.target === notebookEl) closeNotebook(); });
 document.getElementById('ronnotebook-close').addEventListener('click', closeNotebook);
-notebookPrevBtn.addEventListener('click', notebookPrev);
-notebookNextBtn.addEventListener('click', notebookNext);
 notebookPrevTopBtn.addEventListener('click', notebookPrev);
 notebookNextTopBtn.addEventListener('click', notebookNext);
+notebookJumpEl.addEventListener('change', () => notebookJumpTo(parseInt(notebookJumpEl.value, 10)));
 // Capture-phase on window, ahead of both the still-focused terminal input's
 // own key handling and the game's WASD/arrow movement listener, so paging
 // the notebook can never leak an arrow key into a text caret or a step.

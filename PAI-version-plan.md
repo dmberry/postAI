@@ -48,6 +48,17 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.57 — notepad Contents drop-down, footer nav removed, docs/help SKYLINK→POSEIDON sweep
+- Notepad footer prev/next removed; all nav on the top bar (‹ ›, counter) plus a new
+  `#ronnotebook-jump` Contents `<select>` grouped by section (optgroup), value = page
+  index. `buildNotebookJump()` populates it in `openNotebook`; `syncNotebookNav` reflects
+  the current page; change handler → `notebookJumpTo`. Dead footer refs removed from main.js.
+- Docs/help currency: `ronmap-title` and the static `aios-header` placeholder → POSEIDON
+  (JS already set POSEIDON CORE at open); Help machines/terminal tabs SKYLINK→POSEIDON;
+  `docs/ob-terminal-language.md` SKYLINK→POSEIDON. README cert description fixed (paper +
+  ranked, no portrait — was still the pre-v1.51 stone/portrait text); marble temples + flat
+  sea added to the world summary; notepad-nav wording updated.
+
 ### v1.56 — whole deleted shelf in the Backspace, album art wired in, top-bar note nav
 - **Every deleted book + record gets its own yellow box.** `underworld.js` now
   shuffles all `pbook_*`/`record_*` keys and deals them round-robin across the

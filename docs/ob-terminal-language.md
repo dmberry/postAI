@@ -11,7 +11,7 @@ the choir sequence happen in the world, rather than reading about it in the cons
 
 ## 1. The fiction
 
-The obelisks are terminals into SKYLINK — the AI network. Before the collapse, RON
+The obelisks are terminals into POSEIDON — the AI network (named SKYLINK in earlier builds). Before the collapse, RON
 (the resistance) reverse-engineered a sliver of the operators' own console language
 and left fragments of it scrawled across the world: on walls, in notebooks, on
 floppy disks and dead machines. A survivor who collects those fragments, finds an
@@ -160,7 +160,7 @@ Small and self-contained. Suggested new module `src/game/ronml.js`:
 3. **Evaluator** — an environment of built-ins; each primitive is a JS function
    `(args, ctx) => value`, where `ctx` carries the world (`map`, `player`, `robots`,
    the terminal's owning obelisk, the player's held keys). Effects mutate the world
-   via the same hooks the game already exposes (e.g. reuse the SKYLINK-cancel path
+   via the same hooks the game already exposes (e.g. reuse the POSEIDON-cancel path
    for `crash`, the sleep mechanic for `sleep`, a targeting flag for `repel`). ~120
    lines.
 4. **Terminal REPL** — wire the existing `#obterminal` modal to accept typed input:
