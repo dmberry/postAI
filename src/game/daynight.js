@@ -2,6 +2,8 @@
 // a 1-based day counter, a HUD label, and an ambient light level with smooth
 // dawn/dusk ramps. Deterministic given the same sequence of dt values.
 
+import { register } from '../engine/systems.js';
+
 const DAWN_START = 5;   // ramp up begins (05:00)
 const DAWN_END = 8;     // full daylight (08:00)
 const DUSK_START = 18;  // ramp down begins (18:00)
@@ -22,6 +24,10 @@ export class DayNight {
     this.dayLength = dayLengthSeconds; // real seconds per 24 game hours
     this.startHour = startHour;
     this.elapsed = 0; // real seconds since start
+    // Self-register as a system (docs/refactor-registry.md), order 20 = the
+    // "world clocks" band. Normal-play tick only; the resting fast-forward stays
+    // an explicit hub call (the hub keeps the mode gates).
+    register({ name: 'daynight', order: 20, update: (w) => this.update(w.dt) });
   }
 
   update(dt) {

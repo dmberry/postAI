@@ -132,9 +132,17 @@ can't, we find out having touched ~5 lines, not the whole codebase.
   its constructor; its 1 update + 2 draw call sites dispatch through the registry.
   Demonstrates the blessed end-state pattern (self-registration), not an interim
   adapter. **Stopped for review.**
-- **Stage 1.** Migrate the other clean singletons, each self-registering:
-  `dayNight` (order 20), `worldStir`/`fortress` (30s), skylink web (drawWorld,
-  60s). Place the hub's `runUpdate()` so these land in their current sequence.
+- **Stage 1 (done).** `dayNight` (order 20) and `fortress` (order 35) now
+  self-register; the hub's two hardcoded `.update()` calls are gone. The single
+  `runUpdate()` sits at the **late** point (after `updateRobots`), where fortress
+  ran, so fortress keeps seeing this-frame robot positions and its guard-spawns
+  keep their frame timing. `lore` moved from its early point to this late one as
+  a result — verified safe (nothing reads lore state mid-frame; the only delta is
+  a one-frame shift in fragment-pickup detection, sub-perceptible). `worldStir`
+  has no per-frame `update()` (it's event-driven — fortress calls its
+  `stir`/`calm`), so it's not a system. The skylink web draw is renderer-coupled
+  (a renderer method gated by `hud` state), not a self-contained module, so it
+  stays in the renderer for now.
 - **Stage 2.** The ROADMAP file-size split, now expressed as systems: renderer
   HUD/modals → `ui.js`; player weapon-fire (`fire`/`pierceShot`/`coneShot`/
   `burnObelisk`) → `combat.js`.
@@ -165,3 +173,9 @@ can't, we find out having touched ~5 lines, not the whole codebase.
   `register()` itself). Chosen over a central manifest and hub adapters
   specifically because it means two sessions adding features never edit a shared
   file — the repo's live merge-conflict pain. `lore` converted to self-register.
+- **2026-07-11.** Stage 1: one `runUpdate()` point, placed **late** (fortress's
+  old position), not early. A single global registry can't be at two positions;
+  late minimises behaviour drift because moving fortress *early* would shift
+  guard-spawn timing, whereas moving `lore` *late* only shifts fragment-pickup by
+  one frame. Systems whose exact frame-position matters relative to still-
+  hardcoded hub calls constrain where the block goes; migrate accordingly.

@@ -2126,9 +2126,6 @@ function update(dt) {
   }
   if (input.zoomTogglePressed()) camera.toggleZoom();
   if (input.minimapTogglePressed()) { showMinimap = !showMinimap; player.say(showMinimap ? 'Minimap on.' : 'Minimap off.'); }
-  // Registered systems tick here (Stage 0: lore only). The world-contract bag
-  // carries everything a system might read; each reads only what it needs.
-  systems.runUpdate({ dt, player, input, map, camera, robots, animals, birds, dayNight, worldStir, fortress });
   if (input.musicTogglePressed()) {
     const mode = sfx.toggleMusic();
     player.say(mode === 'synth' ? 'Music: the piano bed.' : 'Music off.');
@@ -2579,12 +2576,14 @@ function update(dt) {
   }
   resolveBodyOverlaps(player, animals, robots);
   map.updateShakes(dt);
-  // Fortress: swings the doorway, lights the maze way-out, and runs the breach
-  // alarm. On alarm (with the uplink intact) `stir` rouses the overworld — the
-  // obelisks flare red and the W-factory sends a W4 toward the doorway; `calm`
-  // unwinds it when the fortress stands down or the uplink is cut.
-  fortress.update(dt, player, robots, worldStir);
-  dayNight.update(dt);
+  // Registered systems tick here, sorted by `order`: dayNight (20), fortress
+  // (35), lore (80). This is the normal-play update point — below the paused/
+  // resting/driving gates, which keep their own explicit ticks (the hub keeps
+  // the gates). The world-contract bag carries everything a system might read.
+  //   fortress: swings the doorway, lights the maze way-out, runs the breach
+  //   alarm — on alarm (uplink intact) `stir` flares the obelisks red and sends
+  //   a W4, `calm` unwinds it. dayNight: advances the day/night clock.
+  systems.runUpdate({ dt, player, input, map, camera, robots, animals, birds, dayNight, worldStir, fortress });
   // Time's up: POSEIDON comes online. Every obelisk lights up and links
   // to every other in a web of lasers, and the factory throws wave after
   // wave of W4s at you — indefinitely. There's no timer to survive to; it

@@ -12,6 +12,7 @@
 // markers); the renderer draws the new object/floor kinds generically.
 
 import { makeRng } from './rng.js';
+import { register } from '../engine/systems.js';
 
 export const AI_NAME = 'ZEUS';
 
@@ -321,7 +322,7 @@ export function createFortress(map, seed, spawn) {
     state.open = true;
   };
 
-  return {
+  const controller = {
     AI_NAME,
     region: { x0: 0, y0: seamY, x1: w - 1, y1: southY },
     seamY,
@@ -447,4 +448,13 @@ export function createFortress(map, seed, spawn) {
       };
     },
   };
+  // Self-register as a system (docs/refactor-registry.md), order 35 = the "world
+  // events" band, so it ticks after dayNight (20) and before lore (80). The hub
+  // no longer calls fortress.update directly; it runs via systems.runUpdate.
+  register({
+    name: 'fortress',
+    order: 35,
+    update: (w) => controller.update(w.dt, w.player, w.robots, w.worldStir),
+  });
+  return controller;
 }
