@@ -771,6 +771,15 @@ player.onTapeToast = (def, side) => {
   toast = { text: `\u25b6 ${def.short} \u00b7 side ${side}: ${sideDef.label}`, ttl: 4 };
 };
 
+// RUN/JUMP touch buttons: input routes any finger landing on one of these
+// to sprint-hold / jump instead of movement or HUD (input.js multitouch).
+input.touchButtonHit = (x, y) => {
+  const btns = renderer.touchButtons;
+  if (!btns) return null;
+  const hit = btns.find((b) => Math.hypot(x - b.x, y - b.y) <= b.r);
+  return hit ? hit.id : null;
+};
+
 // Touches that land on the HUD are UI, never movement (input.js touch path).
 input.uiHitTest = (x, y) => {
   if (renderer.slotAt && renderer.slotAt(x, y)) return true;
@@ -1818,7 +1827,7 @@ const hintEl = document.getElementById('hint');
 const touchLike = (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
   || Math.min(window.innerWidth, window.innerHeight) < 560;
 if (touchLike) {
-  hintEl.textContent = 'Hold to move · tap to act · ? for help';
+  hintEl.textContent = 'Hold to move · tap to act · \u00bb run · \u25b2 jump · ? for help';
 }
 const HINT_LIFETIME = 120; // seconds of played time
 let playTime = 0;
@@ -2746,6 +2755,8 @@ function frame(now) {
       showBackpack,
       detail: detail || hoverSlotTip(),
       toast,
+      touchControls: touchLike,
+      touchRunHeld: input._touchRun,
       drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
       deathCert: player.deathCert,
       aiVictory: player.aiVictory,

@@ -48,6 +48,21 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.77 — mobile RUN + JUMP buttons, real multitouch
+
+- **input.js rewritten for multitouch**: touches tracked by identifier and
+  routed by landing zone — RUN button (hold: `_touchRun`, feeds `sprinting()`),
+  JUMP button (one-shot `_touchJump`, consumed by `jumpPressed()`), HUD
+  (uiHitTest: tap-select as before), else the first free finger owns movement.
+  A move finger and a button finger coexist; releases route by identifier.
+- **renderer.drawTouchControls** (hud.touchControls = main's touchLike): two
+  R30 circles right of centre above the dashboard, generous 36px hit radius,
+  RUN brightens while held; registered per-frame in `renderer.touchButtons`
+  for `input.touchButtonHit` (same rebuild pattern as uiSlots).
+- Verified on emulated iPhone-size viewport with synthetic TouchEvents:
+  JUMP tap → player jumps; RUN held + second world finger → sprinting true,
+  false on release; screenshot confirms layout. Hint text updated.
+
 ### v1.76 — manage mode, audible lasers, daemon takes the towers, stamp retired
 
 - **Manage mode** (the mobile swap mechanism): while showBackpack is open, a

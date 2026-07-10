@@ -590,6 +590,7 @@ export class Renderer {
     }
     if (hud.showSkills) this.drawSkillModal(player);
     if (hud.showWeapons) this.drawWeaponChart(player);
+    if (hud.touchControls) this.drawTouchControls(hud);
     if (hud.toast) this.drawToast(hud.toast);
     if (hud.detail) this.drawDetail(hud.detail);
     if (hud.drag) this.drawDragGhost(hud.drag, player);
@@ -831,6 +832,40 @@ export class Renderer {
         if (y > py + ph - 12) break;
         ctx.fillText(line, px + 30, y); y += 16;
       }
+    }
+  }
+
+  // RUN and JUMP buttons for touch play: two translucent circles above the
+  // dashboard on the right, sized for thumbs. RUN is a hold (brightens while
+  // held); JUMP fires on the tap. Registered in this.touchButtons each frame
+  // for input's touchButtonHit — same rebuild-per-frame pattern as uiSlots.
+  drawTouchControls(hud) {
+    const ctx = this.ctx;
+    const R = 30;
+    const bx = this.w - R - 14;
+    const baseY = (this.hudTop != null ? this.hudTop : this.h - 120) - R - 12;
+    const buttons = [
+      { id: 'jump', x: bx, y: baseY - (R * 2 + 14), label: '\u25b2', held: false },
+      { id: 'run', x: bx, y: baseY, label: '\u00bb', held: !!hud.touchRunHeld },
+    ];
+    this.touchButtons = buttons.map((b) => ({ id: b.id, x: b.x, y: b.y, r: R + 6 })); // generous hit radius
+    for (const b of buttons) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, R, 0, Math.PI * 2);
+      ctx.fillStyle = b.held ? 'rgba(207,216,195,0.30)' : 'rgba(12,15,10,0.42)';
+      ctx.fill();
+      ctx.strokeStyle = b.held ? 'rgba(232,224,208,0.9)' : 'rgba(207,216,195,0.45)';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = b.held ? '#eef2e2' : 'rgba(222,214,192,0.85)';
+      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(b.label, b.x, b.y + 1);
+      ctx.font = 'bold 8px system-ui, sans-serif';
+      ctx.fillText(b.id.toUpperCase(), b.x, b.y + R - 7);
+      ctx.textBaseline = 'alphabetic';
+      ctx.textAlign = 'left';
     }
   }
 

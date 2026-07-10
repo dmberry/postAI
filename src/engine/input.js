@@ -85,6 +85,11 @@ export class Input {
     // enough to move around and try the game without a keyboard.
     this.touchVec = null;        // screen-space move direction while a finger is down
     this._touchStart = null;     // where/whether the current touch began (tap vs drag)
+    this._moveTouchId = null;    // identifier of the finger that owns movement
+    this._runTouchId = null;     // identifier of the finger holding the RUN button
+    this._touchRun = false;      // RUN button held (multitouch: alongside the move finger)
+    this._touchJump = false;     // JUMP button tapped — one-shot, consumed by jumpPressed
+    this.touchButtonHit = null;  // set by main.js: (x, y) -> 'run' | 'jump' | null
     const touchXY = (e) => { const t = e.changedTouches[0]; return { x: t.clientX, y: t.clientY }; };
     const setFromTouch = (p) => {
       this.mouseX = p.x; this.mouseY = p.y;    // aim faces the touch point
@@ -96,36 +101,66 @@ export class Input {
       // Dead zone near the centre so a tap right on the player doesn't jitter.
       this.touchVec = len < 26 ? null : { dx: dx / len, dy: dy / len };
     };
+    // MULTITOUCH: one finger owns movement; other fingers can hold the RUN
+    // button, tap JUMP, or tap HUD slots at the same time. Each changed touch
+    // is routed by what it landed on, tracked by identifier.
     mouseTarget.addEventListener('touchstart', (e) => {
-      const p = touchXY(e);
-      this._touchStart = { x: p.x, y: p.y };
-      // A touch that lands on the HUD (dashboard band, a slot, an open panel —
-      // main.js supplies the hit test) is UI, not movement: it must select,
-      // never walk the character toward the bottom of the screen.
-      this._touchUI = !!(this.uiHitTest && this.uiHitTest(p.x, p.y));
-      if (this._touchUI) { this.mouseX = p.x; this.mouseY = p.y; e.preventDefault(); return; }
-      setFromTouch(p);
-      this.mouseHeld = true;
+      for (const t of e.changedTouches) {
+        const p = { x: t.clientX, y: t.clientY };
+        const btn = this.touchButtonHit ? this.touchButtonHit(p.x, p.y) : null;
+        if (btn === 'run') { this._runTouchId = t.identifier; this._touchRun = true; continue; }
+        if (btn === 'jump') { this._touchJump = true; continue; } // one-shot
+        if (this.uiHitTest && this.uiHitTest(p.x, p.y)) {
+          // HUD touch: selects, never walks. Tap resolves on touchend.
+          this._uiTouchId = t.identifier;
+          this._touchStart = { x: p.x, y: p.y };
+          this._touchUI = true;
+          this.mouseX = p.x; this.mouseY = p.y;
+          continue;
+        }
+        if (this._moveTouchId == null) { // first free world finger drives movement
+          this._moveTouchId = t.identifier;
+          this._touchStart = { x: p.x, y: p.y };
+          this._touchUI = false;
+          setFromTouch(p);
+          this.mouseHeld = true;
+        }
+      }
       e.preventDefault();
     }, { passive: false });
     mouseTarget.addEventListener('touchmove', (e) => {
-      if (this._touchUI) { e.preventDefault(); return; }
-      setFromTouch(touchXY(e));
+      for (const t of e.changedTouches) {
+        if (t.identifier === this._moveTouchId) setFromTouch({ x: t.clientX, y: t.clientY });
+      }
       e.preventDefault();
     }, { passive: false });
     mouseTarget.addEventListener('touchend', (e) => {
-      const p = touchXY(e);
-      const s = this._touchStart;
-      const moved = s ? Math.hypot(p.x - s.x, p.y - s.y) : 999;
-      // A quick, still tap is an action (a drag/hold was just movement, so it
-      // shouldn't also swing). A UI touch always lands its tap, so a slot
-      // press + release resolves to the one-click equip/swap in main.js.
-      if (this._touchUI || moved < 16) { this.mouseX = p.x; this.mouseY = p.y; this.mousePressed = true; }
-      this.touchVec = null;
-      this.mouseHeld = false;
-      this.upAt = { x: p.x, y: p.y };
-      this._touchStart = null;
-      this._touchUI = false;
+      for (const t of e.changedTouches) {
+        const p = { x: t.clientX, y: t.clientY };
+        if (t.identifier === this._runTouchId) { this._runTouchId = null; this._touchRun = false; continue; }
+        if (t.identifier === this._uiTouchId) {
+          // A HUD tap always lands, so slot press + release resolves to the
+          // one-click equip/swap (or manage-mode move) in main.js.
+          this._uiTouchId = null;
+          this._touchUI = false;
+          this.mouseX = p.x; this.mouseY = p.y;
+          this.mousePressed = true;
+          this.upAt = { x: p.x, y: p.y };
+          continue;
+        }
+        if (t.identifier === this._moveTouchId) {
+          const s = this._touchStart;
+          const moved = s ? Math.hypot(p.x - s.x, p.y - s.y) : 999;
+          // A quick, still tap is an action (a drag/hold was just movement,
+          // so it shouldn't also swing).
+          if (moved < 16) { this.mouseX = p.x; this.mouseY = p.y; this.mousePressed = true; }
+          this.touchVec = null;
+          this.mouseHeld = false;
+          this.upAt = { x: p.x, y: p.y };
+          this._touchStart = null;
+          this._moveTouchId = null;
+        }
+      }
       e.preventDefault();
     }, { passive: false });
   }
@@ -156,7 +191,7 @@ export class Input {
   }
 
   sprinting() {
-    return this.isDown('ShiftLeft') || this.isDown('ShiftRight');
+    return this.isDown('ShiftLeft') || this.isDown('ShiftRight') || this._touchRun;
   }
 
   usePressed() {
@@ -205,6 +240,7 @@ export class Input {
   }
 
   jumpPressed() {
+    if (this._touchJump) { this._touchJump = false; return true; }
     return this.consumePress('Space');
   }
 
