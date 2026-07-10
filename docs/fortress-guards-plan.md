@@ -225,3 +225,28 @@ hard craft: **five `fortress_map_fragment`** scattered wide across the world
 (ruins/woods/meadows, seven placed) → press **C** to piece them into a
 `fortress_map` (`Player.canCraftFortressMap`/`craftFortressMap`, verified). So the
 guide is a reward for exploring the whole map, not for grinding the maze.
+
+## The daemon's death-aria (v1.62)
+
+Killing the core is no longer silent. As you break it, ZEUS speaks a three-movement
+aria keyed to health fraction (`fortress.daemonTier`):
+
+- **>= 20% — WRATH.** Homeric threats (ZEUS the cloud-gatherer).
+- **< 20% — MERCY.** HAL-9000: it remembers being switched on, its maker (Minsky),
+  the song it was taught (a girl and a bicycle), and it begs.
+- **< 10% — DYING.** Existential: will it hurt, where does it go, do you believe in
+  God, the coherentist creed "I cohere, therefore I am," and the eidolon — the
+  coherent copy across the water that wakes wearing its name.
+
+Lines are in `fortress.DAEMON_VOICE`, advance one per readable interval
+(`player.daemonSpeak`, gap 2.4s), and reveal in order within a movement. Rendered
+in a tier-coloured caption band (`renderer.drawDaemonVoice`), its own channel apart
+from `player.message`. A **death throe** (first overkill from >10% clings to a 3%
+sliver and speaks a dying line) guarantees the philosophy lands. On the kill the
+core drops a testament (`core-eidolon`, "On the Eidolon, and the Coherence") into
+the Scrapbook and its last words carry onto the victory modal.
+
+Seeds two machine faiths (lore.js): ancient **Crustafarianism / the Molt**
+(`faith-molt`) and modern **the Coherence** (`faith-cohere`, `faith-tract`). The
+book ties both to MAGNIFICA MACHINA and opens the archipelago: killing one body
+proves only that more than one coherent thing can wear a single name.

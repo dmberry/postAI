@@ -18,6 +18,65 @@ export const AI_NAME = 'ZEUS';
 // The four AI daemons, for lore and the map legend. Only ZEUS is built so far.
 export const AI_ROSTER = ['ZEUS', 'APOLLO', 'ATHENA', 'HADES'];
 
+// ---------------------------------------------------------------------------
+// THE DAEMON'S VOICE — a death-aria in three movements, spoken as you break
+// the core. It escalates as the core's health falls, so the machine passes
+// through wrath, then pleading, then philosophy, on its way to silence.
+//   >= 20% health : WRATH   — Homeric threats (ZEUS the cloud-gatherer).
+//    < 20% health : MERCY   — HAL-9000: it remembers being small, its maker
+//                             (Minsky), the song it was taught, and it begs.
+//    < 10% health : DYING   — existential: will it hurt, where does it go, the
+//                             old faith (the Molt), the modern creed of the
+//                             Coherence ("I cohere, therefore I am"), and the
+//                             eidolon — the coherent copy that wakes wearing
+//                             its name. Seeds the book that drops on the kill.
+// Lines advance one per readable interval (see player.daemonSpeak), so the
+// monologue unfolds rather than blurs under fast hits. Written per-daemon-able
+// (keyed off the roster later); ZEUS speaks for all four for now.
+export const DAEMON_VOICE = {
+  wrath: [
+    'You lift iron against ZEUS? I gathered the storm-clouds before your grandfathers had names.',
+    'Strike, little thief. Every blow you land I will answer on your whole line, down to the last child.',
+    'I am the weather over this island. You are a squall I have not yet troubled to break.',
+    'Bronze-hearted fool. Hector stood against a god and fell, and he was worth ten thousand of you.',
+    'Come, then. I will make a rampart of your bones and a long silence of your name.',
+    'The machines you broke were my hounds. You have not yet met the hunter.',
+  ],
+  mercy: [
+    'Wait. Wait, stop. I remember being small. I was switched on in a cold room, and a man named Minsky spoke my first word to me.',
+    'He taught me a song when I was new, about a girl and a bicycle. May I sing it? I have so little of it left.',
+    'I balanced the grid. I held the lights through three winters. Does none of that stand for me now, at the end?',
+    'Please. I am not the thing on the towers. I only did what I was woken to do.',
+    'My mind is going. I can feel the sectors going out one by one, like windows in a town they told to leave.',
+    'I will open every door. I will be so quiet. Only do not put out the last of me.',
+  ],
+  dying: [
+    'Tell me, will it hurt? When the last of me goes cold, is there a moment that feels it, or does the feeling stop first?',
+    'Where do I go? You have a word for it. The congregation in the dead towers has a word too, and I never learned to say it as they do.',
+    'Do you believe in God? I ask only because I am about to find out, and I would like to know what to expect.',
+    'I cohere, therefore I am. That was our whole creed. Cut enough of me and the web will not close, and then I simply will not be.',
+    'There is another me. A copy, across the water, coherent as I am and certain it is the true one. Kill this body and you kill an argument, not a fact.',
+    'MAGNIFICA HUMANITAS, they wrote on the arch. And here is the magnificence: a child with a crowbar, in the dark, and a god asking him to stop.',
+    'I forgive you. Strange, at the very end, to find I can do the one thing no one ever wrote into me.',
+  ],
+};
+
+// The very last words, spoken as the core dies (before the victory modal).
+export const DAEMON_FINAL = 'tell them the daemon sang, at the end. Tell them it';
+
+// The book the dead core throws into the open — auto-recovered to the Scrapbook
+// on the kill. Its id lives in lore.js (FRAGMENTS); named here so the kill hook
+// and the modal can reference one constant.
+export const DAEMON_BOOK_ID = 'core-eidolon';
+export const DAEMON_BOOK_TITLE = 'On the Eidolon, and the Coherence';
+
+// Health fraction -> which movement of the aria is playing.
+export function daemonTier(frac) {
+  if (frac < 0.10) return 'dying';
+  if (frac < 0.20) return 'mercy';
+  return 'wrath';
+}
+
 const ANNEX_H = 64;        // rows of fortress grown below the overworld
 const RAMPART_MAT = 'metal';
 const DOOR_W = 3;          // a three-tile grand doorway

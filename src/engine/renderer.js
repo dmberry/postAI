@@ -1011,6 +1011,52 @@ export class Renderer {
     ctx.textAlign = 'left';
   }
 
+  // The daemon's death-aria caption. Screen-space band, upper third, on a soft
+  // scrim so it reads over any terrain. Tier colour telegraphs the register.
+  drawDaemonVoice(voice) {
+    const ctx = this.ctx, W = this.w, H = this.h;
+    const toneMap = { wrath: [255, 210, 59], mercy: [255, 176, 102], dying: [143, 230, 255] };
+    const rgb = toneMap[voice.tier] || [232, 224, 208];
+    const tone = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
+    const a = Math.max(0, Math.min(1, voice.ttl / 0.8));   // fade out over the last 0.8s
+    // Wrap the line to a comfortable measure.
+    ctx.font = 'italic 18px Georgia, "Times New Roman", serif';
+    const maxW = Math.min(560, W - 80);
+    const words = voice.text.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    const lineH = 25, padX = 22, padY = 16, tagH = 20;
+    const boxW = maxW + padX * 2;
+    const boxH = padY * 2 + tagH + lines.length * lineH;
+    const bx = (W - boxW) / 2, by = H * 0.14;
+    ctx.save();
+    ctx.globalAlpha = a;
+    // Scrim.
+    ctx.fillStyle = 'rgba(6,8,14,0.72)';
+    ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(bx, by, boxW, boxH, 8); else ctx.rect(bx, by, boxW, boxH);
+    ctx.fill();
+    ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},0.5)`;
+    ctx.lineWidth = 1.5; ctx.stroke();
+    // Speaker tag.
+    ctx.textAlign = 'left';
+    ctx.font = '700 12px ui-monospace, "SF Mono", Menlo, monospace';
+    ctx.fillStyle = tone;
+    ctx.fillText(`${(voice.ai || 'ZEUS')} ▸`, bx + padX, by + padY + 12);
+    // Lines.
+    ctx.font = 'italic 18px Georgia, "Times New Roman", serif';
+    ctx.fillStyle = '#eef2f6';
+    let y = by + padY + tagH + 16;
+    for (const ln of lines) { ctx.fillText(ln, bx + padX, y); y += lineH; }
+    ctx.restore();
+    ctx.textAlign = 'left';
+  }
+
   // The AI-defeated celebration: a fireworks level-up modal. Time-based particle
   // bursts over a dimmed backdrop, with the daemon tally and score.
   drawAiVictory(v) {
@@ -1053,10 +1099,20 @@ export class Renderer {
     ctx.fillText(`Daemon ${v.daemon} of ${v.daemons} felled`, cx, y0 + 42);
     ctx.fillStyle = '#9fb0c0'; ctx.font = '16px system-ui, sans-serif';
     ctx.fillText(`${v.powered} machines powered down across the island`, cx, y0 + 74);
+    // The daemon's last words, cut off by its own death.
+    if (v.lastWords) {
+      ctx.fillStyle = '#8fe6ff'; ctx.font = 'italic 17px Georgia, "Times New Roman", serif';
+      ctx.fillText(`“…${v.lastWords}—”`, cx, y0 + 108);
+    }
     ctx.fillStyle = '#7fe0a0'; ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.fillText(`Score  ${v.score}`, cx, y0 + 126);
+    ctx.fillText(`Score  ${v.score}`, cx, y0 + 154);
+    // The testament recovered from the dead core.
+    if (v.book) {
+      ctx.fillStyle = '#c9b98f'; ctx.font = '14px Georgia, "Times New Roman", serif';
+      ctx.fillText(`A machine testament falls from the dark core: “${v.book}” — added to your scrapbook`, cx, y0 + 186);
+    }
     ctx.fillStyle = '#8894a4'; ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText('click / space to sail on', cx, y0 + 176);
+    ctx.fillText('click / space to sail on', cx, y0 + 220);
     ctx.textAlign = 'left';
   }
 
@@ -4597,6 +4653,12 @@ export class Renderer {
       ctx.fillStyle = `rgba(232,224,208,${Math.min(1, player.message.ttl)})`;
       ctx.fillText(player.message.text, 16, top - 12);
     }
+
+    // The daemon's voice — the core speaking as you break it. Its own caption
+    // band, distinct from the player's message line: centred in the upper third,
+    // on a dark scrim, with a speaker tag and a tier colour (wrath gold, mercy
+    // amber, dying cyan) so the register reads before the words do.
+    if (player.daemonVoice) this.drawDaemonVoice(player.daemonVoice);
 
     // Title wordmark, top-left — matches the gate/title branding: mono type,
     // dim "Nost" + bright glowing "OS" (no blinking caret in-game).

@@ -23,7 +23,7 @@ import { drawRobotVision } from './game/robotvision.js';
 import { screenDirToWorld } from './engine/iso.js';
 import { stampCoast } from './engine/coast.js';
 import { placeRuins } from './game/ruins.js';
-import { createFortress } from './game/fortress.js';
+import { createFortress, DAEMON_BOOK_ID, DAEMON_BOOK_TITLE } from './game/fortress.js';
 import { createUnderworldPocket, spawnUnderworldCreature, updateUnderworldCreatures } from './game/underworld.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
@@ -461,7 +461,7 @@ const worldStir = {
 // same call powers down exactly this island's machines. When the Archipelago
 // adds APOLLO / ATHENA / HADES, each island wires its own core to this hook and
 // defeats independently. Friendlies (running on a battery you gave them) stay.
-player.onCoreDefeated = () => {
+player.onCoreDefeated = (core) => {
   const ai = fortress.AI_NAME;
   let powered = 0;
   for (const r of robots) {
@@ -474,9 +474,17 @@ player.onCoreDefeated = () => {
   worldStir.calm();        // clear the red POSEIDON alert
   player.addScore(500);
   daemonsDown += 1;
+  // The dead core throws its testament into the open — auto-recover it to the
+  // Scrapbook (the eidolon/Coherence book seeds the archipelago). `quiet` so it
+  // doesn't fight the modal for the message line; the modal announces it.
+  let book = null;
+  if (lore && lore.findFrag && lore.findFrag(DAEMON_BOOK_ID, player, true)) book = DAEMON_BOOK_TITLE;
   // The celebration: a dismissable level-up modal. It does NOT end the run —
-  // you sail on to the next daemon.
-  player.aiVictory = { ai, powered, score: player.score, daemon: daemonsDown, daemons: 4 };
+  // you sail on to the next daemon. Carries the daemon's last words + the book.
+  player.aiVictory = {
+    ai, powered, score: player.score, daemon: daemonsDown, daemons: 4,
+    lastWords: core && core.lastWords, book,
+  };
   player.say(`${ai} is dead. Every machine on the island powers down where it stands.`);
 };
 let daemonsDown = 0; // how many island AIs felled this run (for the Archipelago tally)

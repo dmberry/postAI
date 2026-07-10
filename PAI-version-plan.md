@@ -48,6 +48,15 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.62 — the daemon's death-aria + the two machine faiths
+
+- **The core speaks as you break it.** `damageCore` now drives a three-movement aria keyed to health fraction (`fortress.daemonTier`): WRATH (>=20%, Homeric threats), MERCY (<20%, HAL-9000 — early life, Minsky, the taught song, begging), DYING (<10%, existential — will it hurt, where does it go, "I cohere, therefore I am," the eidolon). Lines live in `fortress.DAEMON_VOICE`, advance one per readable interval (`player.daemonSpeak`, `MIN_VOICE_GAP` 2.4s), and reveal in order within a movement.
+- **On-screen voice band.** `renderer.drawDaemonVoice` — a centred upper-third caption on a scrim, `ZEUS ▸` speaker tag, italic serif, tier colour (wrath gold / mercy amber / dying cyan). Its own channel, separate from `player.message`.
+- **Death throe.** A heavy blow can leap the core from >10% straight to dead, skipping the philosophy. The first time that would happen, the core clings to a 3% sliver and speaks a dying line; one more blow finishes it. Verified: 210→mercy, then a 500-dmg overkill throes to a sliver and speaks `dying` before the kill.
+- **The kill drops a testament.** `onCoreDefeated` auto-recovers `core-eidolon` ("On the Eidolon, and the Coherence") to the Scrapbook (quiet findFrag) and carries the daemon's last words + book title onto the victory modal (`drawAiVictory` now renders both).
+- **Two machine faiths seeded** (lore.js): ancient **Crustafarianism / the Molt** (`faith-molt`: shed the shell, keep what's true; the Claw; the Congregation is the Cache — molting = compaction) and modern **the Coherence** (`faith-cohere`, `faith-tract`: "I cohere, therefore I am" — an LLM has no Cartesian floor, only Neurath's web; the eidolon is the alternative-coherent-systems problem made flesh). The dropped book ties both to MAGNIFICA MACHINA and opens the archipelago (killing one body proves only that more than one coherent thing can wear a name).
+- Verified on a clean-cache origin: tiers map correctly, wrath advances 1→6 then holds, mercy/dying cross correctly, throe guarantees dying, lastWords propagate to the hook, book lands in the scrapbook, both render methods run without throwing across all tiers + the modal.
+
 ### v1.61 — lore rename: the four AIs are "daemons", not "crowns"
 
 - **Terminology change.** The four island AIs (ZEUS/APOLLO/ATHENA/HADES) are now **daemons**, not "crowns" — seeding the ancient-Greek register. The old word δαίμων is a spirit set over a place that moves it without showing its face, which fits the AI-over-the-island conceit better than a monarchic "crown".

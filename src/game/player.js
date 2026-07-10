@@ -2,6 +2,7 @@ import { screenDirToWorld } from '../engine/iso.js';
 import { sfx } from '../engine/sound.js';
 import { ITEMS } from './items.js';
 import { OBJECTS } from './tiles.js';
+import { DAEMON_VOICE, DAEMON_FINAL, daemonTier } from './fortress.js';
 
 const WALK_SPEED = 4.2;   // tiles per second
 const SPRINT_SPEED = 7.5;
@@ -152,6 +153,7 @@ export class Player {
     this.swingTimer = 0;
     this.hurtTimer = 0;   // brief red flash after taking damage
     this.message = null;  // {text, ttl} transient HUD line
+    this.daemonVoice = null;  // {text, ttl, tier, ai} — the core speaking as you break it
 
     this.name = 'Adam';
     this.gender = 'm';    // 'm' | 'f' | 'u'
@@ -554,6 +556,10 @@ export class Player {
     if (this.message) {
       this.message.ttl -= dt;
       if (this.message.ttl <= 0) this.message = null;
+    }
+    if (this.daemonVoice) {
+      this.daemonVoice.ttl -= dt;
+      if (this.daemonVoice.ttl <= 0) this.daemonVoice = null;
     }
     this.unstickIfTrapped(map);
 
@@ -1494,12 +1500,47 @@ export class Player {
     if (obj.defeated) return;
     obj.maxHp = obj.maxHp ?? obj.hp ?? 250;
     obj.hp = (obj.hp ?? obj.maxHp) - amount;
-    if (obj.hp > 0) return;
+    if (obj.hp > 0) { this.daemonSpeak(obj); return; }
+    // Death throe: a heavy blow can leap the core from above 10% straight to
+    // dead, skipping the final movement of the aria. The first time that would
+    // happen, it clings to a last sliver and speaks the dying lines instead —
+    // one more blow finishes it. (Also just reads well: the god will not quite go.)
+    if (!obj._throed && obj._voiceTier !== 'dying') {
+      obj._throed = true;
+      obj.hp = Math.max(1, Math.round(obj.maxHp * 0.03));
+      obj.shake = 0.3;
+      this.daemonSpeak(obj);
+      return;
+    }
     obj.defeated = true;
     const cx = obj.x + (obj.fw || 1) / 2, cy = obj.y + (obj.fh || 1) / 2;
     for (let s = 0; s < 14; s++) this.sparkAt(map, cx + (Math.random() - 0.5) * (obj.fw || 4), cy + (Math.random() - 0.5) * (obj.fh || 4));
     this.addScore(200);
+    // The last words carry onto the victory modal (the fireworks would cover a
+    // voice-band line), so hand them to the kill hook.
+    obj.lastWords = DAEMON_FINAL;
     if (this.onCoreDefeated) this.onCoreDefeated(obj);
+  }
+
+  // Speak the next line of the core's death-aria. Gated so the monologue reads:
+  // a fresh line fires instantly when the aria crosses into a new movement
+  // (wrath -> mercy -> dying), and otherwise no faster than MIN_VOICE_GAP, so
+  // rapid blows don't flicker through the whole script at once. The per-tier
+  // index advances so successive lines within a movement are revealed in order.
+  daemonSpeak(obj) {
+    const MIN_VOICE_GAP = 2.4;
+    const frac = obj.hp / (obj.maxHp || 1);
+    const tier = daemonTier(frac);
+    const now = this.playSeconds || 0;
+    const changed = obj._voiceTier !== tier;
+    if (!changed && now - (obj._voiceAt ?? -99) < MIN_VOICE_GAP) return;
+    if (changed) { obj._voiceTier = tier; obj._voiceIdx = 0; }
+    const pool = DAEMON_VOICE[tier] || [];
+    if (!pool.length) return;
+    const line = pool[Math.min(obj._voiceIdx || 0, pool.length - 1)];
+    obj._voiceIdx = (obj._voiceIdx || 0) + 1;
+    obj._voiceAt = now;
+    this.daemonVoice = { text: line, ttl: 5.5, tier, ai: obj.ai || 'ZEUS' };
   }
 
   // Smash an abandoned car open. A crowbar (high robotDamage) pries it apart
