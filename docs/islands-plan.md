@@ -7,10 +7,11 @@ reached by swimming (exhausting but possible) or by a **boat crafted from wood
 using tools**. Each island is laid out differently according to its god's/AI's
 character.
 
-**Status: draft for review (2026-07-10). Nothing here is built.** Stage 0 is
-the gating refactor; Stages 3+ are designed to be built by parallel sessions
-without file contention. Read "Working rules for parallel sessions" before
-touching anything.
+**Status: design APPROVED (David, 2026-07-10) — §10 decisions are settled
+except island owners. Nothing here is built yet.** Stage 0 is the gating
+refactor; Stages 3+ are designed to be built by parallel sessions without
+file contention. Read "Working rules for parallel sessions" before touching
+anything.
 
 ---
 
@@ -250,19 +251,35 @@ Land that first.
    fortress.js (`AI_NAME`), which Stage 0c makes CALYPSO-local anyway;
    fortress Stages 3b-3/3b-4/4 continue on CALYPSO independently.
 
-## 10. Decisions needed (David / Henrik)
+## 10. Decisions (David, 2026-07-10)
 
-1. **Crossing v1**: cheap transition (recommended first) or real sea map from
-   the start?
-2. **Boat recipe**: 12 wood + axe/saw in hand? Craftable anywhere and carried
-   to shore, or only *at* the shore (recommended: at the shore, it's placed
-   not pocketed)?
-3. **Island discovery**: all four islands on the chart from the start, or
-   learned from lore/HERMES (`read islands`) before they're navigable?
-   (Recommended: learned; it makes the archive matter.)
-4. **Gating**: can you sail to APOLLO before ZEUS falls, or does each AI's
-   fall unlock the next heading? (Recommended: open sailing, scaled danger —
-   the Odyssey is not a level sequence.)
-5. **ITHACA ending**: reachable early (and you *see* home but can't stay —
-   strong Odyssey move) or only after all four AIs fall?
-6. **Owner per island** for Stage 3 (who takes APOLLO / ATHENA / HADES).
+1. **Crossing v1: cheap transition first.** Heading chart + timed crossing
+   sequence (stamina/hull drain, droid events). A real open-sea map may
+   replace it later; the World abstraction means that swap never touches the
+   islands.
+2. **Boat recipe: shore-placed** (provisional, numbers to playtest). Crafted
+   only *at* the shore and placed as a world object, never pocketed — a boat
+   is a place, and departure is a deliberate act from a beach. Starting
+   numbers: 12 wood + a real tool (axe/saw class) in hand.
+3. **Island discovery: home known, the rest learned.** ITHACA's heading is
+   known from the start (you know where home is; you just can't survive the
+   trip yet). APOLLO/ATHENA/HADES must be learned from lore, HERMES documents
+   (`read islands`), and found charts — you sail on rumour, and the archive
+   becomes navigation.
+4. **Gating: open sailing, scaled danger.** Nothing stops an early voyage to
+   HADES; everything there outclasses you. Every risk is chosen — the game's
+   core register. Each island therefore needs a survivable-if-terrified
+   arrival experience for an underpowered player (a beach with cover, a first
+   cache), balanced per island in Stage 3.
+5. **ITHACA: visible early, turned back.** You can sail for home before the
+   AIs fall — see the smoke, maybe a figure on the shore — but a diegetic
+   force turns you back: POSEIDON's storm, *obviously aimed at you*, so it
+   reads as "he won't let you home yet", never as an invisible wall or
+   "content locked". Home becomes a longing, not a checklist. This is a
+   Stage-3 ITHACA build requirement: the turn-back must be built with the
+   island, not bolted on.
+6. **OPEN — owner per island** for Stage 3 (David / Henrik / a directed
+   session each for APOLLO / ATHENA / HADES). Natural split observed: HADES
+   touches the Backspace plumbing; ATHENA generalises the M6 pack/guard
+   logic (Henrik's territory). ITHACA comes first regardless and is small
+   enough for either.
