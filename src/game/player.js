@@ -45,6 +45,7 @@ const TORPOR_TIME = 9;        // seconds of daze added per fruit eaten
 const TORPOR_MAX = 22;        // stacking cap, so a fistful doesn't strand you forever
 const TORPOR_SLOW = 0.5;      // movement multiplier while dazed
 const TORPOR_SWAY = 1.0;      // radians of peak heading roll while dazed (scaled by ease)
+const ANVIL_SLOW = 0.1;       // carrying the anvil, anywhere on you: a tenth of your pace
 const TORPOR_FOOD_DRAIN = 2;  // extra food/sec while dazed — you forget to look after yourself
 
 const JUMP_VZ = 3.8;      // initial jump velocity (world units/s)
@@ -653,6 +654,11 @@ export class Player {
       if (objHere && objHere.type === 'tree') speed *= 0.75;
       // Lotus daze: heavy limbs. Fighting the pull out of the grove is slow work.
       if (this.torpor > 0) speed *= TORPOR_SLOW;
+      // The anvil: an anvil is an anvil, wherever you put it. 10% pace.
+      if (this.carryingAnvil()) {
+        speed *= ANVIL_SLOW;
+        if (!this._anvilSaid) { this._anvilSaid = true; this.say('The anvil is exactly as heavy as an anvil. You can barely move.'); }
+      } else if (this._anvilSaid) this._anvilSaid = false;
       // Up on a block top, ease off the pace — the footprint is small and a
       // full walking speed makes edges twitchy to line up. Slower is easier
       // to control up there.
@@ -794,6 +800,16 @@ export class Player {
     if (input.swapPressed()) this.swapHands();
     if (input.dropPressed()) this.drop(map);
     this.pickupNearby(map);
+  }
+
+  // True if an anvil is anywhere on your person — hands, pockets, backpack
+  // slots, or the spare-weapon sleeve. There is no clever way to carry it.
+  carryingAnvil() {
+    if (this.hands === 'anvil') return true;
+    if (this.pockets.some((s) => s && s.item === 'anvil')) return true;
+    if (this.backpack && (this.backpack.weapon === 'anvil'
+      || this.backpack.slots.some((s) => s && s.item === 'anvil'))) return true;
+    return false;
   }
 
   // Drop a specific slot's whole contents on the ground ahead (used by

@@ -4044,6 +4044,21 @@ export class Renderer {
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
         ctx.fillRect(-5, -1, 10, 4); // label band
         break;
+      case 'anvil':
+        // The classic silhouette: horn, face, waist, foot — unmistakable.
+        ctx.fillStyle = itemDef.color;
+        ctx.beginPath();
+        ctx.moveTo(-9, -7); ctx.lineTo(4, -7);
+        ctx.quadraticCurveTo(10, -7, 11, -4);
+        ctx.quadraticCurveTo(7, -3, 4, -3);
+        ctx.lineTo(3, -3); ctx.lineTo(3, 0);
+        ctx.lineTo(-5, 0); ctx.lineTo(-5, -3); ctx.lineTo(-9, -3);
+        ctx.closePath(); ctx.fill();
+        ctx.fillRect(-3, 0, 6, 3);   // waist
+        ctx.fillRect(-6, 3, 12, 3);  // foot
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
+        ctx.fillRect(-9, -7, 13, 1.6); // worked face catches the light
+        break;
       case 'lotus_fruit':
         // A plump pale fig-like fruit, cream-gold like the grove's blooms.
         ctx.fillStyle = itemDef.color;

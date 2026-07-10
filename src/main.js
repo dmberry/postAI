@@ -87,6 +87,7 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
     map.groundItems.push({ item, qty, x: x + 0.5, y: y + 0.5, keep: true });
   };
   for (let i = 0; i < 12; i++) drop(boards, 'torch', 1);
+  drop(boards, 'anvil', 1); // one anvil, somewhere in town. Good luck.
   for (let i = 0; i < 14; i++) drop(boards, 'tin', 1);
   for (let i = 0; i < 16; i++) drop(tallgrass, 'berries', 2 + Math.floor(rng() * 2));
   // Books are rarer: one copy of each plus two duplicates, buildings only.

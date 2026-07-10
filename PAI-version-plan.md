@@ -48,6 +48,15 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.71 — the anvil
+
+- New item `anvil` (material, stack 1, one seeded in the town boards,
+  keep:true): `player.carryingAnvil()` checks hands + pockets + backpack
+  slots + spare-weapon sleeve; movement multiplies by ANVIL_SLOW 0.1 with a
+  one-time message. Icon: classic silhouette. Verified headless: distance
+  ratio with/without = 0.100 exactly. Future hook: an anvil wants a forge —
+  crafting uses (robot-sword smithing?) left open.
+
 ### v1.70 — drunken lotus walk, mobile HUD touch, 64-stacks, new domains
 
 - **Lotus torpor reworked**: the grove drag (TORPOR_PULL) is gone; instead the

@@ -414,6 +414,15 @@ export const ITEMS = {
     stack: 64,
     color: '#a5493a',
   },
+  // An anvil. Absurdly heavy — carried ANYWHERE (hands, pockets, backpack)
+  // you walk at a tenth pace (player.js ANVIL_SLOW). One sits in the town:
+  // a prize for whoever works out how to want it.
+  anvil: {
+    name: 'Anvil',
+    kind: 'material',
+    stack: 1,
+    color: '#4a4e55',
+  },
   wood: {
     name: 'Wood',
     kind: 'resource',
