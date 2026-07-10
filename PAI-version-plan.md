@@ -48,6 +48,29 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.66 — wildflowers, lotus fix, sweeping maze, patient fireworks
+
+- **Lotus fruit fix (the reported "lotus does nothing")**: grove fruit was
+  pushed without `keep: true`, so the 160s default ground-decay rotted all of
+  it minutes into every run — long before anyone reached the south-west wilds.
+  Both worldgen push sites now keep. Pickup/eat paths were already sound.
+- **Wildflowers** (`scatterFlowers` + `drawFlower`, object type `flower`,
+  walk-through): banks of mostly-one-species blooms (daisy/campion/cornflower)
+  seated on gentle hill slopes (height 1–3), **daffodils** (taller, orange
+  trumpet) at 10% density in hollows/valleys (height ≤ −1), rare lone blooms
+  on the flat (0.6%). ~160–190 per seed. Pure scenery — the lotus grove stays
+  the only flower that does anything.
+- **Fortress maze**: corridors 3→4 wide (pitch 4→5, rows 9→7, similar band
+  height); the DFS is now weighted — lateral moves ×3, carrying straight on ×3
+  — so it carves long sweeping switchback runs instead of a twisty warren.
+  Verified solvable on seeds 1/42/1337 (guide 112/488/222 tiles).
+- **Victory modal**: the killing blow's own click/release used to dismiss it
+  on the next frame. Clicks are now swallowed but never dismiss; Space/Enter
+  works only after 3s, and the "SPACE to sail on" hint appears only then.
+- **`help` recommends the manual**: if `book_ronml` hasn't been read, help
+  appends a tip to find and read the RON-DOS Operator's Manual (ctx.hasManual
+  wired through both terminals).
+
 ### v1.65 — terminal sounds, copy/paste, more posters
 
 - **Audible verdict on every RON-ML command** (hooked on `runRonml`'s `{ok}`

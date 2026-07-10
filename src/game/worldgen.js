@@ -48,6 +48,7 @@ export function buildWorld(seed) {
   plantForests(map, rng, keepClear);
   layMeadows(map, rng, keepClear);
   plantLotusGrove(map, rng, keepClear);
+  scatterFlowers(map, rng, keepClear);
   scatterLoners(map, rng, keepClear);
   scatterWrecks(map, rng);
   paintGraffiti(map, rng);
@@ -538,6 +539,44 @@ function layMeadows(map, rng, keepClear) {
 // reads exactly like food. Eat one by accident (the eat key takes the first
 // edible thing in your pockets) and a dreamy torpor pulls you back here. One
 // grove per island; `map.lotusGrove` gives the pull-back its centre.
+// Decorative wildflowers, three registers (pure scenery — walk-through, no
+// mechanics; the lotus grove stays the only flower that DOES anything):
+// banks of mixed blooms on the gentle hill slopes, yellow daffodils drifting
+// through the valleys and hollows, and the odd lone flower out on the flat,
+// sparse on purpose. kind: 0 daisy, 1 campion, 2 cornflower, 3 daffodil.
+function scatterFlowers(map, rng, keepClear) {
+  const plant = (x, y, kind) => {
+    if (map.floorAt(x, y) !== 'grass' || map.objectAt(x, y)) return;
+    if (inKeepClear(x, y, keepClear)) return;
+    map.addObject('flower', x, y, { kind, n: 1 + Math.floor(rng() * 3), sway: rng() * Math.PI * 2 });
+  };
+  // Banks on the low hills: gather the gentle slopes and seat clusters there,
+  // each bank mostly one species so it reads as a drift, not confetti.
+  const hillTiles = [];
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+    const h = map.heightAt(x, y);
+    if (h >= 1 && h <= 3 && map.floorAt(x, y) === 'grass') hillTiles.push([x, y]);
+  }
+  const banks = Math.min(14, Math.floor(hillTiles.length / 40));
+  for (let b = 0; b < banks; b++) {
+    const [cx, cy] = hillTiles[Math.floor(rng() * hillTiles.length)];
+    const kind = rng() < 0.45 ? 0 : rng() < 0.55 ? 1 : 2;
+    const count = 6 + Math.floor(rng() * 7);
+    for (let i = 0; i < count; i++) {
+      const x = cx + Math.floor((rng() - 0.5) * 7), y = cy + Math.floor((rng() - 0.5) * 7);
+      plant(x, y, rng() < 0.8 ? kind : Math.floor(rng() * 3));
+    }
+  }
+  // Daffodils in the low ground — the valley flower.
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+    if (map.heightAt(x, y) <= -1 && rng() < 0.10) plant(x, y, 3);
+  }
+  // Lone blooms on the flat, rare enough to be a small pleasure to pass.
+  for (let y = 0; y < map.h; y++) for (let x = 0; x < map.w; x++) {
+    if (map.heightAt(x, y) === 0 && rng() < 0.006) plant(x, y, Math.floor(rng() * 3));
+  }
+}
+
 function plantLotusGrove(map, rng, keepClear) {
   // Seat it inside the south-west wilds forest region, nudged a little.
   const cx = 15 + Math.floor((rng() - 0.5) * 4);
@@ -558,9 +597,9 @@ function plantLotusGrove(map, rng, keepClear) {
       const rl = rng();
       if (d > r * 0.35 && rl < 0.5) {
         map.addObject('lotus', x, y, { variant: Math.floor(rng() * 3) });
-        if (rng() < 0.4 && fruit < 8) { map.groundItems.push({ item: 'lotus_fruit', qty: 1, x: x + 0.5, y: y + 0.5 }); fruit++; }
+        if (rng() < 0.4 && fruit < 8) { map.groundItems.push({ item: 'lotus_fruit', qty: 1, x: x + 0.5, y: y + 0.5, keep: true }); fruit++; }
       } else if (rl < 0.14 && fruit < 8) {
-        map.groundItems.push({ item: 'lotus_fruit', qty: 1, x: x + 0.5, y: y + 0.5 }); fruit++;
+        map.groundItems.push({ item: 'lotus_fruit', qty: 1, x: x + 0.5, y: y + 0.5, keep: true }); fruit++;
       }
     }
   }

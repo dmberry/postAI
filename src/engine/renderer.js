@@ -1129,8 +1129,13 @@ export class Renderer {
       ctx.fillStyle = '#c9b98f'; ctx.font = '14px Georgia, "Times New Roman", serif';
       ctx.fillText(`A machine testament falls from the dark core: “${v.book}” — added to your scrapbook`, cx, y0 + 186);
     }
-    ctx.fillStyle = '#8894a4'; ctx.font = '14px system-ui, sans-serif';
-    ctx.fillText('click / space to sail on', cx, y0 + 220);
+    // The dismiss hint appears only once the modal will actually honour it
+    // (main.js ignores Space/Enter for the first seconds so the fireworks play).
+    const shownFor = v.shownAt ? (performance.now() - v.shownAt) : 0;
+    if (shownFor > 3000) {
+      ctx.fillStyle = '#8894a4'; ctx.font = '14px system-ui, sans-serif';
+      ctx.fillText('SPACE to sail on', cx, y0 + 220);
+    }
     ctx.textAlign = 'left';
   }
 
@@ -2013,6 +2018,7 @@ export class Renderer {
         break;
       case 'tree': this.drawTree(obj); break;
       case 'lotus': this.drawLotus(obj); break;
+      case 'flower': this.drawFlower(obj); break;
       case 'column': this.drawColumn(obj); break;
       case 'colfall': this.drawColumn(obj); break;
       case 'marbleblock': this.drawMarbleBlock(obj); break;
@@ -3216,6 +3222,42 @@ export class Renderer {
     }
     ctx.fillStyle = '#f4ead0'; ctx.beginPath(); ctx.arc(c.x, by, 2.4, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#caa85e'; ctx.beginPath(); ctx.arc(c.x, by, 1.1, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Decorative wildflowers (worldgen.scatterFlowers): 1-3 small blooms per
+  // tile. kind: 0 white daisy, 1 pink campion, 2 blue cornflower, 3 yellow
+  // daffodil (the valley flower — taller, with an orange trumpet). Same
+  // innocent no-glow register as the lotus, deliberately smaller so the
+  // grove stays special.
+  drawFlower(obj) {
+    const ctx = this.ctx;
+    const PAL = [
+      { petal: '#f2f4ee', heart: '#e8c94f' },
+      { petal: '#e79ab8', heart: '#f4e08a' },
+      { petal: '#7d95e0', heart: '#3e4f8f' },
+      { petal: '#f2d84b', heart: '#e8973b' },
+    ];
+    const k = obj.kind || 0, p = PAL[k] || PAL[0];
+    const n = obj.n || 1;
+    for (let i = 0; i < n; i++) {
+      const a = (obj.sway || 0) + i * 2.4;
+      const c = worldToScreen(obj.x + 0.5 + Math.cos(a) * 0.22, obj.y + 0.5 + Math.sin(a) * 0.22);
+      const tall = k === 3 ? 8 : 5;
+      ctx.strokeStyle = '#5d7a40'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.moveTo(c.x, c.y + 1); ctx.lineTo(c.x, c.y - tall); ctx.stroke();
+      const by = c.y - tall - 1.5;
+      ctx.fillStyle = p.petal;
+      for (let j = 0; j < 5; j++) {
+        const pa = (j / 5) * Math.PI * 2 + a;
+        ctx.beginPath(); ctx.ellipse(c.x + Math.cos(pa) * 2.2, by + Math.sin(pa) * 1.5, 2.0, 1.2, pa, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = p.heart;
+      ctx.beginPath(); ctx.arc(c.x, by, k === 3 ? 1.8 : 1.2, 0, Math.PI * 2); ctx.fill();
+      if (k === 3) {
+        ctx.strokeStyle = '#c9762b'; ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.arc(c.x, by, 1.9, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
   }
 
   drawRock(tx, ty) {

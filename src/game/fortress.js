@@ -101,13 +101,18 @@ function growSouth(map, rows, fillFloor) {
 
 // A recursive-backtracker labyrinth carved into a full-width band of the annex,
 // so the raid must solve it to get from the doorway down to the sanctum — it
-// spans edge to edge, no walking around. Corridors are 3 wide (room to fight);
-// walls are 1-thick charcoal darkstone. A single entrance (aligned to the
+// spans edge to edge, no walking around. Corridors are 4 wide (room to fight,
+// and to FLEE — the violation-response packs chase you back through here);
+// walls are 1-thick charcoal darkstone. The carve is biased hard toward LONG
+// LATERAL RUNS (weighted DFS: lateral moves and keeping-straight both favoured)
+// so the maze reads as sweeping switchbacks you negotiate across the band,
+// not a twisty warren — long diagonals on screen, and a clearer line of sight
+// when you're running for the way out. A single entrance (aligned to the
 // doorway) and a single exit (aligned to the core) are cut through the ring.
 // Returns the band's bottom row so the caller knows where the maze ends.
 function buildMaze(map, rng, cfg) {
   const { mx0, my0, cols, rows, gateCol, wallH } = cfg;
-  const CW = 3, PITCH = 4;              // 3-wide corridors, 1-wide walls
+  const CW = 4, PITCH = 5;              // 4-wide corridors, 1-wide walls
   const w = map.w;
   const open = new Set();
   const idx = (x, y) => y * w + x;
@@ -124,19 +129,28 @@ function buildMaze(map, rng, cfg) {
   // DFS from the entrance cell so every cell links back to it (a perfect maze:
   // exactly one route to the exit cell at the bottom).
   const visited = Array.from({ length: rows }, () => new Array(cols).fill(false));
-  const stack = [[gateCol, 0]];
+  const stack = [[gateCol, 0, 0, 0]]; // c, r, and the direction that led here
   visited[0][gateCol] = true; carveCell(gateCol, 0);
   const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   while (stack.length) {
-    const [c, r] = stack[stack.length - 1];
+    const [c, r, idc, idr] = stack[stack.length - 1];
     const opts = [];
     for (const [dc, dr] of DIRS) {
       const nc = c + dc, nr = r + dr;
-      if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited[nr][nc]) opts.push([nc, nr]);
+      if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited[nr][nc]) opts.push([nc, nr, dc, dr]);
     }
     if (!opts.length) { stack.pop(); continue; }
-    const [nc, nr] = opts[Math.floor(rng() * opts.length)];
-    visited[nr][nc] = true; carvePassage(c, r, nc, nr); carveCell(nc, nr); stack.push([nc, nr]);
+    // Weighted pick: lateral moves count triple, and carrying straight on
+    // triples again — so corridors run long (especially across the band)
+    // before they turn, and the maze comes out as switchbacks, not crumbs.
+    const weighted = [];
+    for (const o of opts) {
+      let wgt = o[3] === 0 ? 3 : 1;                      // lateral bias
+      if (o[2] === idc && o[3] === idr) wgt *= 3;        // momentum
+      for (let i = 0; i < wgt; i++) weighted.push(o);
+    }
+    const [nc, nr, dc, dr] = weighted[Math.floor(rng() * weighted.length)];
+    visited[nr][nc] = true; carvePassage(c, r, nc, nr); carveCell(nc, nr); stack.push([nc, nr, dc, dr]);
   }
   const bandBottom = cellY(rows - 1) + CW;   // the 1-tile ring row below the last cell
   // Entrance gap up into the plaza, exit gap down toward the sanctum.
@@ -265,11 +279,11 @@ export function createFortress(map, seed, spawn) {
   // entrance/exit column is aligned to the doorway/core so the raid runs on a
   // straight north-south axis, but the only route through is the maze solution.
   const mazeRng = makeRng((seed ^ 0x0ada) >>> 0);
-  const MAZE_MX0 = 1, MAZE_PITCH = 4;
+  const MAZE_MX0 = 1, MAZE_PITCH = 5; // matches buildMaze's CW 4 + 1-wide walls
   const mazeCols = Math.floor((w - 2) / MAZE_PITCH);
   const gateCol = Math.max(0, Math.min(mazeCols - 1, Math.round((doorX0 + 1 - MAZE_MX0) / MAZE_PITCH)));
   const mazeBottom = buildMaze(map, mazeRng, {
-    mx0: MAZE_MX0, my0: seamY + 3, cols: mazeCols, rows: 9, gateCol, wallH: 40,
+    mx0: MAZE_MX0, my0: seamY + 3, cols: mazeCols, rows: 7, gateCol, wallH: 40,
   });
 
   // The quad: the open paved killing-ground between the maze and the sanctum,

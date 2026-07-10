@@ -28,6 +28,7 @@ export const FLOORS = {
 export const OBJECTS = {
   tree:    { solid: true, soft: true }, // `soft`: the PLAYER pushes through (a human edge in the woods), but it still blocks robots and blocks shots (cover)
   lotus:   { solid: false }, // lotus plant: walk-through decor marking the lotus-eaters' grove
+  flower:  { solid: false }, // decorative wildflowers (worldgen.scatterFlowers): pure scenery, walk-through
   column:  { solid: true },  // ruined marble column: a pillar that blocks and gives shot-cover
   colfall: { solid: false }, // toppled column / drum lying in the grass: decorative, walk over it
   marbleblock: { solid: true }, // fallen entablature / altar stone among the columns: blocks, gives cover

@@ -454,7 +454,7 @@ const HELP_VERBS = [
   ['notes', 'unit -> unit', 'open the notepad — browse the pages you\'ve found worth keeping', '', ''],
   ['help', 'unit -> unit', 'this reference, or `help <verb>` for one verb', '', ''],
 ];
-function helpText(topic, station) {
+function helpText(topic, station, hasManual) {
   if (topic) {
     const row = HELP_VERBS.find((v) => v[0].split(' ')[0] === topic);
     if (!row) return `no help for '${topic}'. try: help`;
@@ -471,13 +471,24 @@ function helpText(topic, station) {
   const example = station === 'hermes'
     ? '  e.g.  read moly      make berries      archive'
     : '  e.g.  scan |> nearest      let k = hack OB-1A2B in crash OB-1A2B k';
-  return [
+  const out = [
     title,
     ...lines,
     '',
     '  let x = e in body   bind a value    |>   pipe left into right',
     example,
-  ].join('\n');
+  ];
+  // If the player hasn't read the full manual yet, say so — this reference is
+  // the short form, and the bound RON-DOS Operator's Manual is a real find
+  // (teaches the language properly and unlocks console autocomplete).
+  if (!hasManual) {
+    out.push('', '  TIP: this is only the short reference. The full RON-DOS',
+      '  Operator\'s Manual is out there — a bound copy in a resistance',
+      '  cache, torn pages in the ruins. Find and READ it: it teaches the',
+      '  language properly, and this console will start finishing your',
+      '  typing for you.');
+  }
+  return out.join('\n');
 }
 
 // Runs one line of RON-ML against a world context. Returns
@@ -491,7 +502,7 @@ export function runRonml(source, ctx) {
   // than printing text.)
   const trimmed = source.trim();
   if (trimmed === 'help' || trimmed.startsWith('help ')) {
-    return { ok: true, text: helpText(trimmed.slice(4).trim(), ctx && ctx.station) };
+    return { ok: true, text: helpText(trimmed.slice(4).trim(), ctx && ctx.station, ctx && ctx.hasManual) };
   }
   try {
     const toks = tokenize(source);

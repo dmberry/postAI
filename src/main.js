@@ -907,6 +907,7 @@ function ronmlCtx() {
     && Math.hypot(r.x - player.x, r.y - player.y) <= RONML_ROBOT_RANGE;
   return {
     station: 'ob', // an AI obelisk (TIRESIAS) — the AI-network verbs live here
+    hasManual: !!(player.readManuals && player.readManuals.has('book_ronml')), // helpText hints at the manual until it's read
     listObelisks: () => obeliskObjs.filter((o) => !o.destroyed).map((o) => o.code),
     distanceToNode: (id) => {
       const o = findObelisk(id);
@@ -1056,6 +1057,7 @@ function ronmlCtx() {
 function hermesCtx() {
   return {
     station: 'hermes',
+    hasManual: !!(player.readManuals && player.readManuals.has('book_ronml')),
     showNotepad: () => { openNotebook(); },
     read: (topic) => hermesRead(topic),
     print: () => {}, // never reached — HERMES print takes a topic (see printDoc)
@@ -2063,10 +2065,16 @@ function update(dt) {
   // world behind it until dismissed; then the run carries on (you don't win the
   // game by felling one daemon — you sail for the next).
   if (player.aiVictory) {
-    if (input.clickPos() || input.consumeUp() || input.consumePress('Space') || input.consumePress('Enter')) {
-      input.consumeClick();
-      player.aiVictory = null;
-    }
+    // Stray input must NOT eat the celebration: the killing blow's own click
+    // (or its release) used to dismiss the modal on the very next frame,
+    // before a single firework had burst. Clicks are swallowed but never
+    // dismiss; only a deliberate Space/Enter does, and only once the show
+    // has had a few seconds to play.
+    player.aiVictory.shownAt ??= performance.now();
+    input.consumeClick(); input.clickPos(); input.consumeUp();
+    const shownFor = performance.now() - player.aiVictory.shownAt;
+    const wantsOut = input.consumePress('Space') || input.consumePress('Enter');
+    if (wantsOut && shownFor > 3000) player.aiVictory = null;
     return;
   }
 
