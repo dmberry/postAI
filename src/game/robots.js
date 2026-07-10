@@ -1,4 +1,5 @@
 import { makeRng } from './rng.js';
+import { sfx } from '../engine/sound.js';
 
 // Hunter robots: the machines the towers send after the last humans. Two
 // classes, each with a signature limitation the player can learn. T1s are
@@ -1082,6 +1083,7 @@ function fireT3Lasers(r, player, map, ease) {
       x1: player.x, y1: player.y, prog: 0, kind: 'laser_t3',
     });
   }
+  sfx.play('laser'); // one pew per salvo (play() debounces regardless)
   const block = player.blockRangedShot ? player.blockRangedShot(r.x, r.y) : null;
   if (block === 'reflect') {
     r.hp -= 999; r.hurt = true;
@@ -1394,6 +1396,7 @@ function updateW4(r, dt, player, map) {
     if (r.attackTimer <= 0) {
       r.attackTimer = W4_FIRE_COOLDOWN;
       (map.projectiles ??= []).push({ x0: r.x, y0: r.y, x1: player.x, y1: player.y, prog: 0, kind: 'laser' });
+      sfx.play('laser');
       // A shield or forcefield can stop the bolt; a mirror shield throws it
       // straight back and hurts the shooter.
       const block = player.blockRangedShot ? player.blockRangedShot(r.x, r.y) : null;
@@ -1545,6 +1548,7 @@ function updateM5(r, dt, player, map, ease, d) {
   if (canSee && d <= M5_RANGE && d > 1e-4 && r.attackTimer <= 0) {
     r.attackTimer = M5_FIRE_COOLDOWN;
     (map.projectiles ??= []).push({ x0: r.x, y0: r.y, x1: player.x, y1: player.y, prog: 0, kind: 'laser_m5' });
+    sfx.play('laser');
     const block = player.blockRangedShot ? player.blockRangedShot(r.x, r.y) : null;
     if (block === 'reflect') {
       r.hp -= 999; r.hurt = true;

@@ -48,6 +48,31 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.76 — manage mode, audible lasers, daemon takes the towers, stamp retired
+
+- **Manage mode** (the mobile swap mechanism): while showBackpack is open, a
+  same-slot tap routes to `smartMoveSlot` instead of equipSlot — pocket/hands/
+  bw → packbadge (stow); bpstore → first free pocket, else the hand (moveItem
+  validates holdability); tapes from anywhere → empty walkman; walkman →
+  eject to pocket/pack (setSlot's walkman branch already stops playback).
+  All movement goes through moveItem, so every refusal message is reused.
+- **Robot laser sfx**: new 'laser' recipe (short descending square+sine pew,
+  gain 0.09/0.07 — quiet by request); played at the three robot fire sites
+  (T3 volley once per salvo, W4, M5). play()'s 70ms debounce prevents stacking.
+- **Daemon defeat powers down the obelisks**: onCoreDefeated sets
+  poweredDown/alert=0/stirred=false on every standing tower; drawObelisk
+  skips the whole signal-light block for a powered-down husk. Help box and
+  README updated. OPEN QUESTION for later: should the POSEIDON countdown
+  stop when the towers die? (Currently untouched — on CALYPSO the countdown
+  still runs against dead towers; harmless but conceptually odd. Revisit
+  with the archipelago campaign win.)
+- **In-game version stamp removed** (the tiny v-number under the HUD
+  wordmark); the gate/title keeps its own.
+- **T3 help-box entry** rewritten for the wheeled body + laser eyes.
+- Verified headless: boot clean, laser plays, 12/12 obelisks powered down
+  after onCoreDefeated; manage-mode router is thin dispatch over the
+  battle-tested moveItem (code-reviewed).
+
 ### v1.75 — T3 redrawn: wheeled T2 with laser eyes
 
 - Full drawT3 rewrite per David's brief ("wheeled version of T2 with laser

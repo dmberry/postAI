@@ -481,6 +481,12 @@ player.onCoreDefeated = (core) => {
     powered += 1;
   }
   worldStir.calm();        // clear the red POSEIDON alert
+  // The towers die with the mind that ran them: every standing obelisk goes
+  // dark and inert — no signal light, no alert, nothing left to stir. (They
+  // still stand, and still yield chips if broken open.)
+  for (const o of obeliskObjs) {
+    if (!o.destroyed) { o.poweredDown = true; o.alert = 0; o.stirred = false; }
+  }
   player.addScore(500);
   daemonsDown += 1;
   // The dead core throws its testament into the open — auto-recover it to the
@@ -1874,6 +1880,25 @@ let detail = null;   // right-click inspection tooltip {text, x, y, ttl}
 // Hovering a HUD slot (pockets, hands, backpack panel, walkman) names what's
 // in it, reusing the right-click tooltip's renderer. Right-click detail and
 // an in-progress drag both win over the hover.
+// Manage mode: while the backpack panel is open, a tap on any slot MOVES its
+// item instead of using it — the one-rule mobile swap. Pockets, hands, and
+// the spare sleeve stow into the pack; pack items come out to a free pocket
+// (or the hand, if it's holdable and free); tapes prefer an empty walkman;
+// tapping the walkman ejects. moveItem does all the validating and saying.
+function smartMoveSlot(from) {
+  const held = player.getSlot(from);
+  if (!held) { player.equipSlot(from); return; }
+  const def = ITEMS[held.item];
+  const freePocket = () => { const i = player.pockets.findIndex((ps) => !ps); return i >= 0 ? { kind: 'pocket', i } : null; };
+  if (from.kind === 'walkman') { player.moveItem(from, freePocket() || { kind: 'packbadge' }); return; }
+  if (def && def.kind === 'tape' && !player.walkman) { player.moveItem(from, { kind: 'walkman' }); return; }
+  if (from.kind === 'pocket' || from.kind === 'hands' || from.kind === 'bw') { player.moveItem(from, { kind: 'packbadge' }); return; }
+  // out of the pack: a free pocket first, else offer the hand (moveItem
+  // politely refuses non-holdables there)
+  const t = freePocket();
+  player.moveItem(from, t || { kind: 'hands' });
+}
+
 function hoverSlotTip() {
   try {
   if (drag || !renderer.slotAt) return null;
@@ -2241,7 +2266,10 @@ function update(dt) {
   if (up && drag) {
     const target = renderer.slotAt ? renderer.slotAt(up.x, up.y) : null;
     if (target && target.kind === drag.from.kind && target.i === drag.from.i) {
-      player.equipSlot(drag.from); // released on the source: treat as a click
+      // Released on the source = a click. With the backpack panel OPEN this is
+      // manage mode (one tap moves the item); closed, it's the usual equip.
+      if (showBackpack) smartMoveSlot(drag.from);
+      else player.equipSlot(drag.from); // released on the source: treat as a click
     } else if (target) {
       player.moveItem(drag.from, target);
     } else {

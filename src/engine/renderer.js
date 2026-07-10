@@ -2877,6 +2877,9 @@ export class Renderer {
     // throws a soft halo — unmistakable that it's found you.
     // A fortress breach "stirs" the whole network: a stirred obelisk flares its
     // alert red regardless of whether it has personally sensed the player.
+    // A powered-down tower (its island's daemon is dead) shows no light at
+    // all — the husk stands, but nothing is home.
+    if (obj.poweredDown) return;
     const alert = Math.max(obj.alert || 0, obj.stirred ? 1 : 0);
     const flash = obj.blinkFlash || 0;
     const ly = c.y - H + 8;
@@ -4867,11 +4870,8 @@ export class Renderer {
     ctx.shadowBlur = 7;
     ctx.fillText('OS', bx + postW, by);
     ctx.restore();
-    if (hud.version) {
-      ctx.font = '8px ui-monospace, Menlo, monospace';
-      ctx.fillStyle = 'rgba(207,216,195,0.4)';
-      ctx.fillText(`v${hud.version}`, bx, by + 11);
-    }
+    // (The tiny version stamp that sat here was retired — the gate/title
+    // still shows it; in-game it was just clutter.)
   }
 
   drawLabel(text, x, y) {

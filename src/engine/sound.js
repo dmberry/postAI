@@ -209,6 +209,10 @@ class Sound {
           this._tone({ when: t, dur: 0.25, type: 'square', freq: 1600 * v, end: 180, gain: 0.2, attack: 0.002, filter: 'bandpass', filterFreq: 1500 });
           this._noiseBurst({ when: t, dur: 0.18, gain: 0.2, attack: 0.002, filter: 'highpass', freq: 3000 });
           break;
+        case 'laser': // a robot bolt: quick descending pew — quiet, but you learn it fast
+          this._tone({ when: t, dur: 0.12, type: 'square', freq: 1900 * v, end: 650, gain: 0.09, attack: 0.002, filter: 'bandpass', filterFreq: 1600 });
+          this._tone({ when: t, dur: 0.1, type: 'sine', freq: 950 * v, end: 380, gain: 0.07, attack: 0.002 });
+          break;
         case 'keydrop': // terminal good-news chime: soft ascending major arpeggio + a faint high shimmer
           this._tone({ when: t, dur: 0.1, type: 'sine', freq: 659 * v, gain: 0.15, attack: 0.005 });
           this._tone({ when: t + 0.09, dur: 0.1, type: 'sine', freq: 880 * v, gain: 0.15, attack: 0.005 });
