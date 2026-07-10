@@ -48,6 +48,13 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.59 — kill the island AI: power-down + fireworks level-up
+
+- **The mainframe core is killable.** `Player.hitCore`/`damageCore` (heavy kit only, `FACTORY_MIN_TOOL`; 250hp). Melee for now — bombs/electro-gun/OB-gun still TODO.
+- **Felling it kills the island.** `Player.onCoreDefeated` → main.js powers down **every non-friendly machine on the island** at once (`drained` + `poweredDown`), clears the red alert, and `fortress.update` goes inert forever (`core.defeated`). Written **island-agnostic** — the hook powers down *this island's* `robots` set, so APOLLO/ATHENA/HADES reuse it unchanged; a `crownsDown` tally counts felled crowns. Friendlies stay yours.
+- **Fireworks level-up modal** (`renderer.drawAiVictory`): "ZEUS SILENCED — Crown N of 4", machines-powered-down, score, over a particle fireworks burst; dismissable (click/space), does NOT end the run. Verified: 24 machines down, score +700, alarm cleared.
+- *Follow-ups:* let bombs/electro/OB-gun damage the core; the richer confrontation (ZEUS speaks / secret word / uplink-gate); a "dark husk" render tell for powered-down machines.
+
 ### v1.58 — ZEUS fortress: violation-response guards, fortress map, red alert
 
 - **Guard roster reworked** (robots.js). **M4** unarmed report-drones are the only dormant-fortress presence (1-2; their spotting you is what raises the alarm — sneak past them). **M5** snipers hang back and plink a low-power orange `laser_m5`. **M6** pack robots attack in waves of 3-5 (attack/withdraw; a lone one waits at the pack edge until `M6_PACK_MIN` gather).

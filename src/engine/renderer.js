@@ -594,6 +594,7 @@ export class Renderer {
     if (hud.drag) this.drawDragGhost(hud.drag, player);
     if (hud.rest) this.drawRestOverlay(hud.rest.dim);
     if (hud.deathCert) this.drawDeathCert(hud.deathCert);
+    if (hud.aiVictory) this.drawAiVictory(hud.aiVictory);
     if (hud.paused) this.drawPausedOverlay();
   }
 
@@ -1007,6 +1008,55 @@ export class Renderer {
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('Copy', btnX + btnW / 2, btnY + 16);
+    ctx.textAlign = 'left';
+  }
+
+  // The AI-defeated celebration: a fireworks level-up modal. Time-based particle
+  // bursts over a dimmed backdrop, with the crown tally and score.
+  drawAiVictory(v) {
+    const ctx = this.ctx, W = this.w, H = this.h;
+    ctx.fillStyle = 'rgba(6,8,14,0.82)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Fireworks particle system (kept on the renderer between frames).
+    this._fw ??= [];
+    const now = performance.now();
+    const dt = this._fwLast ? Math.min(0.05, (now - this._fwLast) / 1000) : 0.016;
+    this._fwLast = now;
+    this._fwSpawnT = (this._fwSpawnT ?? 0) - dt;
+    if (this._fwSpawnT <= 0) {
+      this._fwSpawnT = 0.3 + Math.random() * 0.45;
+      const bx = W * (0.18 + Math.random() * 0.64), by = H * (0.12 + Math.random() * 0.4);
+      const hue = Math.floor(Math.random() * 360), n = 26 + Math.floor(Math.random() * 22);
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2, sp = 70 + Math.random() * 110;
+        this._fw.push({ x: bx, y: by, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, ttl: 1.1 + Math.random() * 0.7, max: 1.8, hue });
+      }
+    }
+    for (const p of this._fw) { p.ttl -= dt; p.vy += 100 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.99; }
+    this._fw = this._fw.filter((p) => p.ttl > 0);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const p of this._fw) {
+      const a = Math.max(0, p.ttl / p.max);
+      ctx.fillStyle = `hsla(${p.hue},95%,62%,${a.toFixed(3)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    // Text.
+    const cx = W / 2, y0 = H * 0.33;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#ffd23b'; ctx.font = 'bold 46px system-ui, sans-serif';
+    ctx.fillText(`${(v.ai || 'AI').toUpperCase()} SILENCED`, cx, y0);
+    ctx.fillStyle = '#e6eaf0'; ctx.font = 'bold 22px system-ui, sans-serif';
+    ctx.fillText(`Crown ${v.crown} of ${v.crowns} felled`, cx, y0 + 42);
+    ctx.fillStyle = '#9fb0c0'; ctx.font = '16px system-ui, sans-serif';
+    ctx.fillText(`${v.powered} machines powered down across the island`, cx, y0 + 74);
+    ctx.fillStyle = '#7fe0a0'; ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.fillText(`Score  ${v.score}`, cx, y0 + 126);
+    ctx.fillStyle = '#8894a4'; ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText('click / space to sail on', cx, y0 + 176);
     ctx.textAlign = 'left';
   }
 

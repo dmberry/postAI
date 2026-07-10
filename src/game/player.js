@@ -1125,6 +1125,10 @@ export class Player {
     // overworld POSEIDON (the fortress controller watches obj.destroyed).
     if (obj && obj.type === 'uplink') { this.hitUplink(obj, map, tool); return; }
 
+    // The mainframe core: the AI itself. Break its hull down (heavy kit only)
+    // and the island's controlling mind dies — every machine goes dark.
+    if (obj && obj.type === 'mainframe') { this.hitCore(obj, map, tool); return; }
+
     // Shovel: dig a pit in the open ground ahead. A steep pit (height -2)
     // is a trap — a wheeled T1 rolls in and can't climb out, and you can
     // only get out yourself by jumping.
@@ -1460,6 +1464,39 @@ export class Player {
     this.addScore(40);
     sfx.play('treefall');
     this.say('The W-factory buckles and collapses in a roar. An AI key glints in the wreckage.');
+  }
+
+  // Hammer the mainframe core — the AI itself — the way you crack the factory:
+  // heavy kit only, many blows. When its hull gives, the island's mind dies and
+  // `onCoreDefeated` fires (main.js powers down the island + the victory modal).
+  hitCore(obj, map, tool) {
+    if (obj.defeated) { this.say('The core stands dark and dead.'); return; }
+    this.swingTimer = tool.swingCooldown || 0.5;
+    this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
+    if ((tool.robotDamage ?? 1) < FACTORY_MIN_TOOL) {
+      sfx.play('swing'); obj.shake = 0.12;
+      this.say(`The ${(tool.name || 'weapon').toLowerCase()} rings off the core — you need a wrecking tool, explosives, or the electro-gun to crack it.`);
+      return;
+    }
+    sfx.play('chop');
+    const cx = obj.x + (obj.fw || 1) / 2, cy = obj.y + (obj.fh || 1) / 2;
+    this.sparkAt(map, cx, cy);
+    obj.shake = 0.2;
+    this.damageCore(obj, map, (tool.robotDamage ?? 1) + this.xpLevel('melee'));
+  }
+
+  // Apply `amount` to the core (melee, a bomb blast, or the electro-gun's arc).
+  // On kill, mark it defeated and fire the island-death hook exactly once.
+  damageCore(obj, map, amount) {
+    if (obj.defeated) return;
+    obj.maxHp = obj.maxHp ?? obj.hp ?? 250;
+    obj.hp = (obj.hp ?? obj.maxHp) - amount;
+    if (obj.hp > 0) return;
+    obj.defeated = true;
+    const cx = obj.x + (obj.fw || 1) / 2, cy = obj.y + (obj.fh || 1) / 2;
+    for (let s = 0; s < 14; s++) this.sparkAt(map, cx + (Math.random() - 0.5) * (obj.fw || 4), cy + (Math.random() - 0.5) * (obj.fh || 4));
+    this.addScore(200);
+    if (this.onCoreDefeated) this.onCoreDefeated(obj);
   }
 
   // Smash an abandoned car open. A crowbar (high robotDamage) pries it apart

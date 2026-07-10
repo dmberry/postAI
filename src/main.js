@@ -455,6 +455,32 @@ const worldStir = {
   },
 };
 
+// Killing an island's fortress AI kills the island: every hostile machine here
+// loses its controlling mind and powers down where it stands. Deliberately
+// ISLAND-AGNOSTIC — an island has its own `robots` set + fortress, so the exact
+// same call powers down exactly this island's machines. When the Archipelago
+// adds APOLLO / ATHENA / HADES, each island wires its own core to this hook and
+// defeats independently. Friendlies (running on a battery you gave them) stay.
+player.onCoreDefeated = () => {
+  const ai = fortress.AI_NAME;
+  let powered = 0;
+  for (const r of robots) {
+    if (r.dead || r.fused || r.friendly) continue;
+    r.aggro = false;
+    r.drained = true;      // flat: inert until re-batteried (they never re-arm — the mind is gone)
+    r.poweredDown = true;  // render tell: a cold, dead husk
+    powered += 1;
+  }
+  worldStir.calm();        // clear the red POSEIDON alert
+  player.addScore(500);
+  crownsDown += 1;
+  // The celebration: a dismissable level-up modal. It does NOT end the run —
+  // you sail on to the next crown.
+  player.aiVictory = { ai, powered, score: player.score, crown: crownsDown, crowns: 4 };
+  player.say(`${ai} is dead. Every machine on the island powers down where it stands.`);
+};
+let crownsDown = 0; // how many island AIs felled this run (for the Archipelago tally)
+
 // Character persona and learned skills persist across sessions and deaths.
 const SAVE_KEY = 'postai-character';
 // Name and gender live in their own durable key, separate from the run save.
@@ -1977,6 +2003,17 @@ function update(dt) {
   const wheel = input.consumeWheel();
   if (wheel) camera.zoomBy(-wheel * 0.0015);
 
+  // AI-defeated celebration: a level-up modal (fireworks + score). Freezes the
+  // world behind it until dismissed; then the run carries on (you don't win the
+  // game by felling one crown — you sail for the next).
+  if (player.aiVictory) {
+    if (input.clickPos() || input.consumeUp() || input.consumePress('Space') || input.consumePress('Enter')) {
+      input.consumeClick();
+      player.aiVictory = null;
+    }
+    return;
+  }
+
   // Death certificate: freeze the world behind the modal until it's clicked.
   if (player.deathCert) {
     const copyCert = () => {
@@ -2568,6 +2605,7 @@ function frame(now) {
       detail,
       drag: drag ? { ...drag, mx: input.mouseX, my: input.mouseY } : null,
       deathCert: player.deathCert,
+      aiVictory: player.aiVictory,
       showSkills,
       showWeapons,
       craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun') || player.canCraftChip() || player.canCraftSword() || player.canCraftFortressMap(),

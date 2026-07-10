@@ -183,7 +183,7 @@ export function createFortress(map, seed, spawn) {
   const footprint = [];
   for (let dy = 0; dy < CORE; dy++) for (let dx = 0; dx < CORE; dx++) footprint.push({ x: coreX + dx, y: coreY + dy });
   const core = map.addObject('mainframe', coreX, coreY, {
-    fw: CORE, fh: CORE, footprint, ai: AI_NAME, hp: 400, maxHp: 400, defeated: false,
+    fw: CORE, fh: CORE, footprint, ai: AI_NAME, hp: 250, maxHp: 250, defeated: false,
   });
   for (const t of footprint) map.objectGrid[t.y * w + t.x] = core;
 
@@ -299,6 +299,10 @@ export function createFortress(map, seed, spawn) {
 
     // Per-frame: once you carry the key up to the doorway, it swings open.
     update(dt, player, robots, world) {
+      // The AI is dead: the fortress is inert — no alarm, no manufacture, and the
+      // maze sconces stop strobing. (The island power-down itself is handled by
+      // main.js's onCoreDefeated hook, kept island-agnostic there.)
+      if (core.defeated) { state.alarm = false; map.fortressAlarm = false; return; }
       if (!state.open && player.hasItem('fortress_key')) {
         if (Math.abs(player.y - seamY) <= 2.5 && player.x >= doorX0 - 1.5 && player.x <= doorX0 + DOOR_W + 0.5) {
           openDoor();

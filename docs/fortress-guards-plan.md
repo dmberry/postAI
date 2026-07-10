@@ -168,7 +168,23 @@ code, fully isolated. **Recommendation: reuse `robots.js`.**
    confirmed; night vision falloff; balance. *Verify: a clean ghost run is
    possible, and a loud run is punishing but survivable.*
 
-Then **Stage 4** — the core confrontation (Adamantine speaks; break it → "1 of 4").
+**Stage 4 — kill the AI (first cut, DONE 2026-07-09).** The mainframe core is now
+destructible (`Player.hitCore`/`damageCore`, heavy kit only — `FACTORY_MIN_TOOL`;
+250hp). Felling it fires `Player.onCoreDefeated`, and main.js's handler **powers
+down the whole island**: every non-friendly, non-fused machine goes `drained` +
+`poweredDown` (inert) at once, `worldStir.calm()` clears the red alert, and
+`fortress.update` early-returns forever after (`core.defeated` → no alarm/
+manufacture, sconces stop). Written ISLAND-AGNOSTIC: the hook powers down *this
+island's* `robots` set, so the Archipelago (APOLLO/ATHENA/HADES) reuses it as-is;
+a `crownsDown` tally counts felled crowns. Then a **fireworks level-up modal**
+(`renderer.drawAiVictory`): "ZEUS SILENCED — Crown N of 4", machines-powered-down
+count, score, dismissable (click/space) — it does NOT end the run. Verified: 24
+machines powered down, score +700, alarm cleared, modal draws (77 particles).
+*Still to come (the richer confrontation): ZEUS speaks, the secret word, a gate
+on the uplink/factories, and letting bombs/electro-gun/OB-gun damage the core too
+(melee-only for now).*
+
+Original plan: **Stage 4** — the core confrontation (the AI speaks; break it → "1 of 4").
 
 ## 8. Decisions (David, 2026-07-08)
 
