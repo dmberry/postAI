@@ -48,6 +48,15 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.80 — smaller terminal type, dry snakes
+
+- Terminal font 15px → 13px across all four synced faces (screen, ghost,
+  prompt, input — the ghost overlay must share metrics exactly), fixing the
+  line-wrap on longer RON-ML output.
+- `moveAxis` in animals.js now respects an `a.noWater` flag (water/sea/stream
+  are hard edges); set on vipers at spawn. Verified: a viper forced toward an
+  across-the-river home holds on the sand bank indefinitely.
+
 ### v1.79 — clang, temple healing, spaced backpacks
 
 - **'clang' sfx** (two detuned triangle partials + a tick of highpass noise,

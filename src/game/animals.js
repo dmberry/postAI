@@ -201,6 +201,7 @@ export function spawnAnimals(map, seed, avoid) {
   const viperTiles = tallgrassTiles.length ? tallgrassTiles : grassTiles;
   for (const [x, y] of pickSpots(viperTiles, VIPER_COUNT, VIPER_MIN_GAP, rng)) {
     const viper = baseAnimal('viper', x, y, VIPER_HP, rng);
+    viper.noWater = true; // snakes do not swim here — the bank stops them dead
     viper.raised = false;      // tell: renderer lifts the head while true
     viper.strikeTimer = 0;
     viper.strikeFlash = 0;
@@ -240,6 +241,12 @@ function collides(map, x, y, h) {
 function moveAxis(a, dx, dy, map) {
   const nx = a.x + dx;
   const ny = a.y + dy;
+  // Some animals never take to the water (vipers: a.noWater) — the bank is a
+  // hard edge for them, whatever their wander target says.
+  if (a.noWater) {
+    const f = map.floorAt(Math.floor(nx), Math.floor(ny));
+    if (f === 'water' || f === 'sea' || f === 'stream') return;
+  }
   const h = map.heightAt ? map.heightAt(Math.floor(a.x), Math.floor(a.y)) : null;
   if (!collides(map, nx, ny, h)) {
     a.x = nx;
