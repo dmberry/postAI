@@ -89,41 +89,61 @@ integration points in one small, low-risk feature:
 If the contract can hold lore without contortion, it can hold the rest. If it
 can't, we find out having touched ~5 lines, not the whole codebase.
 
-## Open questions surfaced (decide before mass rollout)
+## Decisions (locked 2026-07-11)
 
-1. **Ordering.** Update order matters today (player before robots; fortress
-   after robots). The `order` field encodes it, but the exact numbers need a
-   pass over the current sequence. *Slice keeps every non-lore call exactly
-   where it is, so ordering is unchanged.*
-2. **Early-return gating.** `paused` / `resting` / `driveState` gate *subsets* of
-   updates (some clocks still tick while resting). A flat `runUpdate` can't
-   express that. Options: a `whenPaused`/`whenResting` tag per system, or the hub
-   keeps the gates and only the "normal-play" set runs through the registry.
-   *Slice leaves the gates in the hub; lore already sits below them.*
-3. **Lifecycle.** New Game / island swap must `clear()` and re-register (or the
-   registry must hold module singletons that survive). *Slice registers lore
-   once and checks New Game still works.*
-4. **Self-registration vs hub-registration.** End state: each feature calls
-   `register()` itself (truly zero hub edits). Slice registers lore *from the
-   hub* via a thin adapter, so `lore.js` (owned, isolated) is untouched and the
-   change is trivially reversible. Moving registration into features is the last
-   migration step, once the contract is blessed.
+1. **Ordering — a numeric `order` field.** Each system carries an `order`; the
+   registry sorts by it (lower first, for update and draw). Bands, spaced so
+   systems can be slotted between without renumbering:
+
+   | Band | order | For |
+   |---|---|---|
+   | Pre-sim | 0–19 | input, mode flags |
+   | World clocks | 20–29 | dayNight, weather |
+   | World events | 30–39 | worldStir, fortress, POSEIDON |
+   | Actors | 40–59 | player, robots, animals, birds |
+   | Effects | 60–69 | projectiles, sparks, explosions |
+   | Reading / late overlay | 70–89 | **lore (80)** |
+   | HUD / screen | 90–99 | HUD widgets, modals |
+
+   Note the `order` field sorts systems *within the registry*. Where the
+   registry's `runUpdate()` sits in the hub decides its position relative to
+   still-hardcoded calls during the migration — so systems are migrated in an
+   order that keeps one `runUpdate()` point correct, or the hub gets a second
+   `runUpdate()` call at a later point. Called out per stage below.
+
+2. **Early-return gating — the hub keeps the gates.** The registry runs the
+   normal-play set; the few special-mode ticks (rest clock, drive-steer) stay as
+   explicit hub logic. Most systems never think about modes. `lore` already sits
+   below the gates, so it only runs in normal play — unchanged.
+
+3. **Registration — self-registration.** Each feature calls `register()` in its
+   own module. Zero hub edits, and — the reason it wins for *this* repo — two
+   people adding features touch **no shared file**, so no merge conflicts. Done:
+   `lore` now self-registers in its constructor; the hub no longer names it.
+
+4. **Lifecycle.** New Game reloads the page (`fullReset -> location.reload`), so
+   the registry rebuilds from scratch and a re-registration can't duplicate.
+   `register()` also replaces a same-named system defensively. An in-place island
+   swap (no reload) would call `clear()` first — wired when islands land.
 
 ## Migration plan (staged, each stage boots green)
 
-- **Stage 0 — this slice.** `systems.js` + register `lore` via adapter; swap its
-  1 update + 2 draw call sites to registry dispatch. **STOP for review.**
-- **Stage 1.** Migrate the other clean singletons through the hub adapter:
-  `dayNight`, `worldStir`, `fortress` (update-side), skylink web (drawWorld).
-  Nail down `order` numbers against the current sequence.
+- **Stage 0 — this slice (done).** `systems.js` + `lore` **self-registers** in
+  its constructor; its 1 update + 2 draw call sites dispatch through the registry.
+  Demonstrates the blessed end-state pattern (self-registration), not an interim
+  adapter. **Stopped for review.**
+- **Stage 1.** Migrate the other clean singletons, each self-registering:
+  `dayNight` (order 20), `worldStir`/`fortress` (30s), skylink web (drawWorld,
+  60s). Place the hub's `runUpdate()` so these land in their current sequence.
 - **Stage 2.** The ROADMAP file-size split, now expressed as systems: renderer
   HUD/modals → `ui.js`; player weapon-fire (`fire`/`pierceShot`/`coneShot`/
   `burnObelisk`) → `combat.js`.
 - **Stage 3.** `robots.js`: update-functions become systems; draw stays in the
   depth-sort (per the boundary above).
-- **Stage 4.** Move `register()` into each feature module — zero hub edits — and
-  add `clear()` to New Game / island swap. Wire the islands world-contract onto
-  the same `world` bag.
+- **Stage 4.** Self-registration is the pattern from Stage 0 on, so each migrated
+  feature already owns its `register()` — no separate "move it into features"
+  step. Remaining: `clear()` on in-place island swap, and wiring the islands
+  world-contract onto the same `world` bag.
 
 ## Decision log
 
@@ -132,6 +152,16 @@ can't, we find out having touched ~5 lines, not the whole codebase.
 - **2026-07-10.** Draw split into `drawWorld` (pre-camera-restore) and
   `drawScreen` (HUD) phases, because `lore` needs both. Depth-sorted actors are
   explicitly **excluded** from the registry and stay in the renderer's sort.
-- **2026-07-10.** Stage 0 registers `lore` from the hub via an adapter (not by
-  editing `lore.js`) to keep the proof reversible and the owned lore module
-  untouched.
+- **2026-07-10.** Stage 0 first registered `lore` from the hub via an adapter, to
+  keep the proof reversible while the contract was unreviewed. *(Superseded by the
+  2026-07-11 self-registration decision.)*
+- **2026-07-11 (David).** Ordering = numeric `order` field with reserved bands
+  (table above). Chosen over dependency graphs (over-built for ~15 systems) and
+  registration order (too implicit).
+- **2026-07-11 (David).** Mode gating stays in the hub; the registry runs the
+  normal-play set. Chosen over per-system `activeWhen` tags (ceremony on every
+  system) and per-system self-checks (scatters mode logic).
+- **2026-07-11 (David).** Registration = self-registration (each feature calls
+  `register()` itself). Chosen over a central manifest and hub adapters
+  specifically because it means two sessions adding features never edit a shared
+  file — the repo's live merge-conflict pain. `lore` converted to self-register.

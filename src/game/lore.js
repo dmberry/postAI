@@ -18,6 +18,7 @@
 
 import { worldToScreen } from '../engine/iso.js';
 import { makeRng } from './rng.js';
+import { register } from '../engine/systems.js';
 
 // The corpus. Each fragment: an id, a `kind` (what object it reads as), a
 // short title for the Scrapbook list, the body text, and an `era` 0..2 that
@@ -1238,6 +1239,18 @@ export class Lore {
     this._seed = seed;
     this._place(map, seed);
     this._restore();
+    // Self-register as a system (docs/refactor-registry.md). Lore owns its own
+    // wiring into the loop — the hub never mentions it, so two people adding
+    // features touch no shared file. New Game reloads the page (fullReset ->
+    // location.reload), so the registry rebuilds and this can't duplicate.
+    // order 80 = the "reading / late overlay" band (see the order-band table).
+    register({
+      name: 'lore',
+      order: 80,
+      update: (w) => this.update(w.dt, w.player, w.input),
+      drawWorld: (g) => this.drawWorld(g),
+      drawScreen: (g, w) => this.drawOverlay(g, w.w, w.h),
+    });
   }
 
   // The fragment set for the current realm — overworld pages up top, Backspace

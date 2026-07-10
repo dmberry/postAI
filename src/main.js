@@ -690,20 +690,11 @@ for (const type of ['t1', 't2', 't3', 'w1', 'w2', 'w3', 'w4', 'w5', 'm4', 'm5', 
   if (img) img.src = renderMachineIcon(type);
 }
 const camera = new Camera(player.x, player.y);
+// `lore` self-registers as a system in its own constructor (Stage 0 of the
+// systems-registry refactor, docs/refactor-registry.md) — the hub never names it.
+// Its update ticks via systems.runUpdate() in update(); its two draw phases via
+// the renderer's runDrawWorld/runDrawScreen.
 const lore = new Lore(map, WORLD_SEED);
-// Stage 0 of the systems-registry refactor (docs/refactor-registry.md): `lore`
-// is the first feature to attach as a {update, drawWorld, drawScreen} system
-// instead of being hardcoded into the hub. Registered here via a thin adapter,
-// so lore.js (owned, isolated) stays untouched and the change is reversible.
-// New Game reloads the page (fullReset -> location.reload), so the registry
-// rebuilds from scratch and this can't leave a stale lore behind.
-systems.register({
-  name: 'lore',
-  order: 50,
-  update: (w) => lore.update(w.dt, w.player, w.input),
-  drawWorld: (g) => lore.drawWorld(g),
-  drawScreen: (g, w) => lore.drawOverlay(g, w.w, w.h),
-});
 // Opening a resistance cache folds any recovered documents packed in it into the
 // Scrapbook (quietly — openBox prints its own one-line summary).
 player.onFindLore = (id) => lore.findFrag(id, player, true);
