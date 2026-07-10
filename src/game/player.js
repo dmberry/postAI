@@ -15,6 +15,8 @@ const REACH = 0.9;        // how far ahead the player can use a tool
 const CHIP_FRAGMENTS_PER_CHIP = 8; // fragments shed by machines to craft one chip
 const FORTRESS_MAP_FRAGMENTS = 5; // scattered map quarters pieced into a fortress map
 const SCRAP_PER_SWORD = 10; // scrap beaten into a robot sword
+const TEMPLE_HEAL_R = 7;      // tiles from a temple-grove centre that count as inside it
+const TEMPLE_HEAL_MULT = 3;   // health regen multiplier among the old stones
 const KNOCKBACK_DIST = 0.5; // tiles a melee hit shoves an animal/robot back
 const KNOCKBACK_STUN = 0.4; // seconds it's frozen (no move, no attack) after
 const TREE_HP = 4;        // penknife swings to fell a tree
@@ -606,7 +608,16 @@ export class Player {
       this.health -= VENOM_DRAIN * dt;
       if (this.health <= 0) this.die(map, 'the venom');
     } else if (this.health < this.maxHealth && this.food > 50) {
-      this.health = Math.min(this.maxHealth, this.health + HEALTH_REGEN * dt);
+      // The marble temples hold a healing vibe: within an old grove, recovery
+      // runs faster — the stones remember being sacred (map.temples is set
+      // from placeRuins' grove centres in main.js).
+      let regen = HEALTH_REGEN;
+      const temples = map.temples;
+      if (temples && temples.some((t) => Math.hypot(t.x - this.x, t.y - this.y) < TEMPLE_HEAL_R)) {
+        regen *= TEMPLE_HEAL_MULT;
+        if (!this._templeSaid) { this._templeSaid = true; this.say('A stillness among the old stones. Your wounds knit faster here.'); }
+      } else if (this._templeSaid) this._templeSaid = false;
+      this.health = Math.min(this.maxHealth, this.health + regen * dt);
     }
 
     // Lotus torpor: the daze bleeds off slowly, drains you while it lasts,
@@ -1165,7 +1176,7 @@ export class Player {
     if (target) {
       this.swingTimer = tool.swingCooldown;
       this.stamina -= tool.staminaCost;
-      sfx.play('chop');
+      sfx.play(isRobot ? 'clang' : 'chop'); // metal answers in metal
       // A practised swordarm hits harder.
       const bonus = this.xpLevel('melee');
       target.hp -= (isRobot ? (tool.robotDamage ?? 1) : (tool.animalDamage ?? 3)) + bonus;

@@ -209,6 +209,11 @@ class Sound {
           this._tone({ when: t, dur: 0.25, type: 'square', freq: 1600 * v, end: 180, gain: 0.2, attack: 0.002, filter: 'bandpass', filterFreq: 1500 });
           this._noiseBurst({ when: t, dur: 0.18, gain: 0.2, attack: 0.002, filter: 'highpass', freq: 3000 });
           break;
+        case 'clang': // blade on machine hull: a quiet metal ring, two detuned partials
+          this._tone({ when: t, dur: 0.16, type: 'triangle', freq: 1180 * v, end: 1120 * v, gain: 0.1, attack: 0.001 });
+          this._tone({ when: t, dur: 0.22, type: 'triangle', freq: 1780 * v, end: 1690 * v, gain: 0.06, attack: 0.001 });
+          this._noiseBurst({ when: t, dur: 0.03, gain: 0.1, attack: 0.001, filter: 'highpass', freq: 2500 });
+          break;
         case 'laser': // a robot bolt: quick descending pew — quiet, but you learn it fast
           this._tone({ when: t, dur: 0.12, type: 'square', freq: 1900 * v, end: 650, gain: 0.09, attack: 0.002, filter: 'bandpass', filterFreq: 1600 });
           this._tone({ when: t, dur: 0.1, type: 'sine', freq: 950 * v, end: 380, gain: 0.07, attack: 0.002 });

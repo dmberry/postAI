@@ -114,7 +114,20 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
       if (nearTree) forestGrass.push([x, y]);
     }
   }
-  for (let i = 0; i < 4; i++) drop(forestGrass, 'backpack', 1);
+  // Spare backpacks in the forests — SPACED, so two never land in the same
+  // grove (a huddle of backpacks reads as a bug, not four finds).
+  {
+    const bpAt = [];
+    for (let i = 0; i < 4 && forestGrass.length; i++) {
+      for (let tries = 0; tries < 30; tries++) {
+        const [x, y] = forestGrass[Math.floor(rng() * forestGrass.length)];
+        if (bpAt.some(([px, py]) => Math.hypot(px - x, py - y) < 18)) continue;
+        map.groundItems.push({ item: 'backpack', qty: 1, x: x + 0.5, y: y + 0.5, keep: true });
+        bpAt.push([x, y]);
+        break;
+      }
+    }
+  }
   // Torn pages of the RON-ML manual, scattered — mostly in the ruins, a couple
   // out in the woods — as loose scraps that echo the bound manual in the caches.
   for (let i = 0; i < 4; i++) drop(boards, 'ronml_page', 1);
@@ -419,7 +432,9 @@ const mainframe = fortress.core; // { x, y } of the core, for the RON-ML map sta
 stampCoast(map, spawn);
 // Ruined marble columns: a few groves of fallen temple columns strewn across
 // the island, after the coast so none land in the sea.
-placeRuins(map, makeRng(WORLD_SEED ^ 0x2c01dd), { spawn, clusters: 4 });
+// Grove centres are kept: standing among the old stones heals you faster
+// (player.js TEMPLE_HEAL_R / TEMPLE_HEAL_MULT reads map.temples).
+map.temples = placeRuins(map, makeRng(WORLD_SEED ^ 0x2c01dd), { spawn, clusters: 4 });
 // The dormant fortress's only garrison: one or two light M4 report drones on
 // the quad. Sneak past them; if one holds you in sight the breach reports and
 // the core spits out its M6 pack + M5 snipers (worldStir.spawnWave below).
