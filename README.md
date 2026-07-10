@@ -1,10 +1,10 @@
 # NostOS — a postAI Odyssey
 
-**Version:** 1.82 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.83 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 An isometric 2D survival game set in a world wrecked by an AI takeover. The machines are still here: black obelisk towers pulse across the landscape and T-class hunter robots patrol them, hunting the humans that remain. Survivors scavenge the ruins while avoiding both the machines and wild animals that have gained strange powers. A resistance called **RON** — Reality or Nothing — hid weapons in caches through the broken towns; whether it still exists is never settled. How it all happened is never stated — you piece it together from newspapers, diaries, floppy disks, VHS tapes, and dead computers.
 
-## Current build (v1.82)
+## Current build (v1.83)
 
 **World.** Seeded 128×128 isometric island — river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, roads, ruined marble temples (with a healing calm among the old stones — wounds knit faster there). Rugged hills and hollows, climbed one step at a time. Rubble steps over; a **wall block** needs a **double-jump** to mount (roam block-tops, walk off any edge to drop) — and up there you're safe from ground attacks. Building walls stop you on foot. Hand-drawn trees; streams wade, the river swims (slow, costly); a travelling ripple fakes current. Map edge is open sea (flat, wine-dark), ringed by semi-transparent gravel cliffs. Day/night cycle with genuinely dark nights and torches. Hidden deep in the south-west wilds, a **lotus-eaters' grove**: sweet pale fruit that reads like food but dazes you — the world hazes gold and you walk home drunk, your heading rolling under you.
 
@@ -30,6 +30,7 @@ One line per version. Full detail (root causes, exact numbers) lives in [PAI-ver
 
 | Version | Summary |
 |---|---|
+| v1.83 | The big structures ring too: hammering the **W-factory answers with a deep foundry clang** (0.5× — the lowest ring in the game), the **mainframe core nearly as deep**, the **uplink mast thin and high** — and the weak-tool bounce off the factory hull now audibly clangs, as the message always claimed. |
 | v1.82 | **No more jittering machines**: a robot blocked by an obstacle (a marble column, a wall corner) used to vibrate in place — the pull toward you and the sidestep around the obstacle fought each frame. Detours are now **committed**: once a machine picks a way round it keeps going until the line to you actually opens, so it sweeps around the column and arrives instead of buzzing behind it. |
 | v1.81 | **Every hull rings true**: the clang is now pitched by machine — a T1's thin wedge tinny and short, the standard T2 ring in the middle, heavy chassis lower, and the W4's furnace plate deep and long. |
 | v1.80 | Terminal type dropped to **13px** (screen, prompt, input, and the autocomplete ghost in lockstep) so RON-ML lines stop wrapping; **vipers never enter water** — the bank is a hard edge for a snake, whatever its wander target says. |

@@ -48,6 +48,14 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.83 — structures clang: factory 0.5x, core 0.55x, uplink 0.9x
+
+- hitFactory / hitCore / hitUplink played the wooden 'chop'; all three now
+  use the pitched clang (factory deepest at 0.5, the core 0.55, the thin
+  mast 0.9). The weak-tool bounce off the factory hull — whose message
+  already said "clangs uselessly" — plays the deep clang too instead of a
+  bare swing whoosh.
+
 ### v1.82 — detour commitment (the column jitter)
 
 - moveToward's wall-follow used to take one perpendicular sidestep per

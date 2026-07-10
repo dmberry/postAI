@@ -1523,7 +1523,7 @@ export class Player {
     if (obj.destroyed) { this.say('The uplink is already wrecked.'); return; }
     this.swingTimer = tool.swingCooldown || 0.5;
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
-    sfx.play('chop');
+    sfx.play('clang', { pitch: 0.9 }); // the mast rings thin
     this.sparkAt(map, obj.x + 0.5, obj.y + 0.5);
     obj.shake = 0.2;
     obj.hp = (obj.hp ?? obj.maxHp ?? 90) - ((tool.robotDamage ?? 1) + this.xpLevel('melee'));
@@ -1541,12 +1541,12 @@ export class Player {
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
     // Anything lighter than a proper wrecking tool just clangs off the hull.
     if ((tool.robotDamage ?? 1) < FACTORY_MIN_TOOL) {
-      sfx.play('swing');
+      sfx.play('clang', { pitch: 0.5 }); // it says clang — it should clang (deep: 8x8 of plate)
       obj.shake = 0.12;
       this.say(`The ${(tool.name || 'weapon').toLowerCase()} clangs uselessly off the factory hull. You need a sledgehammer or crowbar, explosives, or the electro-gun.`);
       return;
     }
-    sfx.play('chop');
+    sfx.play('clang', { pitch: 0.5 }); // the foundry's deep ring
     const cx = obj.x + (obj.fw || 1) / 2, cy = obj.y + (obj.fh || 1) / 2;
     this.sparkAt(map, cx, cy);
     obj.shake = 0.2;
@@ -1588,7 +1588,7 @@ export class Player {
       this.say(`The ${(tool.name || 'weapon').toLowerCase()} rings off the core — you need a wrecking tool, explosives, or the electro-gun to crack it.`);
       return;
     }
-    sfx.play('chop');
+    sfx.play('clang', { pitch: 0.55 }); // the daemon's housing: nearly as deep as the foundry
     const cx = obj.x + (obj.fw || 1) / 2, cy = obj.y + (obj.fh || 1) / 2;
     this.sparkAt(map, cx, cy);
     obj.shake = 0.2;
