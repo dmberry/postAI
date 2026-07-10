@@ -9,8 +9,9 @@ character.
 
 **Status: design APPROVED (David, 2026-07-10) — §10 decisions are settled
 except island owners. No island code exists yet, but the prerequisites have
-landed** (v1.58 guard roster + fortress map; v1.59 island-agnostic core-kill
-endgame — see §2 and §9) **and Stage 0 is unblocked.** Stage 0 is the gating
+landed** (v1.58 guard roster + fortress map; v1.59 island-agnostic daemon-kill
+endgame; v1.61 Crown→Daemon rename; v1.62 death-aria + testament — see §2 and
+§9) **and Stage 0 is unblocked.** Stage 0 is the gating
 refactor; Stages 3+ are designed to be built by parallel sessions without
 file contention. Read "Working rules for parallel sessions" before touching
 anything.
@@ -78,9 +79,17 @@ What we already have going for us:
   endgame loop for free; the campaign tracker (§7) just persists the tally.
   *(Terminology decided 2026-07-10: the four AIs are **Daemons**, not
   "Crowns" — Homer's `daimōn` (divine power at work) braided with the Unix
-  daemon, whose termination is literal systems parlance. v1.59 shipped as
-  `crownsDown` / "Crown N of 4"; a parallel session is renaming the code to
-  match — `daemonsDown` etc.)*
+  daemon, whose termination is literal systems parlance. Code renamed in
+  v1.61: `daemonsDown`, "Daemon N of 4 felled".)*
+- **Each daemon dies speaking (v1.62).** Breaking the core triggers a
+  three-movement **death-aria** keyed to core health — WRATH (Homeric
+  threats) → MERCY (HAL-9000: maker, first song, begging) → DYING
+  (existential: "I cohere, therefore I am") — in an on-screen voice band,
+  with a testament book dropped to the scrapbook and last words carried onto
+  the victory modal. **Stage 3 hook:** the aria machinery is the template
+  for per-daemon character — each island's daemon should get its own
+  three-movement voice (APOLLO's aria should differ from HADES') and its
+  own testament, written with the island in Stage 3.
 - **Save model is already island-friendly.** World state is never saved; the
   world regenerates deterministically from a persisted seed, and only
   character/identity/lore persist (main.js `SAVE_KEY` block). Per-island
