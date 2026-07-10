@@ -1,10 +1,10 @@
 # NostOS — a postAI Odyssey
 
-**Version:** 1.73 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.74 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 An isometric 2D survival game set in a world wrecked by an AI takeover. The machines are still here: black obelisk towers pulse across the landscape and T-class hunter robots patrol them, hunting the humans that remain. Survivors scavenge the ruins while avoiding both the machines and wild animals that have gained strange powers. A resistance called **RON** — Reality or Nothing — hid weapons in caches through the broken towns; whether it still exists is never settled. How it all happened is never stated — you piece it together from newspapers, diaries, floppy disks, VHS tapes, and dead computers.
 
-## Current build (v1.73)
+## Current build (v1.74)
 
 **World.** Seeded 128×128 isometric island — river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, roads, ruined marble temples. Rugged hills and hollows, climbed one step at a time. Rubble steps over; a **wall block** needs a **double-jump** to mount (roam block-tops, walk off any edge to drop) — and up there you're safe from ground attacks. Building walls stop you on foot. Hand-drawn trees; streams wade, the river swims (slow, costly); a travelling ripple fakes current. Map edge is open sea (flat, wine-dark), ringed by semi-transparent gravel cliffs. Day/night cycle with genuinely dark nights and torches. Hidden deep in the south-west wilds, a **lotus-eaters' grove**: sweet pale fruit that reads like food but dazes you — the world hazes gold and you walk home drunk, your heading rolling under you.
 
@@ -30,6 +30,7 @@ One line per version. Full detail (root causes, exact numbers) lives in [PAI-ver
 
 | Version | Summary |
 |---|---|
+| v1.74 | **HOTFIX: the game boots again.** v1.72's large-stone seeding referenced `forestGrass`/`tallgrass` before those lists were declared — a temporal-dead-zone throw at module load that killed the whole game after the title on every platform (black screen, 'Press H' only). Drops moved below the declarations; verified end-to-end in headless Chrome (boot → world renders → HUD live → 2 anvils, 3 stones, 8 lotus fruit placed). |
 | v1.73 | Mobile walkman: the compact HUD now draws the **real cassette with turning reels** while a tape plays (it was a frozen item icon), the deck gets **breathing room from the pack badge**, and starting/flipping a tape shows a **quiet now-playing toast** above the dashboard — artist, album, side and label — fading after a few seconds. |
 | v1.72 | **Kittler and McLuhan join the lore** — two new fragments in the media-theory register ('media determine our situation' / 'there is no software'; 'the medium is the message' / 'the content of the network was us'), plus both lines as faded academic wall-scrawl; a **large stone** joins the anvil as a burden item (same tenth-pace penalty, faceted-boulder icon, three scattered in the wilds); **exactly two anvils** on the whole island. |
 | v1.71 | **The anvil.** One sits somewhere in the town. Carry it — hands, pockets, or backpack, there is no clever way — and you walk at a tenth of your pace. Proper icon (horn, face, waist, foot). A prize for whoever works out how to want it. |

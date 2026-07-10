@@ -90,10 +90,6 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
   // Exactly two anvils on the whole island, both indoors. Good luck.
   drop(boards, 'anvil', 1);
   drop(boards, 'anvil', 1);
-  // Large stones out in the wilds — same absurd weight as the anvil.
-  drop(forestGrass, 'large_stone', 1);
-  drop(forestGrass, 'large_stone', 1);
-  drop(tallgrass, 'large_stone', 1);
   for (let i = 0; i < 14; i++) drop(boards, 'tin', 1);
   for (let i = 0; i < 16; i++) drop(tallgrass, 'berries', 2 + Math.floor(rng() * 2));
   // Books are rarer: one copy of each plus two duplicates, buildings only.
@@ -127,6 +123,12 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
   // exploring. Seven placed, a little slack against an unlucky drop.
   for (let i = 0; i < 3; i++) drop(boards, 'fortress_map_fragment', 1);
   for (let i = 0; i < 2; i++) drop(forestGrass, 'fortress_map_fragment', 1);
+  // Large stones out in the wilds — same absurd weight as the anvil.
+  // (Placed HERE, after forestGrass/tallgrass exist: seeding them beside the
+  // anvils above threw a TDZ error at module load and blanked the whole game.)
+  drop(forestGrass, 'large_stone', 1);
+  drop(forestGrass, 'large_stone', 1);
+  drop(tallgrass, 'large_stone', 1);
   for (let i = 0; i < 2; i++) drop(tallgrass, 'fortress_map_fragment', 1);
   for (let i = 0; i < 2; i++) drop(forestGrass, 'ronml_page', 1);
   // Cassette tapes for the walkman. Every tape EXCEPT the WARD "bear stanhope"

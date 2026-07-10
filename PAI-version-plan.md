@@ -48,6 +48,21 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.74 — HOTFIX: TDZ crash at module load (black screen after title)
+
+- v1.72 seeded `large_stone` drops beside the anvil drops (~line 94), ABOVE
+  the `const forestGrass = []` / `tallgrass` declarations — `Cannot access
+  'forestGrass' before initialization` at module evaluation, so main.js never
+  ran: no world, no HUD, only the DOM chrome ("Press H for help") over a
+  black canvas, on every platform. Moved the drops below the declarations.
+- **Why it escaped**: `node --check` is syntax-only (TDZ is a runtime error),
+  and the headless test suite imports worldgen/player/ronml — never main.js
+  (it needs a DOM). **New standing check**: after ANY main.js module-scope
+  edit, boot the game in headless Chrome (scratchpad puppeteer probe: gate →
+  Start → assert `window.__game` + non-black canvas + uiSlots > 0) before
+  pushing. The probe scripts live in the session scratchpad; recreate from
+  this note if needed.
+
 ### v1.73 — mobile walkman: live reels, spacing, now-playing toast
 
 - **Compact HUD cassette animates**: the walkman slot drew a frozen item icon;
