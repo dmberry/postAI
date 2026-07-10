@@ -87,7 +87,13 @@ const animals = spawnAnimals(map, WORLD_SEED, { x: spawn.x, y: spawn.y, r: 12 })
     map.groundItems.push({ item, qty, x: x + 0.5, y: y + 0.5, keep: true });
   };
   for (let i = 0; i < 12; i++) drop(boards, 'torch', 1);
-  drop(boards, 'anvil', 1); // one anvil, somewhere in town. Good luck.
+  // Exactly two anvils on the whole island, both indoors. Good luck.
+  drop(boards, 'anvil', 1);
+  drop(boards, 'anvil', 1);
+  // Large stones out in the wilds — same absurd weight as the anvil.
+  drop(forestGrass, 'large_stone', 1);
+  drop(forestGrass, 'large_stone', 1);
+  drop(tallgrass, 'large_stone', 1);
   for (let i = 0; i < 14; i++) drop(boards, 'tin', 1);
   for (let i = 0; i < 16; i++) drop(tallgrass, 'berries', 2 + Math.floor(rng() * 2));
   // Books are rarer: one copy of each plus two duplicates, buildings only.

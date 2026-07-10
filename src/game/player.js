@@ -654,11 +654,13 @@ export class Player {
       if (objHere && objHere.type === 'tree') speed *= 0.75;
       // Lotus daze: heavy limbs. Fighting the pull out of the grove is slow work.
       if (this.torpor > 0) speed *= TORPOR_SLOW;
-      // The anvil: an anvil is an anvil, wherever you put it. 10% pace.
-      if (this.carryingAnvil()) {
+      // Burden items (the anvil, the large stone): heavy is heavy, wherever
+      // you put it. 10% pace, and the game says so once per pickup.
+      const burden = this.carryingBurden();
+      if (burden) {
         speed *= ANVIL_SLOW;
-        if (!this._anvilSaid) { this._anvilSaid = true; this.say('The anvil is exactly as heavy as an anvil. You can barely move.'); }
-      } else if (this._anvilSaid) this._anvilSaid = false;
+        if (!this._burdenSaid) { this._burdenSaid = true; this.say(`The ${ITEMS[burden].name.toLowerCase()} is exactly as heavy as it looks. You can barely move.`); }
+      } else if (this._burdenSaid) this._burdenSaid = false;
       // Up on a block top, ease off the pace — the footprint is small and a
       // full walking speed makes edges twitchy to line up. Slower is easier
       // to control up there.
@@ -802,14 +804,20 @@ export class Player {
     this.pickupNearby(map);
   }
 
-  // True if an anvil is anywhere on your person — hands, pockets, backpack
-  // slots, or the spare-weapon sleeve. There is no clever way to carry it.
-  carryingAnvil() {
-    if (this.hands === 'anvil') return true;
-    if (this.pockets.some((s) => s && s.item === 'anvil')) return true;
-    if (this.backpack && (this.backpack.weapon === 'anvil'
-      || this.backpack.slots.some((s) => s && s.item === 'anvil'))) return true;
-    return false;
+  // Returns the item key of any burden-flagged item (ITEMS[..].burden — the
+  // anvil, the large stone) anywhere on your person: hands, pockets, backpack
+  // slots, the spare-weapon sleeve. There is no clever way to carry one.
+  carryingBurden() {
+    const heavy = (k) => k && ITEMS[k] && ITEMS[k].burden ? k : null;
+    if (heavy(this.hands)) return this.hands;
+    const p = this.pockets.find((s) => s && heavy(s.item));
+    if (p) return p.item;
+    if (this.backpack) {
+      if (heavy(this.backpack.weapon)) return this.backpack.weapon;
+      const b = this.backpack.slots.find((s) => s && heavy(s.item));
+      if (b) return b.item;
+    }
+    return null;
   }
 
   // Drop a specific slot's whole contents on the ground ahead (used by

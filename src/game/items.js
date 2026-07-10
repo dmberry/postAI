@@ -422,6 +422,14 @@ export const ITEMS = {
     kind: 'material',
     stack: 1,
     color: '#4a4e55',
+    burden: true, // carried anywhere on you: a tenth of your pace (player.js)
+  },
+  large_stone: {
+    name: 'Large stone',
+    kind: 'material',
+    stack: 1,
+    color: '#8a8d90',
+    burden: true, // same punishing weight as the anvil
   },
   wood: {
     name: 'Wood',

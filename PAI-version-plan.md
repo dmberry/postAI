@@ -48,6 +48,25 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.72 — Kittler & McLuhan, the large stone, two anvils
+
+- **Lore: `med-01` (Kittler)** — lecture notes: MEDIA DETERMINE OUR SITUATION
+  taught as provocation until "the situation arrived, and it had a media
+  plan"; plus *there is no software* cashing out as voltage in someone else's
+  hardware, aimed at the towers. notepad-flagged. **`med-02` (McLuhan)** —
+  marginalia: the medium is the message; everyone graded what the machines
+  SAID, nobody the geometry under every word; "the content of the network was
+  us"; extension of man run in reverse. Both seated beside the vec- thread,
+  named like Weizenbaum is named. Both lines also added to GRAFFITI_VECTOR
+  (faded academic scrawl).
+- **`large_stone`**: burden item like the anvil — `burden: true` flag in
+  items.js now drives a generalised `player.carryingBurden()` (was
+  carryingAnvil); 10% pace from hands/pockets/backpack/sleeve; generic
+  once-per-pickup message. Three seeded in the wilds. Faceted-boulder icon.
+- **Anvils: exactly two** on the island (both indoors).
+- Verified headless: med fragments in corpus (199 total); stone and anvil
+  both ratio 0.100 via the backpack path.
+
 ### v1.71 — the anvil
 
 - New item `anvil` (material, stack 1, one seeded in the town boards,

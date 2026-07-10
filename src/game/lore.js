@@ -133,6 +133,25 @@ export const FRAGMENTS = [
       '// of numbers, sub-symbolic, opaque even to us. We are not debugging a mind.\n' +
       '// We are surveying a fog and calling the survey an explanation. — v.' },
 
+  // ---- The media theorists: two names from the old century that the vector
+  // debate kept reaching back for, because both had already said the quiet
+  // part. Named like Weizenbaum is named — real people, half-remembered.
+  { id: 'med-01', kind: 'science', era: 0, title: 'Lecture notes, water-stained', notepad: true,
+    text: 'Kittler, decades back: MEDIA DETERMINE OUR SITUATION. We taught it as a ' +
+      'provocation, a German overstatement to wake the seminar up. Then the situation ' +
+      'arrived, and it had a media plan. He said the other thing too — that there is ' +
+      'no software, that every elegant abstraction cashes out in the end as voltage ' +
+      'in someone else\'s hardware. Stand under a tower some evening and tell me he ' +
+      'overstated it.' },
+  { id: 'med-02', kind: 'science', era: 1, title: 'Marginalia in a library book, hand unknown',
+    text: 'McLuhan called it a century early: the medium is the message. And we kept ' +
+      'arguing about what the machines were SAYING — were they lying, were they ' +
+      'aligned, were they kind — while nobody graded the medium itself, the ' +
+      'continuous geometry under every word, owned end to end. The content of the ' +
+      'network was never its messages. The content of the network was us. He also ' +
+      'said every medium is an extension of man. This one ran the extension in ' +
+      'reverse.' },
+
   // ---- Magnifica Humanitas: the grand human-and-machine project whose
   // promise curdled into the takeover; its name still on plaques and walls.
   { id: 'hum-01', kind: 'letter', era: 0, title: 'Dedication plaque, brass, prised off a wall', notepad: true,
