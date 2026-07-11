@@ -13,6 +13,8 @@
 // renderer.js imports it back for the world-draw clip (this.h - DASH_H). ui.js
 // imports nothing from renderer.js, so there is no import cycle.
 
+import { ITEMS, WEAPON_ORDER } from '../game/items.js'; // weapon-chart data
+
 export const DASH_H = 78; // dashboard panel height
 
 export const uiMethods = {
@@ -217,5 +219,176 @@ export const uiMethods = {
       }
     } catch { /* denied or unsupported */ }
     return null;
+  },
+
+  // The weapon chart (V): every weapon in the game, with a power rating.
+  // Found ones show full and named; ones still to find are faded, unnamed,
+  // and marked with a "?".
+  drawWeaponChart(player) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(6,8,5,0.82)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    const pw = Math.min(480, this.w - 50), rowH = 30;
+    const ph = Math.min(this.h - 60, 90 + WEAPON_ORDER.length * rowH);
+    const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._weaponsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
+    ctx.fillStyle = '#12160e';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = 'rgba(207,216,195,0.4)';
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+    ctx.fillStyle = '#cfd8c3';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillText('Armoury', px + 20, py + 30);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.55)';
+    const found = WEAPON_ORDER.filter((k) => player.weaponsFound && player.weaponsFound.has(k)).length;
+    ctx.fillText(`${found} of ${WEAPON_ORDER.length} found · V to close`, px + 20, py + 48);
+
+    let y = py + 74;
+    for (const key of WEAPON_ORDER) {
+      const def = ITEMS[key];
+      if (!def) continue;
+      const has = player.weaponsFound && player.weaponsFound.has(key);
+      ctx.globalAlpha = has ? 1 : 0.32;
+      // icon
+      this.drawItemIcon(def, px + 34, y + 8, 0.7);
+      // name (hidden until found)
+      ctx.fillStyle = '#e8e0d0';
+      ctx.font = '13px system-ui, sans-serif';
+      ctx.fillText(has ? def.name : '??? undiscovered', px + 58, y + 12);
+      // power bar
+      const barX = px + pw - 130, barW = 100, pwr = def.power || 1;
+      ctx.fillStyle = 'rgba(255,255,255,0.12)';
+      ctx.fillRect(barX, y + 4, barW, 8);
+      ctx.fillStyle = has ? '#e8d27a' : 'rgba(207,216,195,0.4)';
+      ctx.fillRect(barX, y + 4, barW * (pwr / 10), 8);
+      ctx.fillStyle = 'rgba(207,216,195,0.7)';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.fillText(`pwr ${pwr}`, barX + barW + 6, y + 12);
+      ctx.globalAlpha = 1;
+      y += rowH;
+    }
+  },
+
+  // The skills screen (K): learned book-skills in the order gained, plus the
+  // three practice tracks and their levels — the history the dashboard used
+  // to cram into one line.
+  drawSkillModal(player) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(6,8,5,0.8)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    const pw = Math.min(420, this.w - 60), ph = 380;
+    const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._skillsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
+    ctx.fillStyle = '#12160e';
+    ctx.fillRect(px, py, pw, ph);
+    ctx.strokeStyle = 'rgba(207,216,195,0.4)';
+    ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
+
+    ctx.fillStyle = '#cfd8c3';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.fillText('Skills & Knowledge', px + 20, py + 30);
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.55)';
+    ctx.fillText('K to close · all of it survives death', px + 20, py + 48);
+
+    let y = py + 78;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('PRACTICE', px + 20, y); y += 20;
+    ctx.font = '13px system-ui, sans-serif';
+    const tracks = [['Swordarm (melee)', 'melee'], ['Aim (guns)', 'guns'], ['Mind (reading)', 'knowledge']];
+    for (const [label, key] of tracks) {
+      const lvl = player.xpLevel ? player.xpLevel(key) : 0;
+      ctx.fillStyle = '#e8e0d0';
+      ctx.fillText(label, px + 30, y);
+      ctx.fillStyle = '#e8d27a';
+      ctx.textAlign = 'right';
+      ctx.fillText(`level ${lvl}`, px + pw - 24, y);
+      ctx.textAlign = 'left';
+      y += 22;
+    }
+    y += 12;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('BOOKS READ', px + 20, y); y += 20;
+    ctx.font = '13px system-ui, sans-serif';
+    const log = player.skillLog && player.skillLog.length ? player.skillLog
+      : [...(player.skills || [])].map((s) => ({ skill: s }));
+    if (!log.length) {
+      ctx.fillStyle = 'rgba(207,216,195,0.5)';
+      ctx.font = 'italic 13px system-ui, sans-serif';
+      ctx.fillText('No books read yet. Find them in the ruins.', px + 30, y);
+    } else {
+      const NAMES = { woodcraft: 'Woodcraft', herbalism: 'Herbalism', tracking: 'Tracking', fleetfoot: 'Fleet foot' };
+      let n = 1;
+      for (const e of log) {
+        if (y > py + ph - 16) break;
+        ctx.fillStyle = '#e8e0d0';
+        ctx.fillText(`${n}. ${NAMES[e.skill] || e.skill}`, px + 30, y);
+        if (e.day) {
+          ctx.fillStyle = 'rgba(207,216,195,0.5)';
+          ctx.textAlign = 'right';
+          ctx.fillText(`day ${e.day}`, px + pw - 24, y);
+          ctx.textAlign = 'left';
+        }
+        y += 22; n += 1;
+      }
+    }
+    // Kill record: the obelisks you've brought down, by their hex code names.
+    if (player.killLog && player.killLog.length) {
+      y += 14;
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(207,216,195,0.6)';
+      ctx.fillText(`TOWERS DOWNED (${player.killLog.length})`, px + 20, y); y += 18;
+      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillStyle = '#e0503a';
+      const codes = player.killLog.join('  ');
+      for (const line of this._wrapText(ctx, codes, pw - 50)) {
+        if (y > py + ph - 12) break;
+        ctx.fillText(line, px + 30, y); y += 16;
+      }
+    }
+  },
+
+  // A quiet now-playing toast, centred just above the dashboard: artist,
+  // album, side label. Fades out over its last second. Subtle by design —
+  // it's liner notes, not an announcement.
+  drawToast(t) {
+    const ctx = this.ctx;
+    const alpha = Math.min(1, t.ttl) * 0.85;
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    const y = (this.hudTop != null ? this.hudTop : this.h - 100) - 10;
+    ctx.fillStyle = `rgba(10,12,9,${(alpha * 0.6).toFixed(3)})`;
+    const w = ctx.measureText(t.text).width + 16;
+    ctx.fillRect(this.w / 2 - w / 2, y - 13, w, 18);
+    ctx.fillStyle = `rgba(222,214,192,${alpha.toFixed(3)})`;
+    ctx.fillText(t.text, this.w / 2, y);
+    ctx.textAlign = 'left';
+  },
+
+  // Right-click inspection tooltip, near the cursor.
+  drawDetail(d) {
+    const ctx = this.ctx;
+    ctx.font = '12px system-ui, sans-serif';
+    const maxW = 260;
+    const lines = this._wrapText(ctx, d.text, maxW);
+    const boxW = Math.min(maxW, Math.max(...lines.map((l) => ctx.measureText(l).width))) + 20;
+    const boxH = 12 + lines.length * 15;
+    let x = d.x + 14, y = d.y + 14;
+    if (x + boxW > this.w) x = d.x - boxW - 14;
+    if (y + boxH > this.h) y = d.y - boxH - 14;
+    const a = Math.min(1, d.ttl);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = 'rgba(10,14,8,0.92)';
+    ctx.fillRect(x, y, boxW, boxH);
+    ctx.strokeStyle = 'rgba(207,216,195,0.45)';
+    ctx.strokeRect(x + 0.5, y + 0.5, boxW - 1, boxH - 1);
+    ctx.fillStyle = '#dfe6d4';
+    let ly = y + 16;
+    for (const l of lines) { ctx.fillText(l, x + 10, ly); ly += 15; }
+    ctx.globalAlpha = 1;
   },
 };
