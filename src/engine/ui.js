@@ -14,8 +14,32 @@
 // imports nothing from renderer.js, so there is no import cycle.
 
 import { ITEMS, WEAPON_ORDER } from '../game/items.js'; // weapon-chart data
+import { PAPER_TEXTURE } from './textures.js'; // death-cert paper
 
 export const DASH_H = 78; // dashboard panel height
+
+// The rank for the certificate, banded purely by score.
+export function deathRank(score) {
+  const s = score || 0;
+  let title, blurb;
+  if (s <= 0) { title = 'LAME'; blurb = 'You achieved precisely nothing. Impressive, in a way.'; }
+  else if (s < 100) { title = 'NOOB'; blurb = 'Everyone starts somewhere. You did not get far.'; }
+  else if (s < 200) { title = 'BEGINNER'; blurb = 'The basics, grasped. Barely.'; }
+  else if (s < 300) { title = 'INTERN'; blurb = 'Unpaid, unnoticed, unalive.'; }
+  else if (s < 400) { title = 'NORMIE'; blurb = 'Gloriously average. A credit to the mean.'; }
+  else if (s < 600) { title = 'POST-NORMIE'; blurb = 'You have transcended average, if not survival.'; }
+  else if (s < 800) { title = 'SEASONED'; blurb = 'Salt, scars, and a healthy fear of rivers.'; }
+  else if (s < 1200) { title = 'SERIOUS'; blurb = 'Nobody laughed at your loadout. Nobody.'; }
+  else if (s < 1500) { title = 'TRAINED'; blurb = 'Muscle memory and a mean crowbar swing.'; }
+  else if (s < 2000) { title = 'SNIPER'; blurb = 'One shot, one less machine. Usually.'; }
+  else if (s < 3000) { title = 'AI STALKER'; blurb = 'You hunt the things that hunt you.'; }
+  else if (s < 4000) { title = 'L33T'; blurb = 'The towers whisper your name in binary.'; }
+  else if (s < 5000) { title = 'L33T PRO'; blurb = 'Professionally terrifying to circuitry.'; }
+  else if (s < 10000) { title = 'ULTRA-L33T'; blurb = 'Small children draw you defeating obelisks.'; }
+  else { title = 'MEGA L33T'; blurb = 'POSEIDON has a folder named after you. It is afraid.'; }
+  const colors = { LAME: '#9a7a5a', NOOB: '#c9905a', BEGINNER: '#c9a05a', INTERN: '#c9b05a', NORMIE: '#b9c95a', 'POST-NORMIE': '#9fd058', SEASONED: '#6fbf4a', SERIOUS: '#4abf7a', TRAINED: '#4ac0b0', SNIPER: '#4aa8d8', 'AI STALKER': '#6f8fe0', L33T: '#e8d27a', 'L33T PRO': '#f0c040', 'ULTRA-L33T': '#f09040', 'MEGA L33T': '#ff5040' };
+  return { title, blurb, color: colors[title] || '#e8d27a' };
+}
 
 export const uiMethods = {
   // A soft dim over the play area while the player rests (the dashboard, and
@@ -390,5 +414,152 @@ export const uiMethods = {
     let ly = y + 16;
     for (const l of lines) { ctx.fillText(l, x + 10, ly); ly += 15; }
     ctx.globalAlpha = 1;
+  },
+
+  // A certificate of death: a modal listing the run's achievements and an
+  // amusing rank. Click anywhere to dismiss (handled in main).
+  // A running Greek-key (meander) band — the Homeric border motif, echoing the
+  // marble columns. A bottom rail with a repeated fret hooked above it.
+  meanderBand(x0, yTop, w, color) {
+    const ctx = this.ctx;
+    const a = 4, unit = 4 * a;         // fret cell / repeat width
+    const yb = yTop + 3 * a;
+    ctx.save();
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.lineJoin = 'miter'; ctx.lineCap = 'butt';
+    ctx.beginPath();
+    ctx.moveTo(x0, yb); ctx.lineTo(x0 + w, yb);   // bottom rail
+    for (let x = x0; x + unit <= x0 + w; x += unit) {
+      ctx.moveTo(x, yb);
+      ctx.lineTo(x, yTop);
+      ctx.lineTo(x + 3 * a, yTop);
+      ctx.lineTo(x + 3 * a, yTop + 2 * a);
+      ctx.lineTo(x + a, yTop + 2 * a);
+      ctx.lineTo(x + a, yTop + a);
+    }
+    ctx.stroke();
+    ctx.restore();
+  },
+
+  drawDeathCert(cert) {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(4,6,3,0.85)';
+    ctx.fillRect(0, 0, this.w, this.h);
+    const pw = Math.min(496, this.w - 48), ph = 390;
+    const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
+    this._certBounds = { x: px, y: py, w: pw, h: ph }; // for the S-to-share capture
+    const cx = px + pw / 2;
+    const isVictory = !!cert.victory;
+
+    // The certificate is printed on a sheet of aged paper — a death notice for a
+    // wanderer who did not make it home. A running Greek-key border under the
+    // title keeps the Odyssey note (the columns' motif) without pretending the
+    // paper is stone.
+    ctx.fillStyle = '#ece2cc';
+    ctx.fillRect(px, py, pw, ph);
+    if (PAPER_TEXTURE.complete && PAPER_TEXTURE.naturalWidth) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(px, py, pw, ph); ctx.clip();
+      ctx.drawImage(PAPER_TEXTURE, px, py, pw, ph);
+      ctx.restore();
+    }
+    // Bleach the sheet toward white (a paler, cleaner paper) while keeping the
+    // grain, then only a soft vignette so the edges still fox a little.
+    ctx.fillStyle = 'rgba(252,251,247,0.52)'; ctx.fillRect(px, py, pw, ph);
+    const vg = ctx.createRadialGradient(cx, py + ph * 0.45, ph * 0.28, cx, py + ph * 0.5, ph * 0.85);
+    vg.addColorStop(0, 'rgba(255,255,253,0)');
+    vg.addColorStop(1, 'rgba(150,132,98,0.15)');
+    ctx.fillStyle = vg; ctx.fillRect(px, py, pw, ph);
+    // A printed certificate border: a dark rule with a finer inner rule.
+    ctx.strokeStyle = 'rgba(90,68,40,0.85)'; ctx.lineWidth = 2.5;
+    ctx.strokeRect(px + 6, py + 6, pw - 12, ph - 12);
+    ctx.strokeStyle = 'rgba(150,120,74,0.7)'; ctx.lineWidth = 1;
+    ctx.strokeRect(px + 10, py + 10, pw - 20, ph - 20);
+
+    // Sepia ink that reads on paper.
+    const INK = '#3a2e1f', FAINT = 'rgba(58,46,31,0.62)', VAL = '#4a3a22';
+    const carved = 'rgba(120,90,42,0.7)';
+
+    // Title, engraved.
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 27px Georgia, serif';
+    ctx.fillStyle = isVictory ? '#2f5d2a' : '#7d241a';
+    ctx.fillText(isVictory ? 'THE TOWERS ARE DOWN' : 'CERTIFICATE OF DEATH', cx, py + 50);
+    // Greek-key meander under the title.
+    this.meanderBand(px + 40, py + 64, pw - 80, carved);
+
+    // Epitaph, in the language of a grave stele.
+    ctx.fillStyle = INK; ctx.font = '18px Georgia, serif';
+    if (isVictory) {
+      ctx.fillText(`${cert.name || 'A wanderer'} pulled down every tower and turned for home.`, cx, py + 112);
+      ctx.font = 'italic 17px Georgia, serif'; ctx.fillStyle = FAINT;
+      ctx.fillText('The machines forget. POSEIDON never wakes.', cx, py + 140);
+    } else if (cert.skylink) {
+      ctx.fillText(`Here lies ${cert.name || 'a wanderer'},`, cx, py + 112);
+      ctx.fillText('lost the day POSEIDON woke and the sea rose.', cx, py + 140);
+    } else {
+      ctx.fillText(`Here lies ${cert.name || 'a wanderer'},`, cx, py + 112);
+      ctx.fillText(`taken by ${cert.cause}, far from home.`, cx, py + 140);
+    }
+
+    // Ledger rows.
+    const rank = deathRank(cert.score);
+    ctx.textAlign = 'left';
+    ctx.font = '16px Georgia, serif';
+    const lx = px + 58;
+    const valX = lx + 172;
+    const valMaxW = px + pw - 48 - valX;
+    let y = py + 190;
+    const row = (label, val) => {
+      ctx.font = '16px Georgia, serif';
+      ctx.fillStyle = FAINT; ctx.fillText(label, lx, y);
+      ctx.fillStyle = VAL;
+      const lines = this._wrapText(ctx, String(val), valMaxW);
+      for (const l of lines) { ctx.fillText(l, valX, y); y += 22; }
+      y += 10;
+    };
+    row('Final score', cert.score);
+    row('Skills mastered', cert.skills.length ? cert.skills.join(', ') : 'none');
+    row('Deaths so far', cert.deaths);
+
+    // Rank, carved, with a small "rank:" label so it reads as a grade. The
+    // label + engraved title are centred together as one group.
+    const ry = py + ph - 92;
+    ctx.textAlign = 'left';
+    const pfx = 'rank:  ';
+    ctx.font = 'italic 18px Georgia, serif';
+    const pfxW = ctx.measureText(pfx).width;
+    ctx.font = 'bold 36px Georgia, serif';
+    const rankW = ctx.measureText(rank.title).width;
+    const startX = cx - (pfxW + rankW) / 2;
+    ctx.font = 'italic 18px Georgia, serif'; ctx.fillStyle = FAINT;
+    ctx.fillText(pfx, startX, ry - 2);
+    ctx.font = 'bold 36px Georgia, serif';
+    ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(38,32,20,0.55)';
+    ctx.strokeText(rank.title, startX + pfxW, ry);
+    ctx.fillStyle = rank.color;
+    ctx.fillText(rank.title, startX + pfxW, ry);
+    ctx.textAlign = 'center';
+    ctx.font = 'italic 15px Georgia, serif';
+    ctx.fillStyle = FAINT;
+    ctx.fillText(rank.blurb, cx, py + ph - 52);
+    ctx.font = '11.5px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(44,39,31,0.5)';
+    ctx.fillText('S or Copy to copy as an image · click elsewhere to carry on', cx, py + ph - 26);
+    ctx.textAlign = 'left';
+
+    // Copy-to-clipboard button, drawn ABOVE the sheet (outside _certBounds) so
+    // it is never captured into the copied image.
+    const btnW = 74, btnH = 24;
+    const btnX = px + pw - btnW, btnY = py - btnH - 8;
+    this._certCopyBtn = { x: btnX, y: btnY, w: btnW, h: btnH };
+    ctx.fillStyle = 'rgba(226,220,204,0.92)';
+    ctx.fillRect(btnX, btnY, btnW, btnH);
+    ctx.strokeStyle = 'rgba(30,26,18,0.6)'; ctx.lineWidth = 1;
+    ctx.strokeRect(btnX + 0.5, btnY + 0.5, btnW - 1, btnH - 1);
+    ctx.fillStyle = '#2e2617';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Copy', btnX + btnW / 2, btnY + 16);
+    ctx.textAlign = 'left';
   },
 };
