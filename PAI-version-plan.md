@@ -48,6 +48,10 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.87 — active-status chip row fills the wide HUD
+
+- **Status chips** (`renderer.js` + `player.js`): the wide desktop HUD had a dead gap between the walkman and the right-aligned status block. `drawStatusChips` lays a colour-coded chip there per live state — hidden / poison / hunger / wounded, plus forcefield charge, shield wear (riot hits-left or mirror heat, via `shieldStatus()`), lotus daze, and burden — some with a gauge. Only active states draw; the row starts past the walkman and caps at `this.w - 200`, so it never collides with the score block and simply drops overflow on a tight window. Below 1040px it falls back to `drawConditionsInline` (the old terse text by the vitals bars) so nothing is ever hidden. Added `player.forcefieldFrac()` for the charge gauge. Bonus: a pocket-carried shield's condition now shows here — the held-only hands gauge missed it.
+
 ### v1.86 — smooth block-jumps, shields wear out, small-window HUD, backpack nudge
 
 - **Block-jump feel fixed** (`player.js` + `renderer.js`): jumping/climbing onto a taller tile used to pop the sprite up a whole block-height (40px for a wall) and flip the block's draw order in the single frame your tile crossed onto it — the "jumpy/glitchy on blocks" + "character overlapping blocks" reports. The walk-*off* case already bled lost height into the jump `z` for a smooth drop; added the mirror branch for climbing *on* (bleed the height gained back out of `z`), and added the jump height (`z*2`, matching `climbRaise`'s units) to the player's **sort depth** so draw order tracks true elevation and hands off to `climbRaise` on landing. Verified against the running build: worst frame-to-frame lift jump on a wall landing 40px → 9.9px, sort snap 2.5 → 0.62; walk-off stays 0.1px. Both changes are scoped to airborne frames, so static play is byte-identical.

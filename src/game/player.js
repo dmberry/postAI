@@ -1921,6 +1921,11 @@ export class Player {
     return this.hasItem('forcefield') && this.forcefieldArmed && this.forcefieldCharge > 0;
   }
 
+  // Forcefield charge as a 0..1 fraction of a full cell, for the HUD gauge.
+  forcefieldFrac() {
+    return Math.max(0, Math.min(1, this.forcefieldCharge / FORCEFIELD_MAX));
+  }
+
   // While the electro-compass is armed and carried, the facing chevron
   // becomes a cluster of pointers — one per category of notable thing,
   // each to the nearest of its kind, colour-coded: factory (blue), obelisk

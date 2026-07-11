@@ -4275,24 +4275,11 @@ export class Renderer {
     this.drawBar(16, top + 14, 150, 8, player.health / player.maxHealth, '#b0392f', 'HEALTH');
     this.drawBar(16, top + 37, 150, 8, player.stamina / player.maxStamina, '#5f8f3e', 'STAMINA');
     this.drawBar(16, top + 60, 150, 8, (player.food ?? 100) / (player.maxFood ?? 100), '#c99a3e', 'FOOD');
-    ctx.font = 'bold 9px system-ui, sans-serif';
-    if (player.venom > 0) {
-      ctx.fillStyle = '#b07fd8';
-      ctx.fillText('POISONED', 92, top + 9);
-    }
-    if (player.food <= 0) {
-      ctx.fillStyle = '#e05548';
-      ctx.fillText('STARVING', 92, top + 55);
-    } else if (player.food < 25) {
-      ctx.fillStyle = '#d8a04f';
-      ctx.fillText('HUNGRY', 92, top + 55);
-    }
-    // Wi-Fi block active (works whether held or carried): the machines can't
-    // see you. Shows minutes of charge left.
-    if (player.invisibleToRobots) {
-      ctx.fillStyle = '#4fd8c3';
-      ctx.fillText(`HIDDEN ${Math.ceil((player.wifiPower || 0) / 60)}m`, 92, top + 32);
-    }
+    // Live status. On a wide window there's room for the full chip row out in
+    // the empty middle; on a narrower desktop fall back to the terse text tucked
+    // by the bars so nothing is ever hidden. (The compact layout has its own.)
+    if (this.w >= 1040) this.drawStatusChips(player, top);
+    else this.drawConditionsInline(player, top);
 
     // Hands slot
     const handsX = 210;
@@ -4450,6 +4437,79 @@ export class Renderer {
     ctx.fillStyle = rank.color;
     ctx.fillText(rank.title, this.w - 16, line); line += 16;
     ctx.textAlign = 'left';
+  }
+
+  // Terse condition text tucked beside the vitals bars — the narrow-desktop
+  // fallback for the fuller chip row (drawStatusChips), so a mid-width window
+  // still shows the critical states even without room for the middle chips.
+  drawConditionsInline(player, top) {
+    const ctx = this.ctx;
+    ctx.font = 'bold 9px system-ui, sans-serif';
+    if (player.venom > 0) { ctx.fillStyle = '#b07fd8'; ctx.fillText('POISONED', 92, top + 9); }
+    if (player.invisibleToRobots) {
+      ctx.fillStyle = '#4fd8c3';
+      ctx.fillText(player.terminalSafe ? 'HIDDEN' : `HIDDEN ${Math.ceil((player.wifiPower || 0) / 60)}m`, 92, top + 32);
+    }
+    if (player.food <= 0) { ctx.fillStyle = '#e05548'; ctx.fillText('STARVING', 92, top + 55); }
+    else if (player.food < 25) { ctx.fillStyle = '#d8a04f'; ctx.fillText('HUNGRY', 92, top + 55); }
+  }
+
+  // The active-status chip row that fills the wide HUD's empty middle: one small
+  // chip per live state (hidden, poison, hunger, wounded, forcefield, shield
+  // wear, lotus daze, burden), some with a gauge. Only active states draw, so
+  // the row is empty when nothing's going on rather than filled with dead space.
+  // It lays out left of the right-aligned status block and stops before it, so
+  // it never collides; on a huge screen everything fits with room to spare.
+  drawStatusChips(player, top) {
+    const ctx = this.ctx;
+    const chips = [];
+    if (player.invisibleToRobots) {
+      chips.push({ label: 'HIDDEN', value: player.terminalSafe ? '' : `${Math.ceil((player.wifiPower || 0) / 60)}m`, color: '#4fd8c3' });
+    }
+    if (player.venom > 0) chips.push({ label: 'POISON', color: '#b07fd8' });
+    if ((player.food ?? 100) <= 0) chips.push({ label: 'STARVING', color: '#e05548' });
+    else if ((player.food ?? 100) < 25) chips.push({ label: 'HUNGRY', color: '#d8a04f' });
+    if (player.health / player.maxHealth < 0.25) chips.push({ label: 'WOUNDED', color: '#e0653c' });
+    if (player.forcefieldActive && player.forcefieldActive()) {
+      const f = player.forcefieldFrac ? player.forcefieldFrac() : 1;
+      chips.push({ label: 'FIELD', gauge: f, color: f > 0.25 ? '#4fe08a' : '#e05548' });
+    }
+    if (player.shieldStatus) {
+      const st = player.shieldStatus();
+      if (st && st.kind === 'mirror') chips.push({ label: 'MIRROR', gauge: st.frac, color: st.hot ? '#e0553c' : '#7fd8e6' });
+      else if (st) chips.push({ label: 'SHIELD', value: st.label, gauge: 1 - st.frac, color: st.hot ? '#e05548' : '#7fbf5a' });
+    }
+    if (player.torpor > 0) chips.push({ label: 'DAZED', color: '#e6c07a' });
+    if (player.carryingBurden && player.carryingBurden()) chips.push({ label: 'BURDEN', color: '#b8b0a0' });
+    if (!chips.length) return;
+
+    // Start just past the walkman (same x math the walkman uses), stop short of
+    // the right status block.
+    let x = 286 + player.pockets.length * 42 + 10 + (player.backpack ? 92 : 0) + 36 + 30;
+    const maxX = this.w - 200;
+    const cy = top + 27, ch = 24;
+    ctx.textAlign = 'left';
+    for (const chip of chips) {
+      ctx.font = 'bold 10px system-ui, sans-serif';
+      const text = chip.value ? `${chip.label} ${chip.value}` : chip.label;
+      const tw = ctx.measureText(text).width;
+      const gw = chip.gauge != null ? 26 : 0;
+      const cw = 9 + tw + (gw ? gw + 6 : 0) + 9;
+      if (x + cw > maxX) break; // out of room before the status block; drop the rest
+      ctx.fillStyle = 'rgba(0,0,0,0.34)';
+      ctx.fillRect(x, cy, cw, ch);
+      ctx.fillStyle = chip.color;
+      ctx.fillRect(x, cy + 3, 3, ch - 6); // left accent
+      ctx.fillText(text, x + 9, cy + 16);
+      if (chip.gauge != null) {
+        const gx = x + 9 + tw + 6, gy = cy + 8, gh = 8, gwi = gw - 4;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(gx, gy, gwi, gh);
+        ctx.fillStyle = chip.color;
+        ctx.fillRect(gx, gy, gwi * Math.max(0, Math.min(1, chip.gauge)), gh);
+      }
+      x += cw + 8;
+    }
   }
 
   // HUD elements that must show whichever dashboard variant is up (desktop or
