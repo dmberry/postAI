@@ -68,6 +68,17 @@ const FORCEFIELD_MAX = 60;  // seconds of forcefield per battery
 const FORCEFIELD_DRAIN = 1; // charge/sec while the field is up
 const SHIELD_FRONT = 0.2;   // a shield covers shots from within this facing dot
 const REFLECT_DAMAGE = 8;   // a mirror shield throws this back at the shooter
+// Shields wear out under fire. The riot shield is sheet metal — count the blows
+// it soaks and it eventually caves in. The mirror shield overheats: every bolt
+// it throws back adds heat, it sheds heat when the fire lets up, past FADE it's
+// glowing too hot to reflect (only absorbs), and at full heat it melts to scrap.
+// The forcefield is energy, not metal, so it never breaks — but each blow it
+// swallows costs extra charge, so a barrage drains the cell far faster than idle.
+const RIOT_SHIELD_HITS = 12;      // blocked hits before a riot shield is battered apart
+const MIRROR_HEAT_PER_HIT = 0.17; // heat gained per bolt reflected (0..1 scale)
+const MIRROR_HEAT_COOL = 0.13;    // heat/sec shed while not being hit
+const MIRROR_HEAT_FADE = 0.6;     // above this it's too hot to reflect — only absorbs
+const FORCEFIELD_HIT_COST = 2;    // seconds of charge burned per blow the field eats
 
 const WIFI_MAX = 600;    // Wi-Fi block charge in seconds (10 real minutes)
 const SWIM_STAMINA_DRAIN = 8;  // stamina/sec while in deep water
@@ -122,6 +133,8 @@ export class Player {
     this.doubleJumped = false; // a second, mid-air jump: reaches block tops
     this.forcefieldCharge = 0; // seconds of forcefield left in the current cell
     this.forcefieldArmed = false; // toggled by clicking the forcefield in any slot
+    this.riotShieldHits = 0;   // blows a carried riot shield has soaked; breaks at RIOT_SHIELD_HITS
+    this.mirrorHeat = 0;       // 0..1 mirror-shield overheat; reflects while cool, melts at 1
     this.compassArmed = false; // toggled by clicking the electro-compass in any slot
     this.ronmlKeys = new Set(); // node ids RON-ML's `hack` has cracked open this session
     this.ammoFrac = {};        // accumulated fractional ammo per gun
@@ -805,6 +818,17 @@ export class Player {
     } else {
       this._ffOn = false;
     }
+
+    // Mirror shield sheds heat when it isn't actively bouncing fire, so it only
+    // overheats under a sustained barrage. Carry no mirror shield and its heat
+    // resets, so a freshly found one starts cool. Likewise a dropped riot shield
+    // forgets its dents — pick a new one up and it's whole again.
+    if (this.hasItem('mirror_shield')) {
+      this.mirrorHeat = Math.max(0, this.mirrorHeat - MIRROR_HEAT_COOL * dt);
+    } else {
+      this.mirrorHeat = 0;
+    }
+    if (!this.hasItem('shield')) this.riotShieldHits = 0;
 
     // Electro-compass: armed the same way — click it in whatever slot it's
     // carried in. Stays armed (chevrons on) until you drop the item entirely.
@@ -1930,16 +1954,76 @@ export class Player {
   // worn deflector, not something you have to hold up and aim — and cover you
   // from any direction. The mirror shield takes priority over the plain one.
   blockRangedShot() {
-    if (this.forcefieldActive()) return 'absorb';
-    if (this.hasItem('mirror_shield')) return 'reflect';
-    if (this.hasItem('shield')) return 'absorb';
+    // Called once per incoming shot as it resolves, so this is also where a
+    // shield ages: each call is one blow landing on it.
+    if (this.forcefieldActive()) {
+      // Energy shell — never breaks, but swallowing a blow costs extra charge.
+      this.forcefieldCharge = Math.max(0, this.forcefieldCharge - FORCEFIELD_HIT_COST);
+      return 'absorb';
+    }
+    if (this.hasItem('mirror_shield')) {
+      // Reflect only while cool; each bolt heats it, and at full heat it melts.
+      const cool = this.mirrorHeat < MIRROR_HEAT_FADE;
+      const wasCool = cool;
+      this.mirrorHeat = Math.min(1, this.mirrorHeat + MIRROR_HEAT_PER_HIT);
+      if (wasCool && this.mirrorHeat >= MIRROR_HEAT_FADE) {
+        this.say('The mirror shield flares cherry-red — too hot to throw shots back now.');
+      }
+      if (this.mirrorHeat >= 1) { this._meltMirrorShield(); return 'absorb'; }
+      return cool ? 'reflect' : 'absorb';
+    }
+    if (this.hasItem('shield')) {
+      this.riotShieldHits += 1;
+      if (this.riotShieldHits >= RIOT_SHIELD_HITS) { this._breakRiotShield(); return 'absorb'; }
+      if (this.riotShieldHits === RIOT_SHIELD_HITS - 3) {
+        this.say('Your riot shield is badly dented — it will not take many more.');
+      }
+      return 'absorb';
+    }
     return null;
+  }
+
+  // The mirror shield reaches full heat and slumps: it's gone, leaving a lump
+  // of molten metal recovered as scrap. Heat resets so a fresh one starts cool.
+  _meltMirrorShield() {
+    this.removeItem('mirror_shield');
+    this.mirrorHeat = 0;
+    const got = this.stow('scrap', 3);
+    if (got < 3 && this.map) this.map.groundItems.push({ item: 'scrap', qty: 3 - got, x: this.x, y: this.y });
+    this.say('The mirror shield overheats and slumps into a lump of molten scrap.');
+    sfx.play('hurt');
+  }
+
+  // The riot shield caves in after too many blows: gone, leaving some scrap.
+  _breakRiotShield() {
+    this.removeItem('shield');
+    this.riotShieldHits = 0;
+    const got = this.stow('scrap', 2);
+    if (got < 2 && this.map) this.map.groundItems.push({ item: 'scrap', qty: 2 - got, x: this.x, y: this.y });
+    this.say('Your riot shield caves in under the barrage — battered to scrap.');
+    sfx.play('hurt');
   }
 
   // True if a carried shield/forcefield is currently shielding you — used to
   // draw the protective glow even when the item isn't in hand.
   shielded() {
     return this.forcefieldActive() || this.hasItem('mirror_shield') || this.hasItem('shield');
+  }
+
+  // A read on the carried plain/mirror shield's condition, for the HUD. Returns
+  // { kind, frac (0 fresh -> 1 spent/melting), hot, label } or null. Mirror
+  // takes priority (it's what actually protects — see blockRangedShot).
+  shieldStatus() {
+    if (this.hasItem('mirror_shield')) {
+      const frac = Math.max(0, Math.min(1, this.mirrorHeat));
+      return { kind: 'mirror', frac, hot: frac >= MIRROR_HEAT_FADE, label: frac >= MIRROR_HEAT_FADE ? 'HOT' : 'heat' };
+    }
+    if (this.hasItem('shield')) {
+      const frac = Math.max(0, Math.min(1, this.riotShieldHits / RIOT_SHIELD_HITS));
+      return { kind: 'riot', frac, hot: this.riotShieldHits >= RIOT_SHIELD_HITS - 3,
+        label: `${Math.max(0, RIOT_SHIELD_HITS - this.riotShieldHits)}` };
+    }
+    return null;
   }
 
   // True when standing (not mid-jump) on top of a raised block — its
@@ -1956,8 +2040,13 @@ export class Player {
   }
 
   takeDamage(amount, source) {
-    // The forcefield stops everything — shot or blow — while it's up.
-    if (this.forcefieldActive()) { this.hurtTimer = 0.12; return; }
+    // The forcefield stops everything — shot or blow — while it's up, but each
+    // blow it eats costs charge, so being swarmed drains the cell fast.
+    if (this.forcefieldActive()) {
+      this.forcefieldCharge = Math.max(0, this.forcefieldCharge - FORCEFIELD_HIT_COST);
+      this.hurtTimer = 0.12;
+      return;
+    }
     // Up on a block top, ground enemies can't reach you — melee, bites, and
     // lasers all fall short. (A bomb blast still catches you; flying machines,
     // to come, will too.) So they keep trying in vain while you're safe up high.

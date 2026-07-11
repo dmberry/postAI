@@ -3983,10 +3983,20 @@ export class Renderer {
       this._drawShieldBubble(c.x, by - 12, rr, rr * 1.08, '120,245,170', t);
     } else if (player.shielded && player.shielded()) {
       // A carried shield shows a slimmer deflector shell (no need to hold it):
-      // pale blue for the plain shield, brighter cyan for the mirror.
+      // pale blue for the plain shield, brighter cyan for the mirror. A mirror
+      // shield heats up as it throws shots back, and the shell glows from cyan
+      // toward angry red as it does — a read on how close it is to melting.
       const t = performance.now();
       const mirror = player.hasItem && player.hasItem('mirror_shield');
-      this._drawShieldBubble(c.x, by - 12, 22, 24, mirror ? '180,235,245' : '130,175,225', t);
+      let rgb = mirror ? '180,235,245' : '130,175,225';
+      if (mirror) {
+        const heat = Math.max(0, Math.min(1, player.mirrorHeat || 0));
+        const r = Math.round(180 + (240 - 180) * heat);
+        const g = Math.round(235 + (70 - 235) * heat);
+        const b = Math.round(245 + (55 - 245) * heat);
+        rgb = `${r},${g},${b}`;
+      }
+      this._drawShieldBubble(c.x, by - 12, 22, 24, rgb, t);
     }
   }
 
@@ -4290,6 +4300,28 @@ export class Renderer {
         ctx.font = 'bold 9px system-ui, sans-serif';
         ctx.fillStyle = frac > 0 ? '#cfd8c3' : '#e05548';
         ctx.fillText(frac > 0 ? `${Math.ceil((player.wifiPower || 0) / 60)}m` : 'dead', handsX, top + 60);
+      } else if (heldDef.kind === 'shield' && player.shieldStatus) {
+        // Condition gauge: a riot shield counts down the blows it has left, a
+        // mirror shield fills with heat (cyan -> red) toward melting.
+        const st = player.shieldStatus();
+        if (st) {
+          const gx = handsX + 28, gy = top + 24, gw = 10, gh = 16;
+          const fill = Math.max(0, Math.min(1, st.frac));
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(gx, gy, gw, gh);
+          // Riot: green draining to red as it wears. Mirror: cyan heating to red.
+          const warn = st.hot;
+          ctx.fillStyle = st.kind === 'mirror'
+            ? (warn ? '#e0553c' : '#7fd8e6')
+            : (warn ? '#e05548' : '#5f8f3e');
+          const lvl = st.kind === 'mirror' ? fill : (1 - fill); // mirror fills up, riot drains down
+          ctx.fillRect(gx, gy + gh * (1 - lvl), gw, gh * lvl);
+          ctx.strokeStyle = 'rgba(207,216,195,0.6)';
+          ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
+          ctx.font = 'bold 9px system-ui, sans-serif';
+          ctx.fillStyle = warn ? '#e0865a' : 'rgba(207,216,195,0.75)';
+          ctx.fillText(st.label, handsX, top + 60);
+        }
       }
     }
 
