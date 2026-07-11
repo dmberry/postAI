@@ -111,6 +111,12 @@ export function initMobileGate(mode = 'gate') {
       </div>
     </div>`;
   const footerHtml = `<div class="mg-madein">alpha · Game designed in the UK · <button class="mg-about-open" id="mg-about-open">About</button> <span class="mg-ver">v${VERSION}</span></div>`;
+  // A looping game-world clip drifting slowly behind everything, low opacity.
+  // It plays at half speed (set in JS) and pans gently left→right (CSS).
+  // H.264 MP4 — plays in every modern browser (transcoded from the source .mov).
+  const videoHtml = `<video class="mg-bgvideo" autoplay muted loop playsinline preload="auto" aria-hidden="true">
+      <source src="assets/media/videos/postAI-background.mp4" type="video/mp4">
+    </video>`;
   const copyHtml = isTitle
     ? `<p class="mg-sub">The machines made the world standing reserve. Now survive it.<span class="mg-sub2">A keyboard-and-mouse survival game.<br>Here's the soundtrack while you decide.</span></p>
        <div class="mg-actions">
@@ -120,10 +126,10 @@ export function initMobileGate(mode = 'gate') {
     : `<p class="mg-sub">It's the end of the world.<span class="mg-sub2">This is an early alpha — you can play it right here with touch controls (hold to move, tap to act), or grab a laptop for the full keyboard-and-mouse game. Either way, here's the soundtrack.</span></p>
        <div class="mg-actions"><button id="mg-tryanyway" class="mg-btn primary">▶ Play (alpha)</button></div>`;
   const bodyHtml = isTitle
-    ? `<div class="mg-hero">${brandHtml}${copyHtml}</div>
+    ? `${videoHtml}<div class="mg-hero">${brandHtml}${copyHtml}</div>
        <div class="mg-player">${deckHtml}${rackHtml}${themesHtml}</div>
        ${stageHtml}${footerHtml}${aboutHtml}`
-    : `${brandHtml}${copyHtml}${stageHtml}${deckHtml}${rackHtml}${menuHtml}${footerHtml}${aboutHtml}`;
+    : `${videoHtml}${brandHtml}${copyHtml}${stageHtml}${deckHtml}${rackHtml}${menuHtml}${footerHtml}${aboutHtml}`;
 
   el.innerHTML = `
     <style>
@@ -135,6 +141,13 @@ export function initMobileGate(mode = 'gate') {
         display: flex; flex-direction: column; align-items: center;
         padding: max(16px, env(safe-area-inset-top)) 16px max(14px, env(safe-area-inset-bottom));
         -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+      /* moving game-world backdrop: low opacity, gently panning left↔right
+         (negative z-index so it sits behind all the in-flow content). */
+      .mg-bgvideo { position: absolute; top: 0; left: 0; height: 100%; width: auto; min-width: 100%;
+        z-index: -1; opacity: 0.18; object-fit: cover; pointer-events: none;
+        animation: mg-pan 90s ease-in-out infinite alternate; will-change: transform; }
+      @keyframes mg-pan { from { transform: translateX(0); } to { transform: translateX(-14%); } }
+      @media (prefers-reduced-motion: reduce) { .mg-bgvideo { animation: none; } }
       /* branding wordmark: mono terminal type, glowing AI, blinking caret,
          and a little cassette mark — themes with --accent. */
       .mg-brand { display: flex; align-items: center; gap: 12px; margin: 2px 0 1px; }
@@ -289,6 +302,16 @@ export function initMobileGate(mode = 'gate') {
     ${bodyHtml}
   `;
   document.body.appendChild(el);
+
+  // Backdrop clip at half speed (and nudge it to autoplay where the browser
+  // needs a poke). Harmless if the .mov codec isn't supported — the themed
+  // gradient shows through underneath.
+  const bgv = el.querySelector('.mg-bgvideo');
+  if (bgv) {
+    bgv.playbackRate = 0.5;
+    bgv.addEventListener('loadedmetadata', () => { bgv.playbackRate = 0.5; });
+    bgv.play?.().catch(() => {});
+  }
 
   // ---- theme switch ----
   const applyTheme = (name) => {
