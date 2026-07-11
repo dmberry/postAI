@@ -1,8 +1,21 @@
 # Systems registry — contract design, decision log, migration plan
 
-Branch: `refactor/systems-registry`. Status: **Stage 0 (vertical slice) — for review.**
-Nothing here is on `main`. This is an isolated worktree so the daily push can
-continue undisturbed; a bad pass is `git worktree remove`, not a revert.
+Branch: `refactor/systems-registry` (worktree `~/Projects/nostos-registry`), PR
+nostos#1 (draft, do-not-merge). Nothing is on `main`; the worktree isolates it so
+the daily push continues undisturbed, and a bad pass is `git worktree remove`.
+
+**Where we are (resume here):** Stage 0 (registry) ✓, Stage 1 (dayNight +
+fortress self-registered) ✓, Stage 2a `combat.js` (player.js −294) ✓, Stage 2b
+`ui.js` foundation (4 overlays via prototype mixin + DASH_H) ✓, unit tests
+(`node --test test/*.test.js`, 15 pass) ✓. Rebased onto v1.84.
+
+**Next:** finish the `ui.js` modals through the proven mixin groove — move
+`drawSkillModal`, `drawWeaponChart`, `drawDeathCert`, `drawDaemonVoice`,
+`drawAiVictory`, `drawDetail`, `drawToast` (append to `uiMethods`, delete from
+renderer, keep `_wrapText`/`_fw` on the renderer since the mixin preserves
+`this`), then the dashboard/inventory cluster (`drawItemIcon` stays in the
+renderer, shared with world draws). Rebase onto latest `main` first; run the test
+suite after. See the migration plan below.
 
 ## Tests
 
