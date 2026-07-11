@@ -384,7 +384,10 @@ export const uiMethods = {
     const alpha = Math.min(1, t.ttl) * 0.85;
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'center';
-    const y = (this.hudTop != null ? this.hudTop : this.h - 100) - 10;
+    // Sit well above the HUD panel so it clears the touch/help hint DOM line
+    // (bottom-anchored just over the panel) — on a narrow phone screen the two
+    // used to land on the same row and overlap into garbled text.
+    const y = (this.hudTop != null ? this.hudTop : this.h - 100) - 46;
     ctx.fillStyle = `rgba(10,12,9,${(alpha * 0.6).toFixed(3)})`;
     const w = ctx.measureText(t.text).width + 16;
     ctx.fillRect(this.w / 2 - w / 2, y - 13, w, 18);

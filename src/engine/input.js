@@ -7,7 +7,7 @@ const TRACKED = new Set([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'ShiftLeft', 'ShiftRight',
   'KeyE', 'Slash', 'Space', 'KeyQ', 'KeyH', 'KeyR', 'KeyG', 'KeyF', 'KeyI', 'KeyP', 'KeyZ', 'KeyJ',
-  'KeyK', 'KeyC', 'KeyM', 'KeyV', 'KeyN', 'KeyB', 'KeyX', 'BracketRight', 'Escape',
+  'KeyK', 'KeyC', 'KeyM', 'KeyV', 'KeyN', 'KeyB', 'KeyX', 'KeyT', 'BracketRight', 'Escape',
   'Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5',
 ]);
 
@@ -301,6 +301,12 @@ export class Input {
 
   sleepPressed() {
     return this.consumePress('KeyB');
+  }
+
+  // T: toggle the forcefield on/off from anywhere, so you can drop it to save
+  // the cell without digging the item out of a slot to click it.
+  forcefieldTogglePressed() {
+    return this.consumePress('KeyT');
   }
 
   zoomTogglePressed() {

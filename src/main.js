@@ -2133,6 +2133,10 @@ function update(dt) {
   // Rest (B): skips the clock forward 10 game-minutes and restores some
   // health, so long as nothing hostile is close enough to make that a bad
   // idea, and not so often it's a free heal button.
+  // T: quick-toggle the forcefield on/off, so you can drop it to save the cell
+  // between fights without digging the item out of a slot to click it.
+  if (input.forcefieldTogglePressed()) player.toggleForcefield();
+
   if (sleepCooldown > 0) sleepCooldown = Math.max(0, sleepCooldown - dt);
   if (input.sleepPressed()) {
     if (player.health >= player.maxHealth) {
@@ -2236,6 +2240,21 @@ function update(dt) {
       else if (showSkills && outside(renderer._skillsRect)) { input.consumeClick(); showSkills = false; }
       else if (showWeapons && outside(renderer._weaponsRect)) { input.consumeClick(); showWeapons = false; }
     }
+  }
+
+  // The Scrapbook (lore, J) is a modal too: a click outside its panel closes it,
+  // same as the notebook and the panels above. Handled HERE — before the click
+  // can reach the world and swing your tool — because lore.update (which also
+  // has this check) runs late in the frame, after fire has already eaten the
+  // click, so its own click-away never fired. Escape closes it as well.
+  if (lore.archiveOpen) {
+    const r = lore._archiveRect;
+    const bc = input.clickPos();
+    if (bc && (!r || bc.x < r.x || bc.x > r.x + r.w || bc.y < r.y || bc.y > r.y + r.h)) {
+      input.consumeClick();
+      lore.archiveOpen = false;
+    }
+    if (input.consumePress('Escape')) lore.archiveOpen = false;
   }
 
   // Pointer over the dashboard/backpack slots: press begins a drag (or, on a

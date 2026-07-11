@@ -8,7 +8,7 @@ import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
 import { drawWaterDroid } from '../game/waterdroids.js';
 import { drawUnderworldCreature } from '../game/underworld.js';
-import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, ROCK_TEXTURES, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS, TREE_SHEET, TREE_SPRITES, EDGE_TEXTURE, SEA_TEXTURE, CAR_SPRITES, CAR_MODEL_KEYS, CAR_DIR_KEYS, CAR_RUIN_TEXTURE, FACTORY_TEXTURE, MARBLE_TEXTURE, PAPER_TEXTURE, GRAFFITI_TEXTURES } from './textures.js';
+import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, ROCK_TEXTURES, BOX_TEXTURES, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS, TREE_SHEET, TREE_SPRITES, EDGE_TEXTURE, SEA_TEXTURE, CAR_SPRITES, CAR_MODEL_KEYS, CAR_DIR_KEYS, CAR_RUIN_TEXTURE, FACTORY_TEXTURE, MARBLE_TEXTURE, PAPER_TEXTURE, GRAFFITI_TEXTURES } from './textures.js';
 
 // The underworld floor palette: seven images, loaded here (not via textures.js)
 // so this stays self-contained. map.liminalTex holds a per-tile index into
@@ -329,7 +329,7 @@ export class Renderer {
       // In the underworld there's no map edge to face — it's boundless yellow,
       // so the grey edge-rock cliffs are suppressed (nothing drawn out there).
       if (d.edgeRock) { if (!hud.underworld) this.drawSeaTile(d.edgeRock[0], d.edgeRock[1]); }
-      else if (d.player) { this.drawPlayer(d.player); if (player.shielded && player.shielded()) this.playerShieldBar(d.player); }
+      else if (d.player) this.drawPlayer(d.player);
       else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 44); }
       else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
       else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 48); }
@@ -339,6 +339,15 @@ export class Renderer {
       else if (d.groundItem) this.drawGroundItem(d.groundItem);
       else this.drawObject(d.obj);
       if (lift) ctx.restore();
+    }
+
+    // The player's shield bar is drawn LAST, over the whole depth-sorted scene,
+    // so a block the player stands behind never paints over it — it reads as a
+    // marker floating above the character, always visible while shielded.
+    if (player.shielded && player.shielded()) {
+      const plift = elevOf(player.x, player.y);
+      if (plift) { ctx.save(); ctx.translate(0, -plift); this.playerShieldBar(player); ctx.restore(); }
+      else this.playerShieldBar(player);
     }
 
     // Underworld ceiling lights: soft pools cast on the floor, mostly steady
@@ -597,7 +606,10 @@ export class Renderer {
           if (!dx && !dy) continue;
           const o = map.objectAt ? map.objectAt(pfx2 + dx, pfy2 + dy) : null;
           if (!o) continue;
-          if ((dx + dy <= 2 && NEAR_TALL.has(o.type)) || BIG_TALL.has(o.type)) { occluded = true; break; }
+          // A tall block within ~3 tiles to the south/east stands between the
+          // player and the camera (widened from 2 so a wall never fully eats the
+          // sprite); the big structures occlude from further out.
+          if ((dx + dy <= 3 && NEAR_TALL.has(o.type)) || BIG_TALL.has(o.type)) { occluded = true; break; }
         }
       }
       if (occluded && !hud.underworld) {
@@ -605,7 +617,7 @@ export class Renderer {
           : map.heightAt ? map.heightAt(pfx2, pfy2) : 0) * ELEV;
         ctx.save();
         if (lift2) ctx.translate(0, -lift2);
-        ctx.globalAlpha = 0.28;
+        ctx.globalAlpha = 0.5; // clear enough to read where you are, still reads as behind
         this.drawPlayer(player);
         ctx.restore();
       }
@@ -946,30 +958,44 @@ export class Renderer {
   // then a carried riot/mirror shield's condition (drains as it wears; the
   // mirror also runs cyan->red with heat). Nothing drawn when unshielded.
   playerShieldBar(player) {
-    let frac, color, label;
+    // Bar colour is the shield's OWN colour (from its item def), so the marker
+    // reads as that piece of gear — the forcefield's green, the mirror's cyan,
+    // the riot shield's steel-blue — shifting to warning red only when a mirror
+    // overheats or a forcefield cell runs low.
+    let frac, color;
     if (player.forcefieldActive && player.forcefieldActive()) {
       frac = player.forcefieldFrac ? player.forcefieldFrac() : 1;
-      color = frac > 0.25 ? '#4fe08a' : '#e0894f';
-      label = 'FIELD';
+      color = frac > 0.25 ? (ITEMS.forcefield.color || '#4fe08a') : '#e0894f';
     } else if (player.shieldStatus) {
       const st = player.shieldStatus();
       if (!st) return;
       frac = Math.max(0, Math.min(1, 1 - st.frac)); // condition remaining
-      if (st.kind === 'mirror') { color = st.hot ? '#e0553c' : '#7fd8e6'; label = st.hot ? 'MIRROR·HOT' : 'MIRROR'; }
-      else { color = st.hot ? '#e05548' : '#7fbf5a'; label = 'SHIELD'; }
+      const itemColor = st.kind === 'mirror' ? ITEMS.mirror_shield.color : ITEMS.shield.color;
+      color = st.hot ? '#e0553c' : (itemColor || '#7fd8e6');
     } else return;
     const ctx = this.ctx;
     const c = worldToScreen(player.x, player.y);
-    const w = 20, h = 2, x = c.x - w / 2, y = c.y - 50 - (player.z || 0) * 32;
+    const w = 22, h = 3, x = c.x - w / 2, y = c.y - 50 - (player.z || 0) * 32;
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    const fw = w * frac;
     ctx.fillStyle = color;
-    ctx.fillRect(x, y, w * frac, h);
-    ctx.font = '6px ui-monospace, Menlo, monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = color;
-    ctx.fillText(label, c.x, y - 2.5);
-    ctx.textAlign = 'left';
+    ctx.fillRect(x, y, fw, h);
+    // A shimmer: a soft bright band sweeps left->right across the filled part,
+    // so a shield reads as a live, glinting field rather than a flat bar. No
+    // text — the colour says which shield, the fill says how much is left.
+    if (fw > 2) {
+      const sweep = ((performance.now() / 1100) % 1) * (fw + 12) - 6; // travels a touch past both ends
+      const g = ctx.createLinearGradient(x + sweep - 7, 0, x + sweep + 7, 0);
+      g.addColorStop(0, 'rgba(255,255,255,0)');
+      g.addColorStop(0.5, 'rgba(255,255,255,0.6)');
+      g.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, fw, h); ctx.clip();
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, fw, h);
+      ctx.restore();
+    }
   }
 
   // Which dashboard/backpack slot (if any) is under a screen point. Later
@@ -1595,7 +1621,7 @@ export class Renderer {
   drawMarbleBlock(obj) {
     const ctx = this.ctx;
     const hh = tileHash(obj.x * 3 + 2, obj.y * 3 + 5);
-    const BH = 20 + hh * 12; // block height, px
+    const BH = 32; // block height, px — pinned to 2 levels (ELEV 16 * 2) so standing on top lines up with climbHeight 2 (tiles.js)
     const LIGHT = '#efece4', MID = '#d8d3c8', DARK = '#b3ad9f', EDGE = '#8f897b';
     const tex = MARBLE_TEXTURE, marbleOK = tex && tex.complete && tex.naturalWidth;
     const c = worldToScreen(obj.x + 0.5, obj.y + 0.5);
@@ -2741,18 +2767,26 @@ export class Renderer {
     // in the world keep their crate-brown.
     const swClosed = obj.yellow ? '#c8a83c' : '#9a774c';
     const seClosed = obj.yellow ? '#b0902e' : '#805f3b';
-    ctx.fillStyle = obj.opened ? '#33291a' : swClosed; // SW face (opened = spent, dark)
-    ctx.beginPath();
-    ctx.moveTo(c.x - w, c.y - 3); ctx.lineTo(c.x, c.y + 3);
-    ctx.lineTo(c.x, c.y + 3 - h); ctx.lineTo(c.x - w, c.y - 3 - h);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = obj.opened ? '#271f13' : seClosed; // SE face
-    ctx.beginPath();
-    ctx.moveTo(c.x + w, c.y - 3); ctx.lineTo(c.x, c.y + 3);
-    ctx.lineTo(c.x, c.y + 3 - h); ctx.lineTo(c.x + w, c.y - 3 - h);
-    ctx.closePath();
-    ctx.fill();
+    // Wood-grain faces: a variant + opacity picked per crate (from its tile) so
+    // a row of crates reads varied. drawTexturedQuad fills the crate colour then
+    // warps the grain over it (multiply), falling back to flat until it loads.
+    const bseed = ((obj.x * 73856093) ^ (obj.y * 19349663)) >>> 0;
+    const woodTex = (!obj.opened && BOX_TEXTURES && BOX_TEXTURES.length) ? BOX_TEXTURES[bseed % BOX_TEXTURES.length] : null;
+    const woodA = 0.45 + ((bseed >> 5) % 40) / 100; // 0.45..0.84 per crate
+    const swPts = [{ x: c.x - w, y: c.y - 3 }, { x: c.x, y: c.y + 3 }, { x: c.x, y: c.y + 3 - h }, { x: c.x - w, y: c.y - 3 - h }];
+    const sePts = [{ x: c.x + w, y: c.y - 3 }, { x: c.x, y: c.y + 3 }, { x: c.x, y: c.y + 3 - h }, { x: c.x + w, y: c.y - 3 - h }];
+    if (woodTex) {
+      this.drawTexturedQuad(swPts, woodTex, swClosed, swClosed, 'multiply', woodA);
+      this.drawTexturedQuad(sePts, woodTex, seClosed, seClosed, 'multiply', woodA);
+    } else {
+      const fillFace = (pts, col) => {
+        ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath(); ctx.fill();
+      };
+      fillFace(swPts, obj.opened ? '#33291a' : swClosed);
+      fillFace(sePts, obj.opened ? '#271f13' : seClosed);
+    }
     // Lid: closed boxes get a wooden-plank top and a strap; opened ones a
     // dark hole. The four lid corners form a rhombus (a parallelogram), so
     // the plank texture warps straight onto it the same way floor and wall
@@ -2864,49 +2898,44 @@ export class Renderer {
     const ctx = this.ctx;
     const c = worldToScreen(tx + 0.5, ty + 0.5);
     // Ground-contact shadow.
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
     ctx.beginPath();
-    ctx.ellipse(c.x, c.y + 1, 13, 6, 0, 0, Math.PI * 2);
+    ctx.ellipse(c.x, c.y + 2, 14, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // The rock's dome, faced with a real boulder photo (mossy granite) clipped
-    // to the ellipse. A per-tile seed picks the variant and nudges which slice
-    // of the photo shows, so a cluster of rocks doesn't read as clones. Falls
-    // back to the old flat grey fill until the texture has loaded.
-    const rx = 12, ry = 9, cy = c.y - 5;
+    // A boulder: the stone texture STRETCHED over the whole rock silhouette
+    // (drawImage across the full bounding box, clipped to the shape) so the
+    // photo IS the rock face, at full strength — only a light diagonal shade for
+    // volume, no heavy gradient washing it out. Per-tile seed picks the variant.
+    const rx = 14, ry = 11, cy = c.y - 6;
     const seed = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
     const tex = ROCK_TEXTURES && ROCK_TEXTURES.length
       ? ROCK_TEXTURES[seed % ROCK_TEXTURES.length] : null;
+    const bx = c.x - rx, by = cy - ry, bw = rx * 2, bh = ry * 2;
     ctx.save();
     ctx.beginPath();
     ctx.ellipse(c.x, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.clip();
     if (tex && tex.complete && tex.naturalWidth) {
-      const jx = (seed % 5) - 2, jy = ((seed >> 3) % 5) - 2;
-      ctx.drawImage(tex, c.x - rx - 3 + jx, cy - ry - 4 + jy, rx * 2 + 6, ry * 2 + 8);
-      // Form shading: a top-light and a base-shadow so the disc reads as a dome.
-      const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
-      g.addColorStop(0, 'rgba(255,255,255,0.16)');
-      g.addColorStop(0.5, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,0.4)');
+      ctx.drawImage(tex, bx, by, bw, bh); // stretch the whole texture across the rock
+      const g = ctx.createLinearGradient(bx, by, c.x + rx * 0.4, cy + ry); // top-left light -> lower-right shade
+      g.addColorStop(0, 'rgba(255,255,255,0.12)');
+      g.addColorStop(0.55, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.24)');
       ctx.fillStyle = g;
-      ctx.fillRect(c.x - rx, cy - ry, rx * 2, ry * 2);
+      ctx.fillRect(bx, by, bw, bh);
     } else {
       ctx.fillStyle = ROCK_COLOR;
-      ctx.fillRect(c.x - rx, cy - ry, rx * 2, ry * 2);
+      ctx.fillRect(bx, by, bw, bh);
     }
     ctx.restore();
 
-    // A soft rim to seat the dome against the ground, and a small top highlight.
-    ctx.strokeStyle = 'rgba(0,0,0,0.22)';
+    // A soft rim seats the boulder against the ground.
+    ctx.strokeStyle = 'rgba(0,0,0,0.28)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.ellipse(c.x, cy, rx, ry, 0, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.1)';
-    ctx.beginPath();
-    ctx.ellipse(c.x - 4, cy - 3, 4.5, 2.6, 0, 0, Math.PI * 2);
-    ctx.fill();
   }
 
   drawRubble(tx, ty) {
@@ -2915,39 +2944,51 @@ export class Renderer {
     const seed = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
     const tex = ROCK_TEXTURES && ROCK_TEXTURES.length
       ? ROCK_TEXTURES[seed % ROCK_TEXTURES.length] : null;
-    // A little pile of broken stone: each chunk gets the same boulder texture as
-    // the rocks, clipped to its ellipse with a different slice so the stones in
-    // the heap don't clone. Falls back to the flat grey fill until it loads.
+    // A heap of broken stone. The chunk ellipses are unioned into ONE clip and a
+    // single texture is STRETCHED across the whole silhouette — so it reads as
+    // one continuous stone surface over the pile, not four textured discs. Light
+    // diagonal shade for volume; per-chunk rims keep the stones individually
+    // readable. Falls back to flat grey until the texture loads.
     const chunks = [
       [-8, -2, 7, 5], [2, -6, 8, 6], [-2, 2, 6, 4], [8, 0, 5, 4],
     ];
-    let i = 0;
+    // union bounding box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const [ox, oy, rx, ry] of chunks) {
       const cx = c.x + ox, cy = c.y + oy - 3;
-      ctx.save();
+      minX = Math.min(minX, cx - rx); maxX = Math.max(maxX, cx + rx);
+      minY = Math.min(minY, cy - ry); maxY = Math.max(maxY, cy + ry);
+    }
+    // contact shadow under the whole heap
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 3, 15, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // one clip = union of every chunk ellipse
+    ctx.save();
+    ctx.beginPath();
+    for (const [ox, oy, rx, ry] of chunks) ctx.ellipse(c.x + ox, c.y + oy - 3, rx, ry, 0, 0, Math.PI * 2);
+    ctx.clip();
+    if (tex && tex.complete && tex.naturalWidth) {
+      ctx.drawImage(tex, minX, minY, maxX - minX, maxY - minY);
+      const g = ctx.createLinearGradient(minX, minY, maxX, maxY);
+      g.addColorStop(0, 'rgba(255,255,255,0.13)');
+      g.addColorStop(0.55, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.28)');
+      ctx.fillStyle = g;
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+    } else {
+      ctx.fillStyle = rgbScale(WALL_BASE, 0.7);
+      ctx.fillRect(minX, minY, maxX - minX, maxY - minY);
+    }
+    ctx.restore();
+    // per-chunk rims: keep the individual stones legible within the heap
+    ctx.strokeStyle = 'rgba(0,0,0,0.24)';
+    ctx.lineWidth = 1;
+    for (const [ox, oy, rx, ry] of chunks) {
       ctx.beginPath();
-      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-      ctx.clip();
-      if (tex && tex.complete && tex.naturalWidth) {
-        const jx = ((seed >> (i * 2)) % 7) - 3, jy = ((seed >> (i * 2 + 1)) % 7) - 3;
-        ctx.drawImage(tex, cx - rx - 3 + jx, cy - ry - 3 + jy, rx * 2 + 6, ry * 2 + 6);
-        const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
-        g.addColorStop(0, 'rgba(255,255,255,0.14)');
-        g.addColorStop(0.5, 'rgba(0,0,0,0)');
-        g.addColorStop(1, 'rgba(0,0,0,0.42)');
-        ctx.fillStyle = g;
-        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-      } else {
-        ctx.fillStyle = rgbScale(WALL_BASE, 0.6 + (ox + 8) * 0.02);
-        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
-      }
-      ctx.restore();
-      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.ellipse(c.x + ox, c.y + oy - 3, rx, ry, 0, 0, Math.PI * 2);
       ctx.stroke();
-      i++;
     }
   }
 
@@ -4243,7 +4284,7 @@ export class Renderer {
 
     // --- Top row: vitals (left), score/countdown (right). ---
     const bx = 10, bw = Math.min(150, Math.round(W * 0.42));
-    this.drawBar(bx, top + 16, bw, 6, player.health / player.maxHealth, '#b0392f', 'HP');
+    this.drawBar(bx, top + 16, bw, 6, player.health / player.maxHealth, '#b0392f', 'HP', 0.25);
     this.drawBar(bx, top + 34, bw, 6, player.stamina / player.maxStamina, '#5f8f3e', 'STA');
     this.drawBar(bx, top + 52, bw, 6, (player.food ?? 100) / (player.maxFood ?? 100), '#c99a3e', 'FOOD');
     // conditions, small, just right of the bars
@@ -4332,14 +4373,11 @@ export class Renderer {
     ctx.fillRect(0, top, this.w, 1);
 
     // Vitals
-    this.drawBar(16, top + 14, 150, 8, player.health / player.maxHealth, '#b0392f', 'HEALTH');
+    this.drawBar(16, top + 14, 150, 8, player.health / player.maxHealth, '#b0392f', 'HEALTH', 0.25);
     this.drawBar(16, top + 37, 150, 8, player.stamina / player.maxStamina, '#5f8f3e', 'STAMINA');
     this.drawBar(16, top + 60, 150, 8, (player.food ?? 100) / (player.maxFood ?? 100), '#c99a3e', 'FOOD');
-    // Live status. On a wide window there's room for the full chip row out in
-    // the empty middle; on a narrower desktop fall back to the terse text tucked
-    // by the bars so nothing is ever hidden. (The compact layout has its own.)
-    if (this.w >= 1040) this.drawStatusChips(player, top);
-    else this.drawConditionsInline(player, top);
+    // Live status: terse condition text tucked by the vitals bars.
+    this.drawConditionsInline(player, top);
 
     // Hands slot
     const handsX = 210;
@@ -4377,28 +4415,6 @@ export class Renderer {
         ctx.font = 'bold 9px system-ui, sans-serif';
         ctx.fillStyle = frac > 0 ? '#cfd8c3' : '#e05548';
         ctx.fillText(frac > 0 ? `${Math.ceil((player.wifiPower || 0) / 60)}m` : 'dead', handsX, top + 60);
-      } else if (heldDef.kind === 'shield' && player.shieldStatus) {
-        // Condition gauge: a riot shield counts down the blows it has left, a
-        // mirror shield fills with heat (cyan -> red) toward melting.
-        const st = player.shieldStatus();
-        if (st) {
-          const gx = handsX + 28, gy = top + 24, gw = 10, gh = 16;
-          const fill = Math.max(0, Math.min(1, st.frac));
-          ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(gx, gy, gw, gh);
-          // Riot: green draining to red as it wears. Mirror: cyan heating to red.
-          const warn = st.hot;
-          ctx.fillStyle = st.kind === 'mirror'
-            ? (warn ? '#e0553c' : '#7fd8e6')
-            : (warn ? '#e05548' : '#5f8f3e');
-          const lvl = st.kind === 'mirror' ? fill : (1 - fill); // mirror fills up, riot drains down
-          ctx.fillRect(gx, gy + gh * (1 - lvl), gw, gh * lvl);
-          ctx.strokeStyle = 'rgba(207,216,195,0.6)';
-          ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1);
-          ctx.font = 'bold 9px system-ui, sans-serif';
-          ctx.fillStyle = warn ? '#e0865a' : 'rgba(207,216,195,0.75)';
-          ctx.fillText(st.label, handsX, top + 60);
-        }
       }
     }
 
@@ -4541,64 +4557,6 @@ export class Renderer {
   // the row is empty when nothing's going on rather than filled with dead space.
   // It lays out left of the right-aligned status block and stops before it, so
   // it never collides; on a huge screen everything fits with room to spare.
-  drawStatusChips(player, top) {
-    const ctx = this.ctx;
-    const chips = [];
-    if (player.invisibleToRobots) {
-      chips.push({ label: 'HIDDEN', value: player.terminalSafe ? '' : `${Math.ceil((player.wifiPower || 0) / 60)}m`, color: '#4fd8c3' });
-    }
-    if (player.venom > 0) chips.push({ label: 'POISON', color: '#b07fd8' });
-    if ((player.food ?? 100) <= 0) chips.push({ label: 'STARVING', color: '#e05548' });
-    else if ((player.food ?? 100) < 25) chips.push({ label: 'HUNGRY', color: '#d8a04f' });
-    if (player.health / player.maxHealth < 0.25) chips.push({ label: 'WOUNDED', color: '#e0653c' });
-    if (player.forcefieldActive && player.forcefieldActive()) {
-      const f = player.forcefieldFrac ? player.forcefieldFrac() : 1;
-      chips.push({ label: 'FIELD', gauge: f, color: f > 0.25 ? '#4fe08a' : '#e05548' });
-    }
-    if (player.shieldStatus) {
-      const st = player.shieldStatus();
-      if (st && st.kind === 'mirror') chips.push({ label: 'MIRROR', gauge: st.frac, color: st.hot ? '#e0553c' : '#7fd8e6' });
-      else if (st) chips.push({ label: 'SHIELD', value: st.label, gauge: 1 - st.frac, color: st.hot ? '#e05548' : '#7fbf5a' });
-    }
-    if (player.torpor > 0) chips.push({ label: 'DAZED', color: '#e6c07a' });
-    if (player.carryingBurden && player.carryingBurden()) chips.push({ label: 'BURDEN', color: '#b8b0a0' });
-    if (!chips.length) return;
-
-    // Pre-measure every chip, then RIGHT-align the row so it sits just left of
-    // the score/rank block — balancing the heavy left (bars + slots) against the
-    // otherwise lonely right. Clamp the start so it never runs back into the
-    // walkman; anything that still won't fit is dropped (rare — few are active).
-    const cy = top + 27, ch = 24;
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    for (const chip of chips) {
-      chip._text = chip.value ? `${chip.label} ${chip.value}` : chip.label;
-      chip._tw = ctx.measureText(chip._text).width;
-      chip._gw = chip.gauge != null ? 26 : 0;
-      chip._cw = 9 + chip._tw + (chip._gw ? chip._gw + 6 : 0) + 9;
-    }
-    const totalW = chips.reduce((s, c) => s + c._cw + 8, 0) - 8;
-    const walkEnd = 286 + player.pockets.length * 42 + 10 + (player.backpack ? 92 : 0) + 36;
-    const rightEdge = this.w - 210; // clear of the right-aligned score block
-    let x = Math.max(walkEnd + 28, rightEdge - totalW);
-    ctx.textAlign = 'left';
-    for (const chip of chips) {
-      if (x + chip._cw > rightEdge) break;
-      ctx.fillStyle = 'rgba(0,0,0,0.34)';
-      ctx.fillRect(x, cy, chip._cw, ch);
-      ctx.fillStyle = chip.color;
-      ctx.fillRect(x, cy + 3, 3, ch - 6); // left accent
-      ctx.fillText(chip._text, x + 9, cy + 16);
-      if (chip.gauge != null) {
-        const gx = x + 9 + chip._tw + 6, gy = cy + 8, gh = 8, gwi = chip._gw - 4;
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(gx, gy, gwi, gh);
-        ctx.fillStyle = chip.color;
-        ctx.fillRect(gx, gy, gwi * Math.max(0, Math.min(1, chip.gauge)), gh);
-      }
-      x += chip._cw + 8;
-    }
-  }
-
   // HUD elements that must show whichever dashboard variant is up (desktop or
   // compact): the transient message line, the daemon's dying voice, and the
   // title wordmark + version stamp. These used to live inside drawDashboard
@@ -4610,12 +4568,15 @@ export class Renderer {
     const ctx = this.ctx;
     const top = this.hudTop != null ? this.hudTop : this.h - DASH_H;
 
-    // Transient message line above the panel (say() output — narration, hints).
+    // Transient message line, lifted well above the panel so it clears the
+    // bottom-anchored touch/help hint DOM line on a narrow phone screen (they
+    // used to share a row and overlap into unreadable text). Sits below the
+    // toast (which is higher still). say() output — narration, hints.
     if (player.message) {
       ctx.textAlign = 'left';
       ctx.font = '13px system-ui, sans-serif';
       ctx.fillStyle = `rgba(232,224,208,${Math.min(1, player.message.ttl)})`;
-      ctx.fillText(player.message.text, 16, top - 12);
+      ctx.fillText(player.message.text, 16, top - 28);
     }
 
     // The daemon's voice — the core speaking as you break it. Its own caption
@@ -4647,21 +4608,26 @@ export class Renderer {
     }
   }
 
-  drawLabel(text, x, y) {
+  drawLabel(text, x, y, color) {
     const ctx = this.ctx;
     ctx.font = '9px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(207,216,195,0.55)';
+    ctx.fillStyle = color || 'rgba(207,216,195,0.55)';
     ctx.fillText(text, x, y);
   }
 
-  drawBar(x, y, w, h, frac, color, label) {
+  drawBar(x, y, w, h, frac, color, label, flashBelow = 0) {
     const ctx = this.ctx;
-    this.drawLabel(label, x, y - 5);
+    const f = Math.max(0, Math.min(1, frac));
+    // Danger flash: once the bar drops below flashBelow it blinks bright red and
+    // gets a pulsing red outline + red label, so a critical level grabs the eye.
+    const danger = flashBelow > 0 && f > 0 && f < flashBelow;
+    const pulse = danger ? 0.5 + 0.5 * Math.sin(performance.now() / 130) : 0;
+    this.drawLabel(label, x, y - 5, danger ? `rgba(255,${Math.round(70 + 60 * (1 - pulse))},60,${0.7 + 0.3 * pulse})` : undefined);
     ctx.fillStyle = 'rgba(255,255,255,0.12)';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, Math.max(0, Math.min(1, frac)) * w, h);
-    ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = danger && pulse > 0.5 ? '#ff5b4a' : color;
+    ctx.fillRect(x, y, f * w, h);
+    ctx.strokeStyle = danger ? `rgba(255,80,64,${0.45 + 0.45 * pulse})` : 'rgba(0,0,0,0.5)';
     ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   }
 

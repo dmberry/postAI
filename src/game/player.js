@@ -515,8 +515,7 @@ export class Player {
     }
     const held = this.getSlot(slot);
     if (held && held.item === 'forcefield') {
-      this.forcefieldArmed = !this.forcefieldArmed;
-      this.say(this.forcefieldArmed ? 'Forcefield armed — it will power up once it has a battery.' : 'Forcefield disarmed.');
+      this.toggleForcefield();
       return;
     }
     if (held && held.item === 'compass') {
@@ -1926,6 +1925,17 @@ export class Player {
     return Math.max(0, Math.min(1, this.forcefieldCharge / FORCEFIELD_MAX));
   }
 
+  // Arm/disarm the forcefield — from a click on the item (equipSlot) or the T
+  // key. Disarming stops the cell draining, so you can save battery between
+  // fights instead of letting it burn while carried.
+  toggleForcefield() {
+    if (!this.hasItem('forcefield')) { this.say('You have no forcefield to arm.'); return; }
+    this.forcefieldArmed = !this.forcefieldArmed;
+    this.say(this.forcefieldArmed
+      ? 'Forcefield armed — it powers up once it has a battery.'
+      : 'Forcefield disarmed — the cell stops draining.');
+  }
+
   // While the electro-compass is armed and carried, the facing chevron
   // becomes a cluster of pointers — one per category of notable thing,
   // each to the nearest of its kind, colour-coded: factory (blue), obelisk
@@ -2009,6 +2019,26 @@ export class Player {
     sfx.play('hurt');
   }
 
+  // A carried riot/mirror shield also turns a machine's physical BLOW (T1/T2
+  // and the rest), not only its lasers, and wears the same way — a hit counts
+  // against the riot shield, heats the mirror. No reflect on a melee blow (you
+  // can't bounce a fist back), so the mirror just absorbs it. Returns true if a
+  // shield ate the blow.
+  absorbMeleeOnShield() {
+    if (this.hasItem('mirror_shield')) {
+      this.mirrorHeat = Math.min(1, this.mirrorHeat + MIRROR_HEAT_PER_HIT);
+      if (this.mirrorHeat >= 1) this._meltMirrorShield();
+      return true;
+    }
+    if (this.hasItem('shield')) {
+      this.riotShieldHits += 1;
+      if (this.riotShieldHits === RIOT_SHIELD_HITS - 3) this.say('Your riot shield is badly dented — it will not take many more.');
+      if (this.riotShieldHits >= RIOT_SHIELD_HITS) this._breakRiotShield();
+      return true;
+    }
+    return false;
+  }
+
   // True if a carried shield/forcefield is currently shielding you — used to
   // draw the protective glow even when the item isn't in hand.
   shielded() {
@@ -2019,14 +2049,15 @@ export class Player {
   // { kind, frac (0 fresh -> 1 spent/melting), hot, label } or null. Mirror
   // takes priority (it's what actually protects — see blockRangedShot).
   shieldStatus() {
+    // `frac` is how SPENT the shield is (0 fresh -> 1 gone); `pct` is the
+    // condition remaining as a percentage, which the HUD shows.
     if (this.hasItem('mirror_shield')) {
       const frac = Math.max(0, Math.min(1, this.mirrorHeat));
-      return { kind: 'mirror', frac, hot: frac >= MIRROR_HEAT_FADE, label: frac >= MIRROR_HEAT_FADE ? 'HOT' : 'heat' };
+      return { kind: 'mirror', frac, pct: Math.round((1 - frac) * 100), hot: frac >= MIRROR_HEAT_FADE };
     }
     if (this.hasItem('shield')) {
       const frac = Math.max(0, Math.min(1, this.riotShieldHits / RIOT_SHIELD_HITS));
-      return { kind: 'riot', frac, hot: this.riotShieldHits >= RIOT_SHIELD_HITS - 3,
-        label: `${Math.max(0, RIOT_SHIELD_HITS - this.riotShieldHits)}` };
+      return { kind: 'riot', frac, pct: Math.round((1 - frac) * 100), hot: this.riotShieldHits >= RIOT_SHIELD_HITS - 3 };
     }
     return null;
   }
@@ -2052,6 +2083,9 @@ export class Player {
       this.hurtTimer = 0.12;
       return;
     }
+    // A carried riot/mirror shield turns a machine's melee blow too (not just
+    // its lasers, which blockRangedShot already handles), wearing as it does.
+    if (source === 'machine' && this.absorbMeleeOnShield()) { this.hurtTimer = 0.12; return; }
     // Up on a block top, ground enemies can't reach you — melee, bites, and
     // lasers all fall short. (A bomb blast still catches you; flying machines,
     // to come, will too.) So they keep trying in vain while you're safe up high.

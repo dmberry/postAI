@@ -64,8 +64,16 @@ export const GRASS_PATCH_TEXTURE = loadDownscaled(T + 'floor-secret.jpg');
 // variant deterministically from its tile, so the same rock keeps the same face.
 // Downscaled like the floors to keep the per-frame minification shimmer down.
 export const ROCK_TEXTURES = [
-  loadDownscaled(T + 'rock-surface-1.jpg', 72),
-  loadDownscaled(T + 'rock-surface-2.jpg', 72),
+  loadDownscaled(T + 'rock-surface-1.jpg', 72), // small-rock: granite + moss
+  loadDownscaled(T + 'rock-surface-2.jpg', 72), // mossyrock: pink-grey, heavy moss
+  loadDownscaled(T + 'rock-surface-3.jpg', 72), // smallrock2: plain grey stone
+];
+
+// Wood grain for the loot crates. Each crate picks a variant and a slightly
+// different opacity (see drawBox) so a row of them doesn't look stamped out.
+export const BOX_TEXTURES = [
+  loadDownscaled(T + 'box-wood-1.jpg', 64),
+  loadDownscaled(T + 'box-wood-2.jpg', 64),
 ];
 
 // Keyed by the wall object's `material` field (tiles.js/worldgen.js).

@@ -31,7 +31,7 @@ export const OBJECTS = {
   flower:  { solid: false }, // decorative wildflowers (worldgen.scatterFlowers): pure scenery, walk-through
   column:  { solid: true },  // ruined marble column: a pillar that blocks and gives shot-cover
   colfall: { solid: false }, // toppled column / drum lying in the grass: decorative, walk over it
-  marbleblock: { solid: true }, // fallen entablature / altar stone among the columns: blocks, gives cover
+  marbleblock: { solid: true, climbable: true, climbHeight: 2 }, // fallen entablature / altar stone: climb it like a wall (its draw height is pinned to 2 levels to match)
   // "climbable" objects are solid for everything except the player's own
   // climb check (Player.collides via GameMap.effectiveHeightAt), which
   // treats them as a raised step of `climbHeight` levels rather than an
