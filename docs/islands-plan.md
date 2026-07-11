@@ -8,10 +8,11 @@ using tools**. Each island is laid out differently according to its god's/AI's
 character.
 
 **Status: design APPROVED (David, 2026-07-10) — §10 decisions are settled
-except island owners. No island code exists yet, but the prerequisites have
-landed** (v1.58 guard roster + fortress map; v1.59 island-agnostic daemon-kill
-endgame; v1.61 Crown→Daemon rename; v1.62 death-aria + testament — see §2 and
-§9) **and Stage 0 is unblocked.** Stage 0 is the gating
+except island owners. Stage 0 STARTED: 0a (the `currentWorld` wrap) landed
+2026-07-11** (see §3); 0b (Backspace port) and 0c (CALYPSO extraction) remain.
+**Prerequisites all landed** (v1.58 guard roster + fortress map; v1.59
+island-agnostic daemon-kill endgame; v1.61 Crown→Daemon rename; v1.62
+death-aria + testament — see §2 and §9). Stage 0 is the gating
 refactor; Stages 3+ are designed to be built by parallel sessions without
 file contention. Read "Working rules for parallel sessions" before touching
 anything.
@@ -129,11 +130,16 @@ export function createWorld(id, opts) {
 
 Work items, in order, each leaving the game playable:
 
-1. **0a — introduce `currentWorld` for the overworld only.** Wrap the existing
-   map + entity arrays in a world object built at boot (`calypso` id), point
-   every consumer at `currentWorld.robots` etc. Pure mechanical move-and-alias;
-   no behaviour change. *Verify: full run plays identically; seed unchanged
-   produces the identical world; no console errors.*
+1. **0a — introduce `currentWorld` for the overworld only. ✓ DONE (2026-07-11).**
+   New `src/game/world.js` (`createWorld` + a tiny registry, arrays held BY
+   REFERENCE); a single `currentWorld = createWorld('calypso', {...})` built after
+   the last entity array (main.js ~707), and every RUNTIME consumer repointed to
+   `currentWorld.*` (the ~78 reads below a sentinel comment; the construction
+   block keeps local names for 0c; the two ES6-shorthand literals hand-expanded).
+   `inUnderworld`/map-switching left untouched (0b). Verified: 24 tests
+   (`test/world.test.js` added), aliasing holds (`__game.robots === currentWorld.robots`
+   for all six), a T2 chases via the repointed `runUpdate` bag, renderer draws all
+   classes, no console errors.
 2. **0b — port the Backspace.** `createUnderworldPocket` returns a World; the
    `inUnderworld` boolean and every ternary die, replaced by
    `currentWorld.ambience` and world switching (`switchWorld(w, player)` in
@@ -274,8 +280,10 @@ fortress-map work, landed as v1.58; the core-kill endgame landed as v1.59.)
    parallel session). The ZEUS rename is also done
    (`AI_NAME = 'ZEUS'`, `AI_ROSTER` in fortress.js; no Adamantine remains).
 2. **Stage 0** — world contract; port Backspace; wrap CALYPSO. One session,
-   quiet window. No visible change. **Now unblocked**, subject to the
-   coordination check above.
+   quiet window. No visible change. **0a done (2026-07-11):** `world.js` +
+   `currentWorld` wrap of the overworld arrays. **Next: 0b** (port Backspace,
+   kill `inUnderworld`, add `switchWorld`), then **0c** (extract
+   `src/islands/calypso.js`).
 3. **Stage 1** — boat + cheap crossing + stub islet. Proves travel round-trip
    and campaign save.
 4. **Stage 2** — islandkit extraction, seed-diff verified.

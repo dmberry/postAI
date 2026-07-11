@@ -26,6 +26,7 @@ import { stampCoast } from './engine/coast.js';
 import { placeRuins } from './game/ruins.js';
 import { createFortress, DAEMON_BOOK_ID, DAEMON_BOOK_TITLE } from './game/fortress.js';
 import { createUnderworldPocket, spawnUnderworldCreature, updateUnderworldCreatures } from './game/underworld.js';
+import { createWorld, registerWorld } from './game/world.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
 // Note onsets split into four pitch registers, so each singing machine can be
@@ -704,6 +705,13 @@ const dayNight = new DayNight();
 const minimap = new Minimap(map);
 let showMinimap = true; // toggled with the ] key
 const birds = spawnBirds(map, WORLD_SEED);
+// Wrap the overworld's map + entity arrays in a single World (islands Stage 0a,
+// docs/islands-plan.md §3). Arrays are held BY REFERENCE — currentWorld.robots IS
+// the array the construction block above builds and the runtime below reads, so this
+// is a pure alias with no behaviour change. overworldMap (not the reassignable `map`)
+// because the World owns the *overworld*; the underworld swap stays a local-`map` job.
+const currentWorld = registerWorld(createWorld('calypso', { map: overworldMap, spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs }));
+// === RUNTIME REPOINT BOUNDARY (Stage 0a): construction above uses local names; runtime below reads currentWorld.* ===
 let lastObjectCount = map.objects.length;
 
 // Audio unlocks on the first user gesture (browser requirement).
@@ -810,7 +818,10 @@ input.uiHitTest = (x, y) => {
   return false;
 };
 
-window.__game = { player, map, camera, animals, birds, robots, waterdroids, obelisks, obeliskObjs, wfactory, dayNight, lore, input, renderer, fortress, sfx };
+window.__game = { player, map, camera,
+  animals: currentWorld.animals, birds: currentWorld.birds, robots: currentWorld.robots,
+  waterdroids: currentWorld.waterdroids, obelisks: currentWorld.obelisks, obeliskObjs: currentWorld.obeliskObjs,
+  wfactory, dayNight, lore, input, renderer, fortress, sfx, currentWorld };
 
 function resize() {
   // Size to the *visual* viewport, not innerHeight/100vh. On iOS Safari the
@@ -968,13 +979,13 @@ function replPrint(...lines) {
 // world (map, robots, obeliskObjs, player) through these hooks, and never
 // touch game state directly — ronml.js only handles language mechanics.
 function ronmlCtx() {
-  const findObelisk = (id) => obeliskObjs.find((o) => o.code === id && !o.destroyed);
+  const findObelisk = (id) => currentWorld.obeliskObjs.find((o) => o.code === id && !o.destroyed);
   const nearby = (r) => !r.dead && !r.friendly && !r.fused
     && Math.hypot(r.x - player.x, r.y - player.y) <= RONML_ROBOT_RANGE;
   return {
     station: 'ob', // an AI obelisk (TIRESIAS) — the AI-network verbs live here
     hasManual: !!(player.readManuals && player.readManuals.has('book_ronml')), // helpText hints at the manual until it's read
-    listObelisks: () => obeliskObjs.filter((o) => !o.destroyed).map((o) => o.code),
+    listObelisks: () => currentWorld.obeliskObjs.filter((o) => !o.destroyed).map((o) => o.code),
     distanceToNode: (id) => {
       const o = findObelisk(id);
       return o ? Math.hypot(o.x + 0.5 - player.x, o.y + 0.5 - player.y) : Infinity;
@@ -990,9 +1001,9 @@ function ronmlCtx() {
       o.needsRebuild = true; // temporary — this is a hack, not a physical fell
       map.objectGrid[o.y * map.w + o.x] = null;
       if (player.skylinkActive) player.skylinkActive = false;
-      if (factoryLive() && !robots.some((r) => r.type === 'w3' && !r.dead)) {
+      if (factoryLive() && !currentWorld.robots.some((r) => r.type === 'w3' && !r.dead)) {
         const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-        if (drone) robots.push(drone);
+        if (drone) currentWorld.robots.push(drone);
       }
       player.say(`${id} goes dark. A repair drone is already inbound to raise it.`);
     },
@@ -1008,7 +1019,7 @@ function ronmlCtx() {
       o.frozen = true;
       o.frozenT = 0;
       let count = 0;
-      for (const r of robots) {
+      for (const r of currentWorld.robots) {
         if (r.dead || r.fused || r.friendly) continue;
         if ((r.type === 't1' || r.type === 't2') && r.home
           && Math.hypot(r.home.x - (o.x + 0.5), r.home.y - (o.y + 0.5)) < 10) {
@@ -1017,15 +1028,15 @@ function ronmlCtx() {
           count++;
         }
       }
-      if (factoryLive() && !robots.some((r) => r.type === 'w3' && !r.dead)) {
+      if (factoryLive() && !currentWorld.robots.some((r) => r.type === 'w3' && !r.dead)) {
         const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-        if (drone) robots.push(drone);
+        if (drone) currentWorld.robots.push(drone);
       }
       player.say(`${id} pins itself in a loop that never returns. Its light flares white-hot${count ? ' and its garrison seizes up mid-stride' : ''} — only a repair drone can talk it down now.`);
     },
     sleepNearby: (mins) => {
       const secs = Math.max(1, mins);
-      for (const r of robots) if (nearby(r)) r.disabledT = Math.max(r.disabledT || 0, secs);
+      for (const r of currentWorld.robots) if (nearby(r)) r.disabledT = Math.max(r.disabledT || 0, secs);
       player.say('The local machines idle. The yard goes quiet for a spell.');
     },
     skylinkActive: () => !!player.skylinkActive,
@@ -1034,19 +1045,19 @@ function ronmlCtx() {
       player.say(`The deadline clock stutters and loses ${Math.max(0, hours)} hour${Math.max(0, hours) === 1 ? '' : 's'}. POSEIDON waits a little longer.`);
     },
     repelNearby: () => {
-      for (const r of robots) if (nearby(r)) { r.repelledT = REPEL_DURATION; r.aggro = false; }
+      for (const r of currentWorld.robots) if (nearby(r)) { r.repelledT = REPEL_DURATION; r.aggro = false; }
       player.say('Targeting flips. Anything nearby turns tail and runs.');
     },
     sing: () => {
       const eligible = (r) => !r.dead && !r.drained && !r.friendly && !r.fused;
-      const targets = robots.filter((r) => nearby(r) && eligible(r));
-      if (!targets.length && !robots.some(eligible)) { player.say('Nothing anywhere to sing to.'); return; }
+      const targets = currentWorld.robots.filter((r) => nearby(r) && eligible(r));
+      if (!targets.length && !currentWorld.robots.some(eligible)) { player.say('Nothing anywhere to sing to.'); return; }
       // A choir wants a full section — if too few are in earshot, summon the
       // nearest others from across the map to come and join (they walk in to
       // the formation), so the piece is never a lonely solo.
       const CHOIR_TARGET = 6;
       if (targets.length < CHOIR_TARGET) {
-        const more = robots.filter((r) => eligible(r) && !targets.includes(r))
+        const more = currentWorld.robots.filter((r) => eligible(r) && !targets.includes(r))
           .sort((a, b) => Math.hypot(a.x - player.x, a.y - player.y) - Math.hypot(b.x - player.x, b.y - player.y))
           .slice(0, CHOIR_TARGET - targets.length);
         for (const r of more) targets.push(r);
@@ -1199,7 +1210,7 @@ const ROBOT_LABELS = { t1: 'T1 ROLLER', t2: 'T2 STALKER', t3: 'T3 SNIPER', w1: '
 function startDrive() {
   if (!hermesTor) { replPrint('No relay lock — open this at a TOR.'); return; }
   let best = null, bestD = DRIVE_RANGE;
-  for (const r of robots) {
+  for (const r of currentWorld.robots) {
     if (r.dead || r.fused || r.friendly) continue;
     const d = Math.hypot(r.x - (hermesTor.x + 0.5), r.y - (hermesTor.y + 0.5));
     if (d < bestD) { bestD = d; best = r; }
@@ -1232,7 +1243,7 @@ function driveSelfDestruct() {
   if (!r) { endDrive(); return; }
   const R = 4.5;
   for (let s = 0; s < 10; s++) player.sparkAt(map, r.x + (Math.random() - 0.5) * 2, r.y + (Math.random() - 0.5) * 2);
-  for (const o of robots) {
+  for (const o of currentWorld.robots) {
     if (o === r || o.dead || o.fused) continue;
     if (Math.hypot(o.x - r.x, o.y - r.y) <= R) { o.hp = (o.hp ?? 10) - 20; if (o.hp <= 0) o.dead = true; }
   }
@@ -1298,11 +1309,11 @@ function drawDriveOverlay(now) {
   };
   const ents = [];
   if (Math.hypot(player.x - r.x, player.y - r.y) < 20) ents.push({ x: player.x, y: player.y, label: 'HUMAN · ALLY', kind: 'human' });
-  for (const o of robots) {
+  for (const o of currentWorld.robots) {
     if (o === r || o.dead || o.fused) continue;
     if (Math.hypot(o.x - r.x, o.y - r.y) < 18) ents.push({ x: o.x, y: o.y, label: `${ROBOT_LABELS[o.type] || o.type.toUpperCase()} · HOSTILE`, kind: 'hostile' });
   }
-  for (const a of animals) {
+  for (const a of currentWorld.animals) {
     if (a.dead) continue;
     if (Math.hypot(a.x - r.x, a.y - r.y) < 13) ents.push({ x: a.x, y: a.y, label: 'FAUNA', kind: 'fauna' });
   }
@@ -1362,13 +1373,13 @@ function openRonMap() {
   }
   // Live machines (small red dots).
   g.fillStyle = '#e0552f';
-  for (const r of robots) {
+  for (const r of currentWorld.robots) {
     if (r.dead || r.fused || r.friendly) continue;
     g.beginPath(); g.arc(sx(r.x), sy(r.y), 2.5, 0, Math.PI * 2); g.fill();
   }
   // Obelisks (green squares + code), destroyed ones hollow.
   g.font = '9px ui-monospace, monospace';
-  for (const o of obeliskObjs) {
+  for (const o of currentWorld.obeliskObjs) {
     const x = sx(o.x + 0.5), y = sy(o.y + 0.5);
     if (o.destroyed) {
       g.strokeStyle = 'rgba(80,230,130,0.4)'; g.lineWidth = 1.2;
@@ -1962,12 +1973,12 @@ player.onObeliskDestroyed = (ob) => {
     const originY = factoryLive() ? factoryCy() : ob.y + 0.5;
     const squad = spawnW1s(map, squadSeed, originX, originY, 2 + Math.floor(Math.random() * 3));
     if (squad.length) {
-      robots.push(...squad);
+      currentWorld.robots.push(...squad);
       player.say(`The W-factory dispatches a revenge squad: ${squad.length} W1 hunter${squad.length > 1 ? 's' : ''}, already coming for you.`);
     }
   }
   // Victory: every obelisk toppled at once.
-  if (obeliskObjs.every((o) => o.destroyed) && !player._ended) {
+  if (currentWorld.obeliskObjs.every((o) => o.destroyed) && !player._ended) {
     player._ended = true;
     player.addScore(100);
     player.deathCert = { name: player.name, gender: player.gender, cause: 'nothing — you won', score: player.score, skills: [...player.skills], deaths: player.deaths || 0, victory: true };
@@ -1984,9 +1995,9 @@ player.onObeliskDestroyed = (ob) => {
     player.skylinkActive = false;
     ob.needsRebuild = true;
     player.say('The tower comes down and the POSEIDON web collapses — dark, for now. A repair drone is already inbound to raise it.');
-    if (factoryLive() && !robots.some((r) => r.type === 'w3' && !r.dead)) {
+    if (factoryLive() && !currentWorld.robots.some((r) => r.type === 'w3' && !r.dead)) {
       const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-      if (drone) robots.push(drone);
+      if (drone) currentWorld.robots.push(drone);
     }
   }
 };
@@ -2000,7 +2011,7 @@ player.onObeliskAttacked = () => {
   wFactoryW4Cooldown = 25;
   const w4 = spawnW4(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
   if (w4) {
-    robots.push(w4);
+    currentWorld.robots.push(w4);
     player.say('A W4 hunter-killer streaks out of the W-factory, lasers charging.');
   }
 };
@@ -2065,12 +2076,12 @@ const SKYLINK_MAX_W4 = 50; // concurrent cap, so a long purge can't melt the fra
 let skylinkTimer = 0; // seconds survived under the purge, once active
 let skylinkW4Clock = 0;
 function dispatchSkylinkW4s(n) {
-  const towers = obeliskObjs.filter((o) => !o.destroyed);
+  const towers = currentWorld.obeliskObjs.filter((o) => !o.destroyed);
   for (let i = 0; i < n; i++) {
     const src = towers.length ? towers[Math.floor(Math.random() * towers.length)] : (factoryLive() ? { x: factoryCx() - 0.5, y: factoryCy() - 0.5 } : null);
     const ox = src ? src.x + 0.5 : player.x, oy = src ? src.y + 0.5 : player.y;
     const w4 = spawnW4(map, Math.floor(Math.random() * 0x7fffffff), ox, oy);
-    if (w4) robots.push(w4);
+    if (w4) currentWorld.robots.push(w4);
   }
 }
 function update(dt) {
@@ -2144,7 +2155,7 @@ function update(dt) {
       player.say("You're not hurt enough to need the rest.");
     } else if (sleepCooldown > 0) {
       player.say('Still too keyed up to rest again so soon.');
-    } else if (robots.some((r) => !r.dead && !r.friendly && !r.drained && r.aggro
+    } else if (currentWorld.robots.some((r) => !r.dead && !r.friendly && !r.drained && r.aggro
       && Math.hypot(r.x - player.x, r.y - player.y) < SLEEP_SAFE_RANGE)) {
       player.say("Too dangerous to rest with something hunting you.");
     } else {
@@ -2367,9 +2378,9 @@ function update(dt) {
 
   // Weapons target robots and water droids alike (a combined foe list, only
   // for the player's own targeting — each still updates on its own array).
-  const foes = waterdroids.length ? robots.concat(waterdroids) : robots;
-  player.update(dt, input, map, animals, foes, mouseWorld);
-  updateWaterDroids(dt, waterdroids, player, map);
+  const foes = currentWorld.waterdroids.length ? currentWorld.robots.concat(currentWorld.waterdroids) : currentWorld.robots;
+  player.update(dt, input, map, currentWorld.animals, foes, mouseWorld);
+  updateWaterDroids(dt, currentWorld.waterdroids, player, map);
   // Advance in-flight rounds.
   for (const p of map.projectiles) {
     const dist = Math.hypot(p.x1 - p.x0, p.y1 - p.y0) || 0.001;
@@ -2404,7 +2415,7 @@ function update(dt) {
     b.done = true;
     sfx.play('charge');
     map.explosions.push({ x: b.x, y: b.y, radius: b.radius, ttl: 0.8, max: 0.8 });
-    player.detonateBomb(b, map, animals, robots, waterdroids, obeliskObjs);
+    player.detonateBomb(b, map, currentWorld.animals, currentWorld.robots, currentWorld.waterdroids, currentWorld.obeliskObjs);
   }
   if (map.bombs.some((b) => b.done)) map.bombs = map.bombs.filter((b) => !b.done);
   for (const e of map.explosions) e.ttl -= dt;
@@ -2476,11 +2487,11 @@ function update(dt) {
       wFactoryNext = 6 + Math.random() * 5;
       // Anything the crew can mend, now including fully-toppled towers — the
       // factory sends a drone to raise them again until you bring it down.
-      const anyRepairable = obeliskObjs.some((o) => o.destroyed || o.obDamage > 0 || o.frozen);
-      const w3Active = robots.some((r) => r.type === 'w3' && !r.dead);
+      const anyRepairable = currentWorld.obeliskObjs.some((o) => o.destroyed || o.obDamage > 0 || o.frozen);
+      const w3Active = currentWorld.robots.some((r) => r.type === 'w3' && !r.dead);
       if (anyRepairable && !w3Active) {
         const drone = spawnW3(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-        if (drone) { robots.push(drone); player.say('A repair drone whirs out of the W-factory.'); }
+        if (drone) { currentWorld.robots.push(drone); player.say('A repair drone whirs out of the W-factory.'); }
       }
     }
     // A W5 gardener drone: no trigger, no urgency — the factory just keeps
@@ -2493,20 +2504,20 @@ function update(dt) {
     if (wFactoryW5Clock > wFactoryW5Next) {
       wFactoryW5Clock = 0;
       wFactoryW5Next = 30 + Math.random() * 40;
-      const w5Count = robots.reduce((n, r) => n + (r.type === 'w5' && !r.dead ? 1 : 0), 0);
+      const w5Count = currentWorld.robots.reduce((n, r) => n + (r.type === 'w5' && !r.dead ? 1 : 0), 0);
       if (w5Count < 2) {
         const gardener = spawnW5(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-        if (gardener) { robots.push(gardener); player.say('A small drone trundles out of the W-factory, unhurried.'); }
+        if (gardener) { currentWorld.robots.push(gardener); player.say('A small drone trundles out of the W-factory, unhurried.'); }
       }
     }
     wFactoryW1Clock += dt;
     if (wFactoryW1Clock > wFactoryW1Next) {
       wFactoryW1Clock = 0;
       wFactoryW1Next = 100 + Math.random() * 80;
-      const liveW1 = robots.filter((r) => r.type === 'w1' && !r.dead).length;
+      const liveW1 = currentWorld.robots.filter((r) => r.type === 'w1' && !r.dead).length;
       if (liveW1 < 3) {
         const wave = spawnW1s(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy(), 2 + Math.floor(Math.random() * 2));
-        if (wave.length) { robots.push(...wave); player.say('The W-factory dispatches a hunting wave.'); }
+        if (wave.length) { currentWorld.robots.push(...wave); player.say('The W-factory dispatches a hunting wave.'); }
       }
     }
     // Re-garrison: when an obelisk realises it has no guards left (its home
@@ -2518,11 +2529,11 @@ function update(dt) {
       wFactoryGuardClock = 0;
       wFactoryGuardNext = 40 + Math.random() * 40;
       const MIN_GUARDS = 2, HOME_R = 8;
-      const guardsOf = (ob) => robots.filter((r) => !r.dead && !r.friendly
+      const guardsOf = (ob) => currentWorld.robots.filter((r) => !r.dead && !r.friendly
         && (r.type === 't1' || r.type === 't2')
         && Math.hypot(r.home.x - (ob.x + 0.5), r.home.y - (ob.y + 0.5)) < HOME_R).length;
       let worst = null, worstCount = MIN_GUARDS;
-      for (const ob of obeliskObjs) {
+      for (const ob of currentWorld.obeliskObjs) {
         if (ob.destroyed) continue;
         const g = guardsOf(ob);
         if (g < worstCount) { worstCount = g; worst = ob; }
@@ -2532,7 +2543,7 @@ function update(dt) {
         const guard = spawnGuard(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy(),
           type, { x: worst.x + 0.5, y: worst.y + 0.5 });
         if (guard) {
-          robots.push(guard);
+          currentWorld.robots.push(guard);
           player.say(`The W-factory builds a ${type.toUpperCase()} and sends it to re-garrison ${worst.code}.`);
         }
       }
@@ -2544,10 +2555,10 @@ function update(dt) {
     // (not real time), independent of the attack-triggered dispatch above.
     if (dayNight.totalHours - lastW4GameHour >= 0.5) {
       lastW4GameHour = dayNight.totalHours;
-      const liveW4 = robots.filter((r) => r.type === 'w4' && !r.dead).length;
+      const liveW4 = currentWorld.robots.filter((r) => r.type === 'w4' && !r.dead).length;
       if (liveW4 < 3) {
         const w4 = spawnW4(map, Math.floor(Math.random() * 0x7fffffff), factoryCx(), factoryCy());
-        if (w4) { robots.push(w4); player.say('The W-factory rolls out another W4 hunter-killer.'); }
+        if (w4) { currentWorld.robots.push(w4); player.say('The W-factory rolls out another W4 hunter-killer.'); }
       }
     }
   }
@@ -2572,8 +2583,8 @@ function update(dt) {
   // Autosave the run every few seconds.
   saveClock += dt;
   if (saveClock >= 8) { saveClock = 0; persist(); }
-  updateAnimals(dt, animals, player, map);
-  updateBirds(dt, birds, animals, player, map);
+  updateAnimals(dt, currentWorld.animals, player, map);
+  updateBirds(dt, currentWorld.birds, currentWorld.animals, player, map);
   // (Robots' AI now ticks inside systems.runUpdate below — order 30, before
   //  fortress at 35, which reads this-frame robot aggro. See robots.js.)
   // Choir light-flash sync: while the piece plays, each singing machine's red
@@ -2584,7 +2595,7 @@ function update(dt) {
   const choirT = sfx.choirElapsed();
   if (choirT >= 0) {
     let nearestSinger = Infinity;
-    for (const r of robots) {
+    for (const r of currentWorld.robots) {
       if (!r.singing) continue;
       const band = CHOIR_REGISTERS[(r.choirVoice || 0) % 4];
       let last = -1;
@@ -2607,11 +2618,11 @@ function update(dt) {
   //   alarm — on alarm (uplink intact) `stir` flares the obelisks red and sends
   //   a W4, `calm` unwinds it. dayNight: advances the day/night clock. robots
   //   ticks before fortress so fortress sees this-frame aggro (see robots.js).
-  systems.runUpdate({ dt, player, input, map, camera, robots, animals, birds, dayNight, worldStir, fortress });
+  systems.runUpdate({ dt, player, input, map, camera, robots: currentWorld.robots, animals: currentWorld.animals, birds: currentWorld.birds, dayNight, worldStir, fortress });
   // Push the player out of any machine/animal body he ended the tick overlapping.
   // Must run after everyone has moved — robots now move inside runUpdate above,
   // so this sits just below it (separate() nudges both bodies; see collision.js).
-  resolveBodyOverlaps(player, animals, robots);
+  resolveBodyOverlaps(player, currentWorld.animals, currentWorld.robots);
   // Time's up: POSEIDON comes online. Every obelisk lights up and links
   // to every other in a web of lasers, and the factory throws wave after
   // wave of W4s at you — indefinitely. There's no timer to survive to; it
@@ -2621,7 +2632,7 @@ function update(dt) {
   // suspension is the player's reprieve, and POSEIDON only (re)lights once the
   // repair drone has raised every flagged tower back up.
   if (dayNight.hoursLeft() <= 0 && !player.skylinkActive && !player.deathCert && !player._ended
-    && !obeliskObjs.some((o) => o.needsRebuild)) {
+    && !currentWorld.obeliskObjs.some((o) => o.needsRebuild)) {
     player.skylinkActive = true;
     skylinkTimer = 0; // now counts up: seconds survived under the purge
     skylinkW4Clock = 0;
@@ -2633,7 +2644,7 @@ function update(dt) {
     skylinkW4Clock += dt;
     if (skylinkW4Clock > 1.2) {
       skylinkW4Clock = 0;
-      const liveW4 = robots.filter((r) => r.type === 'w4' && !r.dead).length;
+      const liveW4 = currentWorld.robots.filter((r) => r.type === 'w4' && !r.dead).length;
       if (liveW4 < SKYLINK_MAX_W4) dispatchSkylinkW4s(2 + Math.floor(Math.random() * 3));
     }
   }
@@ -2665,7 +2676,7 @@ function update(dt) {
   // The ambient piano only plays in calm moments: silent while anything is
   // actively aggroed on the player and close enough to matter.
   let underThreat = false;
-  for (const a of animals) {
+  for (const a of currentWorld.animals) {
     if (a.dead) continue;
     const close = Math.hypot(a.x - player.x, a.y - player.y) < 18;
     if (a.type === 'dog') {
@@ -2681,12 +2692,12 @@ function update(dt) {
       }
     }
   }
-  for (const b of birds) {
+  for (const b of currentWorld.birds) {
     if (b.shrieking && !b._sShriek) { b._sShriek = true; sfx.play('shriek'); }
     if (!b.shrieking) b._sShriek = false;
   }
   let nearestRobot = Infinity;
-  for (const r of robots) {
+  for (const r of currentWorld.robots) {
     if (r.dead) continue;
     const hunting = r.state === 'chase' || r.chasing || r.aggro;
     const dist = Math.hypot(r.x - player.x, r.y - player.y);
@@ -2717,7 +2728,7 @@ function update(dt) {
   // and holds, and nearby non-aggro robots get nudged to sweep near the
   // tower — a report of closeness, never an exact position.
   let sirenPull = false, sirenResisted = false; // for the once-only song messages
-  for (const ob of obeliskObjs) {
+  for (const ob of currentWorld.obeliskObjs) {
     if (ob.burning > 0) ob.burning -= dt; // OB-gun flame timer, ticked for the renderer
     if (ob.frozen) ob.frozenT = (ob.frozenT || 0) + dt; // CPU-burn age for the renderer's smoke ramp
     if (ob.destroyed) continue;
@@ -2758,7 +2769,7 @@ function update(dt) {
       ob._nudgeT -= dt;
       if (ob._nudgeT <= 0) {
         ob._nudgeT = 2.5;
-        for (const r of robots) {
+        for (const r of currentWorld.robots) {
           if (r.dead || r.drained || r.fused || r.friendly || r.disabledT > 0 || r.aggro) continue;
           if (Math.hypot(r.x - ob.x, r.y - ob.y) > 18) continue;
           r.wanderTarget = {
@@ -2791,7 +2802,7 @@ function frame(now) {
 
   if (now - lastRenderTime >= MIN_RENDER_MS) {
     lastRenderTime = now;
-    renderer.draw(camera, map, player, inUnderworld ? [] : animals, {
+    renderer.draw(camera, map, player, inUnderworld ? [] : currentWorld.animals, {
       fps,
       version: VERSION,
       // Fluorescent-lit down there regardless of the overworld's clock — the
@@ -2800,9 +2811,9 @@ function frame(now) {
       dawnGlow: inUnderworld ? 0 : dayNight.dawnGlow(),
       timeLabel: dayNight.countdownLabel,
       minimap: (inUnderworld || !showMinimap) ? null : minimap,
-      birds: inUnderworld ? [] : birds,
-      robots: inUnderworld ? [] : robots,
-      waterdroids: inUnderworld ? [] : waterdroids,
+      birds: inUnderworld ? [] : currentWorld.birds,
+      robots: inUnderworld ? [] : currentWorld.robots,
+      waterdroids: inUnderworld ? [] : currentWorld.waterdroids,
       underworld: inUnderworld,
       uwCreatures: inUnderworld ? uwCreatures : [],
       lore,
@@ -2825,7 +2836,7 @@ function frame(now) {
       // the Backspace.
       skylinkActive: player.skylinkActive && !player._ended && !inUnderworld,
       skylinkTimer,
-      obeliskObjs: inUnderworld ? [] : obeliskObjs,
+      obeliskObjs: inUnderworld ? [] : currentWorld.obeliskObjs,
       paused,
       rest: resting ? { dim: restDim(resting.t) } : null,
       ubikFlicker: player.ubikFlickerT || 0,
