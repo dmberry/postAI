@@ -6,16 +6,28 @@ the daily push continues undisturbed, and a bad pass is `git worktree remove`.
 
 **Where we are (resume here):** Stage 0 (registry) ✓, Stage 1 (dayNight +
 fortress self-registered) ✓, Stage 2a `combat.js` (player.js −294) ✓, Stage 2b
-`ui.js` foundation (4 overlays via prototype mixin + DASH_H) ✓, unit tests
-(`node --test test/*.test.js`, 15 pass) ✓. Rebased onto v1.84.
+`ui.js` **complete** ✓. The ui.js split landed in three passes via the prototype
+mixin: the foundation (4 overlays + `DASH_H`), then the modals (`drawSkillModal`,
+`drawWeaponChart`, `drawDeathCert`, `drawDaemonVoice`, `drawAiVictory`,
+`drawDetail`, `drawToast`, plus `meanderBand`/`deathRank`/`shareCertificate`),
+and now the dashboard/inventory cluster (`drawDashboard`, `drawDashboardCompact`,
+`drawConditionsInline`, `drawHudOverlay`, `drawBar`, `drawLabel`, `drawSlot`,
+`drawBackpackPanel`, `drawDragGhost`, `drawTouchControls`, `drawWalkmanTicker`,
+`slotAt`). renderer.js 4,984 → 4,123; ui.js is 1,112. Unit tests
+(`node --test test/*.test.js`, 15 pass) ✓, and every moved method verified live
+in-browser (desktop + compact dashboards, backpack panel, all condition branches)
+with no console errors.
 
-**Next:** finish the `ui.js` modals through the proven mixin groove — move
-`drawSkillModal`, `drawWeaponChart`, `drawDeathCert`, `drawDaemonVoice`,
-`drawAiVictory`, `drawDetail`, `drawToast` (append to `uiMethods`, delete from
-renderer, keep `_wrapText`/`_fw` on the renderer since the mixin preserves
-`this`), then the dashboard/inventory cluster (`drawItemIcon` stays in the
-renderer, shared with world draws). Rebase onto latest `main` first; run the test
-suite after. See the migration plan below.
+**Deliberately kept in renderer.js** — not HUD chrome, so out of scope for the
+ui.js split: `drawItemIcon` and `drawCassette` (shared with world/actor draws and
+the title deck), `drawMinimap` (reads fog/world state), `_wrapText` (helper,
+reached via `this` from the ui modals), and the actor overlays `creatureHealthBar`
+/ `playerShieldBar` (drawn over world entities inside the depth sort).
+
+**Next:** Stage 3 — `robots.js`. Its per-frame AI-update functions become
+registered systems; the draw stays in the renderer's depth-sort (per the boundary
+below). Rebase onto latest `main` first; run the test suite after. See the
+migration plan below.
 
 ## Tests
 
@@ -172,10 +184,10 @@ can't, we find out having touched ~5 lines, not the whole codebase.
   `stir`/`calm`), so it's not a system. The skylink web draw is renderer-coupled
   (a renderer method gated by `hud` state), not a self-contained module, so it
   stays in the renderer for now.
-- **Stage 2 — the ROADMAP file-size split (in progress).** Note this is a plain
-  module extraction, not registry work: weapon-fire and HUD-draw are event- and
-  render-driven, not per-frame systems, so they move to their own files but do
-  not `register()`.
+- **Stage 2 — the ROADMAP file-size split (done: `combat.js` + `ui.js`).** Note
+  this is a plain module extraction, not registry work: weapon-fire and HUD-draw
+  are event- and render-driven, not per-frame systems, so they move to their own
+  files but do not `register()`.
   - **`combat.js` (done).** `fire`/`pierceShot`/`coneShot`/`burnObelisk` moved out
     of `player.js` (2,422 → 2,128 lines). They take `player` as their first
     argument instead of `this`; everything they call back into stays a Player
@@ -185,7 +197,7 @@ can't, we find out having touched ~5 lines, not the whole codebase.
     (both `player.js` and `combat.js` import them from there), which is what
     breaks the would-be cycle. Verified live: firing spends ammo, spawns the
     tracer, lands damage, and prints the right line.
-  - **`ui.js` (foundation done, mixin pattern).** Renderer HUD/modals are far more
+  - **`ui.js` (done, mixin pattern).** Renderer HUD/modals are far more
     entangled than weapon-fire: ~20 methods scattered across the 4,984-line file,
     calling each other and a shared `drawItemIcon` (~600 lines) that world/actor
     draws also use, so a `this`→`renderer` rewrite would be large and risky.
@@ -197,10 +209,17 @@ can't, we find out having touched ~5 lines, not the whole codebase.
     `drawTorporHaze`, `drawUnderworldVeil`, `drawPausedOverlay`) plus `DASH_H`
     (the dashboard height, relocated to `ui.js`; renderer imports it back, no
     cycle). Verified live: the methods are functions on `Renderer.prototype` and
-    draw without error. Remaining (same pattern, now low-risk): the modals
-    (`drawSkillModal`, `drawWeaponChart`, `drawDeathCert`, `drawDaemonVoice`,
-    `drawAiVictory`, `drawDetail`, `drawToast`) and the dashboard/inventory
-    cluster; `drawItemIcon` stays in the renderer (shared with world draws).
+    draw without error. The remaining two passes then landed the same way: the
+    modals (`drawSkillModal`, `drawWeaponChart`, `drawDeathCert`, `drawDaemonVoice`,
+    `drawAiVictory`, `drawDetail`, `drawToast`), and the dashboard/inventory
+    cluster (`drawDashboard`, `drawDashboardCompact`, `drawConditionsInline`,
+    `drawHudOverlay`, `drawBar`, `drawLabel`, `drawSlot`, `drawBackpackPanel`,
+    `drawDragGhost`, `drawTouchControls`, `drawWalkmanTicker`, `slotAt`) — moved
+    by a byte-exact script, not retyped, then `deathRank`'s now-dead import
+    dropped from renderer. `drawItemIcon`, `drawCassette`, `drawMinimap`,
+    `_wrapText`, `creatureHealthBar`, and `playerShieldBar` stay in the renderer
+    (shared with world/actor draws or the depth sort). ui.js is now the whole
+    screen-space HUD; renderer.js is world-draw + depth-sort + `drawItemIcon`.
 - **Stage 3.** `robots.js`: update-functions become systems; draw stays in the
   depth-sort (per the boundary above).
 - **Stage 4.** Self-registration is the pattern from Stage 0 on, so each migrated
@@ -234,3 +253,13 @@ can't, we find out having touched ~5 lines, not the whole codebase.
   guard-spawn timing, whereas moving `lore` *late* only shifts fragment-pickup by
   one frame. Systems whose exact frame-position matters relative to still-
   hardcoded hub calls constrain where the block goes; migrate accordingly.
+- **2026-07-11.** Stage 2b finished: the dashboard/inventory HUD cluster (12
+  methods) moved verbatim into `uiMethods`, completing the `ui.js` split. Moved
+  with a byte-exact extraction script rather than hand-transcription, since the
+  blocks are large (`drawDashboard` alone is ~180 lines) and retyping risks silent
+  drift. Boundary held: `drawItemIcon`/`drawCassette` (shared with world/title
+  draws), `drawMinimap` (fog/world), `_wrapText` (modal helper), and the
+  `creatureHealthBar`/`playerShieldBar` actor overlays stay in the renderer. The
+  stale `drawStatusChips` doc-comment (the chips were removed in v1.87) that had
+  fused onto `drawHudOverlay` was trimmed in passing. Verified: 15 tests green +
+  live in-browser, no console errors.
