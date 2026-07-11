@@ -48,9 +48,13 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
-### v1.87 — active-status chip row fills the wide HUD
+### v1.87 — HUD polish (status chips by the score, kit dividers, shield bar), textured rubble, title background restored
 
-- **Status chips** (`renderer.js` + `player.js`): the wide desktop HUD had a dead gap between the walkman and the right-aligned status block. `drawStatusChips` lays a colour-coded chip there per live state — hidden / poison / hunger / wounded, plus forcefield charge, shield wear (riot hits-left or mirror heat, via `shieldStatus()`), lotus daze, and burden — some with a gauge. Only active states draw; the row starts past the walkman and caps at `this.w - 200`, so it never collides with the score block and simply drops overflow on a tight window. Below 1040px it falls back to `drawConditionsInline` (the old terse text by the vitals bars) so nothing is ever hidden. Added `player.forcefieldFrac()` for the charge gauge. Bonus: a pocket-carried shield's condition now shows here — the held-only hands gauge missed it.
+- **Status chips** (`renderer.js` + `player.js`): a colour-coded chip per live state — hidden / poison / hunger / wounded, plus forcefield charge, shield wear (riot hits-left or mirror heat, via `shieldStatus()`), lotus daze, and burden — some with a gauge. Only active states draw. Right-aligned to end just left of the score/rank block so it **balances the HUD** (heavy left bars+slots vs the lonely right), clamped so it never runs back into the walkman; overflow drops. Below 1040px it falls back to `drawConditionsInline` (the terse text by the vitals bars). Added `player.forcefieldFrac()` for the charge gauge. Surfaces a pocket-carried shield's condition the held-only hands gauge missed.
+- **Shield bar over the player** (`renderer.js` `playerShieldBar`): a slim bar above the head, like the machines' damage bar but thinner (reads as protection) and in the shield's colour, tiny label — forcefield charge, or a carried riot/mirror shield's condition (mirror cyan→red with heat). Only while shielded; tracks the head on a jump.
+- **Kit dividers** (`renderer.js`): thin vertical rules between HANDS | POCKETS | PACK | WALKMAN, centred in each gap from the slot geometry, so the strip reads as groups.
+- **Rubble textured** (`renderer.js` `drawRubble`): the little stone piles now map the rock textures per chunk (different slice each), matching the boulders instead of flat grey.
+- **Title background restored** (`mobile-gate.js`): `5df6672` had removed the `.mg-bgvideo` element believing `postAI-background.mp4` was never committed — but it was tracked since v1.39 (`4a1abf9`), so the removal killed a working backdrop. Reinstated the element, panning CSS, and half-speed handler; the mp4 being tracked means the deploy gets it too.
 
 ### v1.86 — smooth block-jumps, shields wear out, small-window HUD, backpack nudge
 
