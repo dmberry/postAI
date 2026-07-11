@@ -1,10 +1,10 @@
 # NostOS — a postAI Odyssey
 
-**Version:** 1.84 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
+**Version:** 1.85 · **Authors:** David and Henrik · **Started:** 4 July 2026 · **Play:** https://nostos-ai.vercel.app · **Repo:** https://github.com/dmberry/nostos · **Plans/suggestions:** [PAI-version-plan.md](PAI-version-plan.md)
 
 An isometric 2D survival game set in a world wrecked by an AI takeover. The machines are still here: black obelisk towers pulse across the landscape and T-class hunter robots patrol them, hunting the humans that remain. Survivors scavenge the ruins while avoiding both the machines and wild animals that have gained strange powers. A resistance called **RON** — Reality or Nothing — hid weapons in caches through the broken towns; whether it still exists is never settled. How it all happened is never stated — you piece it together from newspapers, diaries, floppy disks, VHS tapes, and dead computers.
 
-## Current build (v1.84)
+## Current build (v1.85)
 
 **World.** Seeded 128×128 isometric island — river with two bridges, a ten-building town, a ruined hamlet, forests, tall grass, roads, ruined marble temples (with a healing calm among the old stones — wounds knit faster there). Rugged hills and hollows, climbed one step at a time. Rubble steps over; a **wall block** needs a **double-jump** to mount (roam block-tops, walk off any edge to drop) — and up there you're safe from ground attacks. Building walls stop you on foot. Hand-drawn trees; streams wade, the river swims (slow, costly); a travelling ripple fakes current. Map edge is open sea (flat, wine-dark), ringed by semi-transparent gravel cliffs. Day/night cycle with genuinely dark nights and torches. Hidden deep in the south-west wilds, a **lotus-eaters' grove**: sweet pale fruit that reads like food but dazes you — the world hazes gold and you walk home drunk, your heading rolling under you.
 
@@ -30,6 +30,7 @@ One line per version. Full detail (root causes, exact numbers) lives in [PAI-ver
 
 | Version | Summary |
 |---|---|
+| v1.85 | **Robots keep hunting, and a crate won't save you.** **M4** report drones now sweep your **last-seen tile** before giving up — ducking behind cover no longer switches the hunt off, and running far no longer freezes them. Standing on a **loot crate is no longer safe**: machines reach up and hit you, though a tall **wall-block** you double-jump onto still shelters you. The in-game **version stamp** is back under the wordmark. Under the hood: the **systems-registry / file-size refactor** landed — the renderer's HUD split into `ui.js`, weapon-fire into `combat.js`, features self-register as `{update, draw}` modules, with a first unit-test suite. |
 | v1.84 | **You never vanish behind a building again**: when a wall, column, tower, or the factory stands between you and the camera, a faint ghost of the character draws over it — you always know where you are; and a machine **pinned by terrain for ~7 seconds now gives up the chase** — back to its patrol with a long sulk before it re-acquires, instead of buzzing at an obstacle forever. |
 | v1.83 | The big structures ring too: hammering the **W-factory answers with a deep foundry clang** (0.5× — the lowest ring in the game), the **mainframe core nearly as deep**, the **uplink mast thin and high** — and the weak-tool bounce off the factory hull now audibly clangs, as the message always claimed. |
 | v1.82 | **No more jittering machines**: a robot blocked by an obstacle (a marble column, a wall corner) used to vibrate in place — the pull toward you and the sidestep around the obstacle fought each frame. Detours are now **committed**: once a machine picks a way round it keeps going until the line to you actually opens, so it sweeps around the column and arrives instead of buzzing behind it. |

@@ -48,6 +48,13 @@ keeps only the latest status, plus the conventions, art notes, and forward plan
 above and below. (The old blow-by-blow "Where we are (v1.06 … v1.54)" log was
 pruned; the README table is the record now.)
 
+### v1.85 — relentless M4s, crates aren't safe, version stamp back (+ the refactor landed)
+
+- **M4 keeps looking** (`robots.js`): the fortress report-drone used to drop you at 6s of no line-of-sight and freeze past the 42-tile CPU cull. Now it stamps your last-seen tile while it can see you, and on losing sight heads there and sweeps for `M4_SEARCH_TIME` (9s) before giving up — cull-exempt while aggro'd, and it only tracks you when it actually has LOS (no more seeing through walls). M4-only, deliberately, to keep the cull cheap. Its own give-up in `updateGuard`, excluded from the generic LOS-giveup.
+- **Loot crate no longer safe** (`robots.js` + `player.js`): a perched player was untouchable — the solid crate held melee robots ~1 tile out (past 0.6–0.9 reach) and `onBlockTop()` gave blanket damage immunity. Split by height: `reachBonus()` gives a robot +0.6 reach to strike a player on a low climbable (climbHeight ≤ 1: box/rock/rubble), 0 on a tall wall; `onBlockTop()` now only counts elevation ≥ 2 as a safe perch. So a crate lifts you but isn't a fortress; a double-jump wall-block still is. Verified: T1 lands 24 dmg on a box, 0 on a wall.
+- **Version stamp restored** (`renderer.js`): it had been retired as clutter; `hud.version` was still passed, just not drawn. Back small/dim under the wordmark so the build is always readable.
+- **Under the hood — the systems-registry refactor landed on main.** Features self-register as `{update, drawWorld, drawScreen}` (dayNight/fortress/lore), ranged weapon-fire extracted to `combat.js` (player.js −294 lines), renderer HUD/modals mixed in from `ui.js`, plus a zero-dep `node --test` suite (registry + combat, 15 tests). See `docs/refactor-registry.md`.
+
 ### v1.84 — occlusion ghost + stuck machines give up
 
 - **Ghost pass** (renderer, after the drawables loop): if a tall object sits
