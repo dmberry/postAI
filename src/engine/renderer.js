@@ -329,7 +329,7 @@ export class Renderer {
       // In the underworld there's no map edge to face — it's boundless yellow,
       // so the grey edge-rock cliffs are suppressed (nothing drawn out there).
       if (d.edgeRock) { if (!hud.underworld) this.drawSeaTile(d.edgeRock[0], d.edgeRock[1]); }
-      else if (d.player) this.drawPlayer(d.player);
+      else if (d.player) { this.drawPlayer(d.player); if (player.shielded && player.shielded()) this.playerShieldBar(d.player); }
       else if (d.animal) { drawAnimal(this.ctx, d.animal, worldToScreen); this.creatureHealthBar(d.animal, player, 44); }
       else if (d.bird) drawBird(this.ctx, d.bird, worldToScreen);
       else if (d.robot) { drawRobot(this.ctx, d.robot, worldToScreen); this.creatureHealthBar(d.robot, player, 48); }
@@ -938,6 +938,38 @@ export class Renderer {
     ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
     ctx.fillStyle = frac > 0.5 ? '#6fbf4a' : frac > 0.22 ? '#d8a04f' : '#d84f3a';
     ctx.fillRect(x, y, w * frac, h);
+  }
+
+  // A shield-state bar floating over the player's head, like the machines'
+  // damage bar but SLIMMER (so it reads as protection, not health) and in the
+  // shield's own colour, with a tiny label. Forcefield charge takes priority,
+  // then a carried riot/mirror shield's condition (drains as it wears; the
+  // mirror also runs cyan->red with heat). Nothing drawn when unshielded.
+  playerShieldBar(player) {
+    let frac, color, label;
+    if (player.forcefieldActive && player.forcefieldActive()) {
+      frac = player.forcefieldFrac ? player.forcefieldFrac() : 1;
+      color = frac > 0.25 ? '#4fe08a' : '#e0894f';
+      label = 'FIELD';
+    } else if (player.shieldStatus) {
+      const st = player.shieldStatus();
+      if (!st) return;
+      frac = Math.max(0, Math.min(1, 1 - st.frac)); // condition remaining
+      if (st.kind === 'mirror') { color = st.hot ? '#e0553c' : '#7fd8e6'; label = st.hot ? 'MIRROR·HOT' : 'MIRROR'; }
+      else { color = st.hot ? '#e05548' : '#7fbf5a'; label = 'SHIELD'; }
+    } else return;
+    const ctx = this.ctx;
+    const c = worldToScreen(player.x, player.y);
+    const w = 20, h = 2, x = c.x - w / 2, y = c.y - 50 - (player.z || 0) * 32;
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fillRect(x - 1, y - 1, w + 2, h + 2);
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, w * frac, h);
+    ctx.font = '6px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = color;
+    ctx.fillText(label, c.x, y - 2.5);
+    ctx.textAlign = 'left';
   }
 
   // Which dashboard/backpack slot (if any) is under a screen point. Later
@@ -2880,14 +2912,42 @@ export class Renderer {
   drawRubble(tx, ty) {
     const ctx = this.ctx;
     const c = worldToScreen(tx + 0.5, ty + 0.5);
+    const seed = ((tx * 73856093) ^ (ty * 19349663)) >>> 0;
+    const tex = ROCK_TEXTURES && ROCK_TEXTURES.length
+      ? ROCK_TEXTURES[seed % ROCK_TEXTURES.length] : null;
+    // A little pile of broken stone: each chunk gets the same boulder texture as
+    // the rocks, clipped to its ellipse with a different slice so the stones in
+    // the heap don't clone. Falls back to the flat grey fill until it loads.
     const chunks = [
       [-8, -2, 7, 5], [2, -6, 8, 6], [-2, 2, 6, 4], [8, 0, 5, 4],
     ];
+    let i = 0;
     for (const [ox, oy, rx, ry] of chunks) {
-      ctx.fillStyle = rgbScale(WALL_BASE, 0.6 + (ox + 8) * 0.02);
+      const cx = c.x + ox, cy = c.y + oy - 3;
+      ctx.save();
       ctx.beginPath();
-      ctx.ellipse(c.x + ox, c.y + oy - 3, rx, ry, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+      if (tex && tex.complete && tex.naturalWidth) {
+        const jx = ((seed >> (i * 2)) % 7) - 3, jy = ((seed >> (i * 2 + 1)) % 7) - 3;
+        ctx.drawImage(tex, cx - rx - 3 + jx, cy - ry - 3 + jy, rx * 2 + 6, ry * 2 + 6);
+        const g = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
+        g.addColorStop(0, 'rgba(255,255,255,0.14)');
+        g.addColorStop(0.5, 'rgba(0,0,0,0)');
+        g.addColorStop(1, 'rgba(0,0,0,0.42)');
+        ctx.fillStyle = g;
+        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+      } else {
+        ctx.fillStyle = rgbScale(WALL_BASE, 0.6 + (ox + 8) * 0.02);
+        ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+      }
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      i++;
     }
   }
 
@@ -4422,6 +4482,27 @@ export class Renderer {
       }
     }
 
+    // Thin dividers between the kit groups: HANDS | POCKETS | PACK | WALKMAN,
+    // so the strip reads as sections rather than one run of slots. Centred in
+    // each gap from the slot geometry above.
+    {
+      const lastPocketEnd = pocketsX + (player.pockets.length - 1) * 42 + 36;
+      const seps = [pocketsX - 16, lastPocketEnd + 8]; // hands|pockets, pockets|next
+      if (player.backpack) {
+        const bpEnd = pocketsX + player.pockets.length * 42 + 10 + 36; // pack slot right edge
+        const wmStart = pocketsX + player.pockets.length * 42 + 10 + 92; // walkman left
+        seps.push((bpEnd + wmStart) / 2); // pack|walkman
+      }
+      ctx.strokeStyle = 'rgba(207,216,195,0.16)';
+      ctx.lineWidth = 1;
+      for (const sx of seps) {
+        ctx.beginPath();
+        ctx.moveTo(Math.round(sx) + 0.5, top + 12);
+        ctx.lineTo(Math.round(sx) + 0.5, top + DASH_H - 12);
+        ctx.stroke();
+      }
+    }
+
     // Stats block, right-aligned
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'right';
@@ -4483,32 +4564,38 @@ export class Renderer {
     if (player.carryingBurden && player.carryingBurden()) chips.push({ label: 'BURDEN', color: '#b8b0a0' });
     if (!chips.length) return;
 
-    // Start just past the walkman (same x math the walkman uses), stop short of
-    // the right status block.
-    let x = 286 + player.pockets.length * 42 + 10 + (player.backpack ? 92 : 0) + 36 + 30;
-    const maxX = this.w - 200;
+    // Pre-measure every chip, then RIGHT-align the row so it sits just left of
+    // the score/rank block — balancing the heavy left (bars + slots) against the
+    // otherwise lonely right. Clamp the start so it never runs back into the
+    // walkman; anything that still won't fit is dropped (rare — few are active).
     const cy = top + 27, ch = 24;
+    ctx.font = 'bold 10px system-ui, sans-serif';
+    for (const chip of chips) {
+      chip._text = chip.value ? `${chip.label} ${chip.value}` : chip.label;
+      chip._tw = ctx.measureText(chip._text).width;
+      chip._gw = chip.gauge != null ? 26 : 0;
+      chip._cw = 9 + chip._tw + (chip._gw ? chip._gw + 6 : 0) + 9;
+    }
+    const totalW = chips.reduce((s, c) => s + c._cw + 8, 0) - 8;
+    const walkEnd = 286 + player.pockets.length * 42 + 10 + (player.backpack ? 92 : 0) + 36;
+    const rightEdge = this.w - 210; // clear of the right-aligned score block
+    let x = Math.max(walkEnd + 28, rightEdge - totalW);
     ctx.textAlign = 'left';
     for (const chip of chips) {
-      ctx.font = 'bold 10px system-ui, sans-serif';
-      const text = chip.value ? `${chip.label} ${chip.value}` : chip.label;
-      const tw = ctx.measureText(text).width;
-      const gw = chip.gauge != null ? 26 : 0;
-      const cw = 9 + tw + (gw ? gw + 6 : 0) + 9;
-      if (x + cw > maxX) break; // out of room before the status block; drop the rest
+      if (x + chip._cw > rightEdge) break;
       ctx.fillStyle = 'rgba(0,0,0,0.34)';
-      ctx.fillRect(x, cy, cw, ch);
+      ctx.fillRect(x, cy, chip._cw, ch);
       ctx.fillStyle = chip.color;
       ctx.fillRect(x, cy + 3, 3, ch - 6); // left accent
-      ctx.fillText(text, x + 9, cy + 16);
+      ctx.fillText(chip._text, x + 9, cy + 16);
       if (chip.gauge != null) {
-        const gx = x + 9 + tw + 6, gy = cy + 8, gh = 8, gwi = gw - 4;
+        const gx = x + 9 + chip._tw + 6, gy = cy + 8, gh = 8, gwi = chip._gw - 4;
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
         ctx.fillRect(gx, gy, gwi, gh);
         ctx.fillStyle = chip.color;
         ctx.fillRect(gx, gy, gwi * Math.max(0, Math.min(1, chip.gauge)), gh);
       }
-      x += cw + 8;
+      x += chip._cw + 8;
     }
   }
 
