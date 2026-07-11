@@ -26,7 +26,7 @@ import { stampCoast } from './engine/coast.js';
 import { placeRuins } from './game/ruins.js';
 import { createFortress, DAEMON_BOOK_ID, DAEMON_BOOK_TITLE } from './game/fortress.js';
 import { createUnderworldPocket, spawnUnderworldCreature, updateUnderworldCreatures } from './game/underworld.js';
-import { createWorld, registerWorld } from './game/world.js';
+import { createWorld, registerWorld, switchWorld } from './game/world.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
 // Note onsets split into four pitch registers, so each singing machine can be
@@ -710,7 +710,11 @@ const birds = spawnBirds(map, WORLD_SEED);
 // the array the construction block above builds and the runtime below reads, so this
 // is a pure alias with no behaviour change. overworldMap (not the reassignable `map`)
 // because the World owns the *overworld*; the underworld swap stays a local-`map` job.
-const currentWorld = registerWorld(createWorld('calypso', { map: overworldMap, spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs }));
+const calypso = registerWorld(createWorld('calypso', { map: overworldMap, spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs }));
+// `currentWorld` is the world the player is on right now; `calypso` is a stable
+// handle to the overworld (the only always-present world). The runtime below reads
+// currentWorld.* so a world swap (0b: the Backspace) redirects every consumer at once.
+let currentWorld = calypso;
 // === RUNTIME REPOINT BOUNDARY (Stage 0a): construction above uses local names; runtime below reads currentWorld.* ===
 let lastObjectCount = map.objects.length;
 
@@ -737,42 +741,45 @@ const UBIK_TELEPORT_COOLDOWN = 1.5; // seconds before another jump can fire (sto
 // which every system (player.update, updateRobots, renderer.draw, ...) reads
 // fresh each call, so no other wiring is needed beyond keeping `player.map`
 // and `window.__game.map` in sync.
-let underworld = null;
-let inUnderworld = false;
-let overworldReturn = null;
-let uwCreatures = [];
-let uwAmbienceClock = 0, uwAmbienceNext = 8 + Math.random() * 10;
-
-function enterUnderworld() {
-  if (!underworld) {
-    underworld = createUnderworldPocket((WORLD_SEED ^ 0x0b1c) >>> 0);
-    uwCreatures = [spawnUnderworldCreature((WORLD_SEED ^ 0x1e57) >>> 0, underworld.creatureX, underworld.creatureY)];
-  }
-  overworldReturn = { x: player.x, y: player.y };
-  map = underworld.map;
-  player.map = map;
-  window.__game.map = map;
-  player.x = underworld.spawnX;
-  player.y = underworld.spawnY;
-  camera.snap(player.x, player.y);
-  inUnderworld = true;
-  lore.placeBackspace(map); // only Backspace lore shows down here
-  sfx.setDrone(0.8);
-  player.say('The tear swallows you. The air in here is wrong — flat, yellow, humming.');
+// The Backspace is its own World now (islands 0b). Built lazily on first entry and
+// kept for the session. Its onEnter/onExit carry the narration + lore + drone, its
+// update() ticks the lurker and the ambient shrieks, and its empty entity arrays
+// give the draw a blanked overworld for free (no more `inUnderworld ? [] : …`).
+let backspace = null;
+function ensureBackspace() {
+  if (backspace) return;
+  const pocket = createUnderworldPocket((WORLD_SEED ^ 0x0b1c) >>> 0);
+  const creatures = [spawnUnderworldCreature((WORLD_SEED ^ 0x1e57) >>> 0, pocket.creatureX, pocket.creatureY)];
+  let ambClock = 0, ambNext = 8 + Math.random() * 10;
+  backspace = registerWorld(createWorld('backspace', {
+    map: pocket.map,
+    spawn: { x: pocket.spawnX, y: pocket.spawnY },
+    creatures,
+    keepsPosition: false, // always land in the tear's arrival room, never mid-pocket
+    ambience: { light: 1, dawnGlow: false, minimap: false, underworld: true, musicBed: 'drone' },
+    update(dt, pl) {
+      updateUnderworldCreatures(dt, creatures, pl, pocket.map);
+      ambClock += dt;
+      if (ambClock > ambNext) { ambClock = 0; ambNext = 8 + Math.random() * 14; sfx.play(Math.random() < 0.5 ? 'shriek' : 'hiss'); }
+    },
+    onEnter() { lore.placeBackspace(pocket.map); sfx.setDrone(0.8); player.say('The tear swallows you. The air in here is wrong — flat, yellow, humming.'); },
+    onExit() { lore.leaveBackspace(); sfx.setDrone(0); player.say('You come up through the tear. Ordinary daylight, ordinary weight. You are back.'); },
+  }));
+  backspace.exit = { x: pocket.exitX, y: pocket.exitY }; // the plain door home, proximity-checked in the loop
 }
 
-function exitUnderworld() {
-  map = overworldMap;
-  player.map = map;
+// The single world-switch point. switchWorld moves the player + syncs player.map +
+// fires onExit/onEnter; here we also sync the outer `map` local, the debug hook, and
+// the camera. Everything reading currentWorld.* / `map` follows next frame.
+function goToWorld(target) {
+  currentWorld = switchWorld(currentWorld, target, player);
+  map = currentWorld.map;
   window.__game.map = map;
-  player.x = overworldReturn.x;
-  player.y = overworldReturn.y;
+  window.__game.currentWorld = currentWorld;
   camera.snap(player.x, player.y);
-  inUnderworld = false;
-  lore.leaveBackspace(); // back to the overworld fragment set
-  sfx.setDrone(0);
-  player.say('You come up through the tear. Ordinary daylight, ordinary weight. You are back.');
 }
+
+function enterBackspace() { ensureBackspace(); goToWorld(backspace); }
 
 // Fog of war: the minimap only shows where you have been.
 map.explored = new Uint8Array(map.w * map.h);
@@ -2350,28 +2357,23 @@ function update(dt) {
     drag = null; // released outside any slot: cancel the drag (but never while a touch drag is live)
   }
 
-  // The underworld runs its own much smaller update: the player, the one
-  // lurking creature, the camera, and the way back up — everything else in
-  // this function (obelisks, the W-factory, animals, day/night, RON resupply,
-  // lore terminals...) belongs to the overworld and simply holds still while
-  // you're not there to see it.
-  if (inUnderworld) {
+  // Off the overworld (the Backspace), the current World runs its own much
+  // smaller update: the player, the world's own entities/ambience via its
+  // update() hook, the camera, and the way back up — everything else in this
+  // function (obelisks, the W-factory, animals, day/night, RON resupply, lore
+  // terminals...) belongs to the overworld and simply holds still while you're
+  // not there to see it, because it only ticks when currentWorld === calypso.
+  if (currentWorld !== calypso) {
     player.update(dt, input, map, [], [], mouseWorld);
-    updateUnderworldCreatures(dt, uwCreatures, player, map);
+    currentWorld.update(dt, player); // the lurker + the ambient shrieks
     camera.follow(player.x, player.y, dt);
     if (player._ubikTeleportCooldown > 0) player._ubikTeleportCooldown -= dt;
     // The exit is a plain door set in the wall — approach it (it's solid, so
     // you stand a tile off) and you step back out into the real world.
-    else if (Math.hypot(player.x - underworld.exitX, player.y - underworld.exitY) < 1.7) {
-      exitUnderworld();
+    else if (currentWorld.exit && Math.hypot(player.x - currentWorld.exit.x, player.y - currentWorld.exit.y) < 1.7) {
+      goToWorld(calypso);
       player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
       sfx.play('zap');
-    }
-    uwAmbienceClock += dt;
-    if (uwAmbienceClock > uwAmbienceNext) {
-      uwAmbienceClock = 0;
-      uwAmbienceNext = 8 + Math.random() * 14;
-      sfx.play(Math.random() < 0.5 ? 'shriek' : 'hiss');
     }
     return;
   }
@@ -2429,7 +2431,7 @@ function update(dt) {
   // (portals hold much longer, UBIK_PORTAL_LIFE), rather than lifting a spot
   // of ground forever. A portal no longer links to another overworld spot —
   // every tear is a way down into the one shared underworld pocket instead
-  // (see game/underworld.js and enterUnderworld() above).
+  // (see game/underworld.js and enterBackspace() above).
   if (map.ubikPatches && map.ubikPatches.length) {
     for (const p of map.ubikPatches) p.t += dt;
     map.ubikPatches = map.ubikPatches.filter((p) => p.t < (p.portal ? UBIK_PORTAL_LIFE : UBIK_PATCH_LIFE));
@@ -2437,7 +2439,7 @@ function update(dt) {
     if (player._ubikTeleportCooldown <= 0) {
       for (const p of portals) {
         if (Math.hypot(p.x - player.x, p.y - player.y) > UBIK_TELEPORT_RANGE) continue;
-        enterUnderworld();
+        enterBackspace();
         player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
         sfx.play('zap');
         // Crucial: `map` is now the underworld pocket. Bail out of the rest
@@ -2445,7 +2447,7 @@ function update(dt) {
         // factory, animals etc. all assume the overworld map and would run
         // against the wrong one this frame (revealAround in particular reads
         // map.explored, which the pocket doesn't have). Next frame the
-        // inUnderworld branch at the top takes over cleanly.
+        // off-overworld branch (currentWorld !== calypso) at the top takes over.
         return;
       }
     }
@@ -2802,20 +2804,22 @@ function frame(now) {
 
   if (now - lastRenderTime >= MIN_RENDER_MS) {
     lastRenderTime = now;
-    renderer.draw(camera, map, player, inUnderworld ? [] : currentWorld.animals, {
+    const amb = currentWorld.ambience;
+    renderer.draw(camera, map, player, currentWorld.animals, {
       fps,
       version: VERSION,
-      // Fluorescent-lit down there regardless of the overworld's clock — the
-      // underworld veil (below) carries the mood instead of day/night darkness.
-      light: inUnderworld ? 1 : dayNight.light(),
-      dawnGlow: inUnderworld ? 0 : dayNight.dawnGlow(),
+      // Render mood comes from the world's ambience: calypso uses the day/night
+      // clock (light:null); the Backspace is fullbright with its own veil below.
+      // The Backspace's empty entity arrays blank the overworld for free.
+      light: amb.light != null ? amb.light : dayNight.light(),
+      dawnGlow: amb.dawnGlow ? dayNight.dawnGlow() : 0,
       timeLabel: dayNight.countdownLabel,
-      minimap: (inUnderworld || !showMinimap) ? null : minimap,
-      birds: inUnderworld ? [] : currentWorld.birds,
-      robots: inUnderworld ? [] : currentWorld.robots,
-      waterdroids: inUnderworld ? [] : currentWorld.waterdroids,
-      underworld: inUnderworld,
-      uwCreatures: inUnderworld ? uwCreatures : [],
+      minimap: (amb.minimap && showMinimap) ? minimap : null,
+      birds: currentWorld.birds,
+      robots: currentWorld.robots,
+      waterdroids: currentWorld.waterdroids,
+      underworld: amb.underworld,
+      uwCreatures: currentWorld.creatures,
       lore,
       torch: player.pockets.some((s) => s && s.item === 'torch'),
       showBackpack,
@@ -2834,9 +2838,9 @@ function frame(now) {
       craftSword: player.canCraftSword() && !player.canCraftChip() && !player.canCraftWaveGun() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       // POSEIDON is an overworld network — its lights/lines must never draw over
       // the Backspace.
-      skylinkActive: player.skylinkActive && !player._ended && !inUnderworld,
+      skylinkActive: player.skylinkActive && !player._ended && currentWorld === calypso,
       skylinkTimer,
-      obeliskObjs: inUnderworld ? [] : currentWorld.obeliskObjs,
+      obeliskObjs: currentWorld.obeliskObjs,
       paused,
       rest: resting ? { dim: restDim(resting.t) } : null,
       ubikFlicker: player.ubikFlickerT || 0,

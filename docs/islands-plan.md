@@ -8,8 +8,9 @@ using tools**. Each island is laid out differently according to its god's/AI's
 character.
 
 **Status: design APPROVED (David, 2026-07-10) — §10 decisions are settled
-except island owners. Stage 0 STARTED: 0a (the `currentWorld` wrap) landed
-2026-07-11** (see §3); 0b (Backspace port) and 0c (CALYPSO extraction) remain.
+except island owners. Stage 0 IN PROGRESS: 0a (the `currentWorld` wrap) + 0b
+(the Backspace ported to a World) landed 2026-07-11** (see §3); only 0c (CALYPSO
+extraction) remains.
 **Prerequisites all landed** (v1.58 guard roster + fortress map; v1.59
 island-agnostic daemon-kill endgame; v1.61 Crown→Daemon rename; v1.62
 death-aria + testament — see §2 and §9). Stage 0 is the gating
@@ -140,14 +141,21 @@ Work items, in order, each leaving the game playable:
    (`test/world.test.js` added), aliasing holds (`__game.robots === currentWorld.robots`
    for all six), a T2 chases via the repointed `runUpdate` bag, renderer draws all
    classes, no console errors.
-2. **0b — port the Backspace.** `createUnderworldPocket` returns a World; the
-   `inUnderworld` boolean and every ternary die, replaced by
-   `currentWorld.ambience` and world switching (`switchWorld(w, player)` in
-   world.js: calls onExit/onEnter, moves the player, keeps `player.map` in
-   sync). The overworld freeze-while-away behaviour is preserved because
-   main.js only ever ticks `currentWorld`. *Verify: tear in, wander, lurker
-   hunts, EXIT out, overworld resumed exactly where it was; save/reload mid-
-   Backspace does whatever it does today (no regression).*
+2. **0b — port the Backspace. ✓ DONE (2026-07-11).** The Backspace is now a
+   `backspace` World (built lazily, `keepsPosition:false` so you always land at
+   the tear's door): empty entity arrays blank the overworld for free, its
+   `ambience` (`{light:1, dawnGlow:false, minimap:false, underworld:true}`)
+   drives the veil/fullbright render, its `update()` ticks the lurker + ambient
+   shrieks, and its `onEnter`/`onExit` carry the narration + lore + drone. The
+   `inUnderworld` boolean and all five draw ternaries are gone (draw reads
+   `currentWorld.*` + `currentWorld.ambience`); the update loop dispatches on
+   `currentWorld !== calypso`. `switchWorld(from, to, player)` (world.js) runs
+   onExit/onEnter, places the player (returnPos for keepsPosition worlds, else
+   spawn), and syncs `player.map`; main.js's `goToWorld` syncs the outer `map`
+   local + camera + debug hook. Verified live: tear in (narration, blanked
+   overworld, lurker, veil, no minimap), lurker ticks, EXIT out (overworld
+   resumed at the exact return position, entities back), 26 tests, no console
+   errors.
 3. **0c — wrap the current island as `src/islands/calypso.js`.** Move the
    world-assembly block out of main.js (the buildWorld call, spawns, fortress/
    factory/obelisk wiring, loot seeding at ~line 100–450) into
@@ -280,10 +288,12 @@ fortress-map work, landed as v1.58; the core-kill endgame landed as v1.59.)
    parallel session). The ZEUS rename is also done
    (`AI_NAME = 'ZEUS'`, `AI_ROSTER` in fortress.js; no Adamantine remains).
 2. **Stage 0** — world contract; port Backspace; wrap CALYPSO. One session,
-   quiet window. No visible change. **0a done (2026-07-11):** `world.js` +
-   `currentWorld` wrap of the overworld arrays. **Next: 0b** (port Backspace,
-   kill `inUnderworld`, add `switchWorld`), then **0c** (extract
-   `src/islands/calypso.js`).
+   quiet window. No visible change. **0a + 0b done (2026-07-11):** `world.js` +
+   `currentWorld` wrap of the overworld arrays; the Backspace is a World and
+   `inUnderworld` + `switchWorld` are in. **Next: 0c** — extract
+   `src/islands/calypso.js` (move the boot construction block into
+   `createIsland(seed) → World`; the boot becomes
+   `switchWorld(null, createIsland(WORLD_SEED), player)`).
 3. **Stage 1** — boat + cheap crossing + stub islet. Proves travel round-trip
    and campaign save.
 4. **Stage 2** — islandkit extraction, seed-diff verified.

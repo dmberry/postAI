@@ -32,10 +32,16 @@ export function createWorld(id, opts = {}) {
     creatures:   opts.creatures   ?? [],  // Backspace-style lurkers (0b) / per-island oddities
     controllers: opts.controllers ?? [],  // fortress / factory / obelisk-network (wired in 0c)
 
-    // --- forward-compat stubs (UNUSED in 0a; populated in 0b/0c) ---
-    // What the inUnderworld ternaries hard-code today; consumed by 0b, not 0a.
+    // Where the player arrives. Normal worlds remember where you left them
+    // (returnPos, set on exit); the Backspace opts out so you always land at its
+    // door. spawn is the fallback / first-arrival point.
+    keepsPosition: opts.keepsPosition ?? true,
+
+    // Render mood — what the inUnderworld ternaries hard-code today. calypso's
+    // light:null means "use the day/night clock"; the Backspace is fullbright with
+    // its own veil. Consumed by the draw in main.js (0b).
     ambience: Object.assign(
-      { light: null, dawnGlow: true, minimap: true, crickets: true, musicBed: 'synth' },
+      { light: null, dawnGlow: true, minimap: true, underworld: false, crickets: true, musicBed: 'synth' },
       opts.ambience,
     ),
     update:     opts.update     ?? NOOP,  // (dt, player) -> ticks own entities/controllers
@@ -52,6 +58,23 @@ export function registerWorld(world) { _worlds.set(world.id, world); return worl
 export function getWorld(id) { return _worlds.get(id); }
 export function allWorlds() { return [..._worlds.values()]; }
 
-// switchWorld(world, player) is deliberately NOT defined in 0a: it has no caller until
-// 0b, and its body (onExit/onEnter + player move + player.map sync) is 0b's design. The
-// contract above already carries every field it will need.
+// Move the player from `from` to `to`: run the world lifecycle hooks, place the
+// player, and keep player.map in sync. The caller (main.js) reassigns its
+// `currentWorld` to the returned world and syncs its own map local / camera.
+//   - `from.returnPos` is stamped on exit (so returning to a keepsPosition world
+//     lands you where you left it); worlds with keepsPosition:false (the
+//     Backspace) skip that and always arrive at `spawn`.
+//   - onExit fires before the move, onEnter after — matching the old
+//     enter/exitUnderworld ordering (position set, then the narration/sfx hook).
+export function switchWorld(from, to, player) {
+  if (from) {
+    if (from.keepsPosition) from.returnPos = { x: player.x, y: player.y };
+    from.onExit(player);
+  }
+  const at = (to.keepsPosition && to.returnPos) ? to.returnPos : to.spawn;
+  player.x = at.x;
+  player.y = at.y;
+  player.map = to.map;
+  to.onEnter(player);
+  return to;
+}
