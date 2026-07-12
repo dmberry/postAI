@@ -40,7 +40,9 @@ function tokenize(src) {
     }
     if (/[A-Za-z]/.test(c)) {
       let j = i + 1;
-      while (j < n && /[A-Za-z0-9_-]/.test(src[j])) j++;
+      // `.` is allowed inside an identifier so filenames lex as one token
+      // (factory-id.ml, readme.md) — evalNode tags anything ending .ml/.md a file.
+      while (j < n && /[A-Za-z0-9_.-]/.test(src[j])) j++;
       toks.push({ t: 'IDENT', v: src.slice(i, j) });
       i = j;
       continue;
@@ -155,6 +157,23 @@ function parse(toks) {
 // Each `ctx` method is supplied by the caller (main.js) and does the actual
 // world-mutation; this module only handles language mechanics and gating.
 
+// `copy <file> <device>` — the arity-2 second half of the polymorphic `copy`.
+// `copy` (below) returns a partial bound to this when its first arg is a file,
+// so `copy factory-id.ml ob` moves the file, while `copy aikey` stays the
+// arity-1 key-bind. ctx.copyFile does the world-side move and returns {ok,msg}.
+const COPY_FILE = {
+  arity: 2,
+  fn: ([file, dest], ctx) => {
+    if (!file || file.tag !== 'file') throw new RonmlError('copy needs a file first — try: copy factory-id.ml ob');
+    const destName = (dest && dest.id) ? String(dest.id).toLowerCase() : '';
+    if (!destName) throw new RonmlError('copy a file WHERE? — try: copy factory-id.ml ob');
+    if (!ctx.copyFile) throw new RonmlError("you can't move files at this terminal.");
+    const r = ctx.copyFile(file.name, destName);
+    if (!r || !r.ok) throw new RonmlError((r && r.msg) || `couldn't copy ${file.name}.`);
+    return { tag: 'file', name: file.name };
+  },
+};
+
 function makeBuiltins(station) {
   const B = {
     scan: {
@@ -199,6 +218,13 @@ function makeBuiltins(station) {
     copy: {
       arity: 1,
       fn: ([what], ctx) => {
+        // Polymorphic on the first argument. A FILE means `copy <file> <device>`
+        // — return a partial bound to COPY_FILE so the next atom (the device)
+        // completes it. Anything else is the classic `copy aikey`: bind the
+        // held AI key into the session as a sealed token for decrypt/unlock.
+        if (what && what.tag === 'file') {
+          return { tag: 'fn', name: 'copy', builtin: COPY_FILE, args: [what], ctx };
+        }
         if (!ctx.hasAiKey || !ctx.hasAiKey()) {
           throw new RonmlError('nothing to copy — you are not holding an AI key. (a wrecked W-factory drops one.)');
         }
@@ -206,6 +232,28 @@ function makeBuiltins(station) {
         const bindName = (what && what.id ? String(what.id) : 'aikey').toLowerCase();
         if (ctx.bindSession) ctx.bindSession(bindName, token);
         return token;
+      },
+    },
+    // `cd <device>` / `ls`: the RON-DOS drive navigation. Devices are the AI key
+    // you hold (cd aikey / cd card), the obelisk's scratch bench (cd ob), and a
+    // HERMES relay's folder (cd hermes). `ls` lists the current device's files.
+    // ctx supplies cd/ls (main.js) — where the file state actually lives.
+    cd: {
+      arity: 1,
+      fn: ([dev], ctx) => {
+        const name = (dev && (dev.id || dev.name)) ? String(dev.id || dev.name).toLowerCase() : '';
+        if (!name) throw new RonmlError('cd needs a device — try: cd aikey  ·  cd ob');
+        if (!ctx.cd) throw new RonmlError('no drives at this terminal.');
+        const r = ctx.cd(name);
+        if (!r || !r.ok) throw new RonmlError((r && r.msg) || `no device '${name}' here.`);
+        return { tag: 'unit' };
+      },
+    },
+    ls: {
+      arity: 0,
+      fn: (_args, ctx) => {
+        if (!ctx.ls) throw new RonmlError('no drives at this terminal.');
+        return { tag: 'list', items: (ctx.ls() || []).map((n) => ({ tag: 'file', name: n })) };
       },
     },
     // `decrypt aikey`: turn a sealed AI key (from `copy`) into the open token
@@ -419,7 +467,10 @@ function makeBuiltins(station) {
 // Which verbs belong to which system. Used to filter each terminal's builtins,
 // and to tell "not a command here" (a real verb, wrong system) apart from a
 // plain bad word.
-const OB_VERBS = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 'sleep', 'rewind', 'repel', 'sing', 'map', 'print', 'copy', 'decrypt', 'unlock', 'eliza'];
+// `copy`, `cd`, `ls` are deliberately NOT listed here — they are neutral (work at
+// both an obelisk and a HERMES relay), like `notes`. A verb tagged for one station
+// is refused at the other; the file verbs must move files at either terminal.
+const OB_VERBS = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 'sleep', 'rewind', 'repel', 'sing', 'map', 'print', 'decrypt', 'unlock', 'eliza'];
 // Note: HERMES's `print` is added as an override in makeBuiltins (it takes a
 // topic), not tagged here — tagging it would steal the obelisk's own arity-0
 // `print`. `print` is already in OB_VERBS, so ALL_VERBS still covers it.
@@ -458,6 +509,9 @@ function evalNode(node, env, ctx, builtins) {
       if (ctx && ctx.station && ALL_VERBS.has(lower)) {
         throw new RonmlError(`'${node.name}' isn't a command on this terminal.`);
       }
+      // A dotted name ending .ml/.md is a FILE, not a node — so cd/ls/copy/eliza
+      // can carry it around the drives. Everything else is a node id (OB-XXXX).
+      if (/\.(ml|md)$/i.test(node.name)) return { tag: 'file', name: node.name };
       return { tag: 'node', id: node.name };
     }
     case 'Let': {
@@ -491,6 +545,7 @@ function describeValue(v) {
     case 'num': return `the number ${v.v}`;
     case 'node': return `node ${v.id}`;
     case 'key': return v.kind === 'aikey' ? 'the AI key' : 'a key';
+    case 'file': return `the file ${v.name}`;
     case 'list': return 'a list';
     case 'binding': return `the binding ${v.name}`;
     case 'fn': return `${v.name} (needs ${v.builtin.arity - v.args.length} more arg${v.builtin.arity - v.args.length === 1 ? '' : 's'})`;
@@ -505,6 +560,7 @@ function formatValue(v) {
     case 'num': return String(v.v);
     case 'node': return v.id;
     case 'key': return v.kind === 'aikey' ? (v.enc === false ? 'AIKEY:open' : 'AIKEY:sealed') : `KEY:${v.id}`;
+    case 'file': return v.name;
     case 'list': return '[' + v.items.map(formatValue).join(', ') + ']';
     case 'binding': return `val ${v.name} = ${formatValue(v.value)}`;
     case 'fn': return `<${describeValue(v)}>`;
@@ -522,7 +578,8 @@ const USAGE_HINTS = {
   nearest: 'nearest needs a list. try: scan |> nearest',
   sleep: 'sleep needs a number of minutes. try: sleep 30',
   rewind: 'rewind needs a number of hours. try: rewind 3',
-  copy: 'copy needs a key to copy. try: copy aikey',
+  copy: 'copy a key (copy aikey) or a file to a device (copy factory-id.ml ob)',
+  cd: 'cd needs a device. try: cd aikey  ·  cd ob',
   decrypt: 'decrypt needs the AI key. try: copy aikey  then  decrypt aikey',
   unlock: 'unlock needs a hacked node key and the decrypted AI key. try: copy aikey / let k = hack OB-XXXX / let d = decrypt aikey / unlock k d',
   print: 'print needs a topic — at an obelisk: print map  or  print aikey; at a relay: print <document>',
@@ -549,7 +606,10 @@ const HELP_VERBS = [
   ['repel', 'unit -> unit', 'nearby machines turn tail and flee you', 'no key needed', 'ob'],
   ['map', 'unit -> unit', 'show the territory map (obelisks, machines, mainframe)', '', 'ob'],
   ['print t', 'atom -> unit', 'print map (a carryable map) or print aikey (a spare AI key)', '', 'ob'],
-  ['copy k', 'key -> key', 'copy the AI key you hold into the session as `aikey`', 'hold an AI key', 'ob'],
+  ['copy k', 'key -> key', 'copy the AI key you hold into the session as `aikey`', 'hold an AI key', ''],
+  ['copy f d', 'file device -> file', 'copy a file onto a device — copy factory-id.ml ob', '', ''],
+  ['cd d', 'device -> unit', 'change drive: cd aikey · cd ob · cd hermes', '', ''],
+  ['ls', 'unit -> list', 'list the files on the current drive', '', ''],
   ['decrypt k', 'key -> key', 'open the sealed AI key so unlock can use it', 'hold an AI key', 'ob'],
   ['unlock k d', 'key key -> unit', 'drop a fortress key: a hacked node key k + the decrypted AI key d', 'needs both', 'ob'],
   ['eliza', 'unit -> unit', 'run ELIZA, the 1966 DOCTOR script — talk to it (also: run eliza); Ctrl+C or quit to leave', '', 'ob'],

@@ -359,6 +359,10 @@ export const ITEMS = {
     kind: 'key',
     stack: 4,
     color: '#e6d24a',
+    // RON-DOS files the card carries (cd aikey / ls at a terminal). Refunctioning
+    // the card adds files and renames it: trojan_key (+root-access.ml), then
+    // hermes_card (+zeus-lightning.ml). See docs/calypso-escape-chain.md.
+    files: ['access-ai-code.ml', 'factory-id.ml'],
   },
   // Spat out by the fortress gate terminal once you hack it with RON-ML. Its
   // bolts throw the grand doorway in the southern rampart open — the only way

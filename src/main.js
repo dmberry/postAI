@@ -623,6 +623,58 @@ function replPrint(...lines) {
 // Builds a fresh ctx object each command: primitives read/mutate the live
 // world (map, robots, obeliskObjs, player) through these hooks, and never
 // touch game state directly — ronml.js only handles language mechanics.
+// ---- RON-ML terminal filesystem (Calypso escape chain, Layer A) ------------
+// A thin drive/file layer over the terminals (docs/calypso-escape-chain.md).
+// Drives you `cd` into:
+//   ob     — a per-visit scratch bench (obelisk terminals only)
+//   aikey  — the AI card you hold; its file list is derived from card STATE
+//            (ai_key -> trojan_key -> hermes_card), so the card needs no
+//            per-slot data. Also reachable as `card`. (S3 wires the writes.)
+//   hermes — the relay's static folder (S4 fills the zeus-virus folder)
+// The current drive and the ob scratch live in replSession, so they persist
+// across lines within one terminal visit and reset when you jack out.
+function fsCardItem() {
+  for (const k of ['hermes_card', 'trojan_key', 'ai_key']) if (player.hasItem(k)) return k;
+  return null;
+}
+function fsDevAvail(dev) {
+  if (dev === 'ob') return terminalKind !== 'hermes';
+  if (dev === 'aikey') return true; // the card travels with you, at either terminal
+  if (dev === 'hermes') return terminalKind === 'hermes';
+  return false;
+}
+function fsFilesOn(dev) {
+  if (dev === 'ob') return Object.keys(replSession.__obfiles || {});
+  if (dev === 'aikey') { const c = fsCardItem(); return c && ITEMS[c].files ? ITEMS[c].files.slice() : []; }
+  return []; // hermes folder: S4
+}
+function fsCwd() {
+  return replSession.__cwd || (fsCardItem() ? 'aikey' : (terminalKind === 'hermes' ? 'hermes' : 'ob'));
+}
+function fsCd(dev) {
+  const d = dev === 'card' ? 'aikey' : dev;
+  if (!fsDevAvail(d)) return { ok: false, msg: `no drive '${dev}' at this terminal.` };
+  replSession.__cwd = d;
+  return { ok: true };
+}
+function fsLs() { return fsFilesOn(fsCwd()); }
+function fsCopyFile(name, destRaw) {
+  const dest = destRaw === 'card' ? 'aikey' : destRaw;
+  const cwd = fsCwd();
+  if (!fsFilesOn(cwd).includes(name)) return { ok: false, msg: `no file '${name}' on ${cwd}. (cd to where it is first.)` };
+  if (!fsDevAvail(dest)) return { ok: false, msg: `no drive '${destRaw}' at this terminal.` };
+  if (dest === 'ob') {
+    replSession.__obfiles = replSession.__obfiles || {};
+    replSession.__obfiles[name] = true;
+    return { ok: true };
+  }
+  // Writing to the card is how it is refunctioned — wired in S3 (root-access.ml
+  // -> trojan_key) and S4 (zeus-lightning.ml -> hermes_card). Until then the
+  // card's storage is sealed to arbitrary files.
+  if (dest === 'aikey') return { ok: false, msg: "the card's storage is sealed — it only takes a valid credential." };
+  return { ok: false, msg: `can't write to ${destRaw}.` };
+}
+
 function ronmlCtx() {
   const findObelisk = (id) => currentWorld.obeliskObjs.find((o) => o.code === id && !o.destroyed);
   const nearby = (r) => !r.dead && !r.friendly && !r.fused
@@ -634,6 +686,7 @@ function ronmlCtx() {
     hasManual: !!(player.readManuals && player.readManuals.has('book_ronml')), // helpText hints at the manual until it's read
     session: replSession, // persistent top-level bindings for this terminal visit
     bindSession: (name, val) => { replSession[name] = val; },
+    cd: fsCd, ls: fsLs, copyFile: fsCopyFile, // RON-DOS drives (cd/ls/copy files)
     hasAiKey: () => player.hasItem('ai_key'),
     currentNode: () => (terminalOb ? terminalOb.code : null),
     printKey: () => {
@@ -798,6 +851,7 @@ function hermesCtx() {
     station: 'hermes',
     hasManual: !!(player.readManuals && player.readManuals.has('book_ronml')),
     session: replSession, // persistent bindings work at relays too (copy/let)
+    cd: fsCd, ls: fsLs, copyFile: fsCopyFile, // RON-DOS drives also work at a relay
     showNotepad: () => { openNotebook(); },
     read: (topic) => hermesRead(topic),
     print: () => {}, // never reached — HERMES print takes a topic (see printDoc)
@@ -1426,8 +1480,8 @@ obTermEl.addEventListener('click', (e) => { if (e.target === obTermEl) closeObTe
 // Autocomplete is per-system: an obelisk (TIRESIAS) suggests only AI-network
 // verbs, a HERMES relay only RON verbs — no seepage between the two. (sing is
 // secret, so it's in neither list.)
-const OB_COMPLETE = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 'sleep', 'rewind', 'repel', 'map', 'print', 'copy', 'decrypt', 'unlock', 'eliza', 'notes', 'help', 'let'];
-const HERMES_COMPLETE = ['read', 'print', 'archive', 'records', 'drive', 'backup', 'restore', 'notes', 'help', 'let'];
+const OB_COMPLETE = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 'sleep', 'rewind', 'repel', 'map', 'print', 'copy', 'cd', 'ls', 'decrypt', 'unlock', 'eliza', 'notes', 'help', 'let'];
+const HERMES_COMPLETE = ['read', 'print', 'archive', 'records', 'drive', 'backup', 'restore', 'copy', 'cd', 'ls', 'notes', 'help', 'let'];
 const escapeHtml = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 function ronmlCompletion(value) {
   if (elizaBot) return ''; // no RON-ML hints mid-conversation with the DOCTOR
