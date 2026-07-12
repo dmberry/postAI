@@ -170,6 +170,7 @@ export class Player {
 
     this.hands = 'penknife';                 // starting tool
     this.boatBuilt = false;                  // one boat at a time; a session flag (Stage 1c persists it as campaign state)
+    this.calypsoLeave = false;               // Calypso refunctioned (retire): the sea will let you go (decision #8)
     this.pockets = [{ item: 'note_home', qty: 1 }, null, null, null]; // start with the Odyssey note in-pocket
     this.backpack = null;                    // {slots: [16], weapon} once found; dropped on death
     this.selectedPocket = null;              // 0-3 (pockets), 'bw' (backpack weapon), or null
@@ -407,6 +408,31 @@ export class Player {
     sfx.play('zap');
     this.say("You lash the timber into a boat, beached at the water's edge. Board it to cross the sea.");
     return true;
+  }
+
+  // Board a beached boat and cross the sea (Stage 1b, decision #8). Leaving
+  // Ogygia needs Calypso's leave: refunction her at the fortress terminal (the
+  // `retire` command sets calypsoLeave). Without it, the sea rises and Poseidon
+  // flings you back onto the sand.
+  boardBoat(map, boat) {
+    if (this._ended || this.deathCert) return;
+    if (this.calypsoLeave) {
+      this._ended = true;
+      this.deathCert = {
+        name: this.name, gender: this.gender,
+        cause: 'you sailed from Ogygia', score: this.score,
+        skills: [...this.skills], deaths: this.deaths || 0,
+        victory: true, escaped: true,
+      };
+      sfx.play('zap');
+      this.say('You push off the sand and step aboard. The sea heaves but does not close over you. Calypso has let you go. You have left Ogygia.');
+    } else {
+      sfx.play('hurt');
+      this.say("You launch, and the sea rises against you. Poseidon's storm hurls the boat back onto the beach. Calypso will not release you yet: refunction her at the fortress terminal first.");
+      // Shove back inland so you are not left overlapping the hull.
+      this.x -= this.facing.x * 1.5;
+      this.y -= this.facing.y * 1.5;
+    }
   }
 
   // The nearest walkable land tile at the sea's edge (8-adjacent to an open-sea
@@ -1247,6 +1273,9 @@ export class Player {
     const ty = Math.floor(this.y + this.facing.y * REACH);
     const obj = map.objectAt(tx, ty);
     const facingBox = obj && obj.type === 'box';
+    // Board a beached boat -> the departure (Stage 1b / decision #8): with
+    // Calypso's leave you sail off; without it, Poseidon storms you back.
+    if (obj && obj.type === 'boat') { this.boardBoat(map, obj); return; }
 
     // Defensive gear is passive — a shield blocks by being held and facing the
     // shot, a forcefield by simply being up. Using it just searches a cache

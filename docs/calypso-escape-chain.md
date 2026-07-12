@@ -118,11 +118,16 @@ Line references are approximate — firm against the text.
 
 ## 8. To build (new subsystem over existing RON-ML primitives)
 
-**Build status (2026-07-12): Layer A is BUILT** (branch `gameplay`, unpushed — commits
-`e7fc056`, `c5d4ff9`, `0f76040`). The whole terminal hack `ai_key → trojan_key →
-hermes_card` runs at the obelisk + HERMES consoles, with autocopy/reprint recovery; 48
-unit tests; live-verified card state machine. Everything below is now implemented except
-where noted. **Layer B (§ Sequencing) is still deferred.**
+**Build status (2026-07-12): Layer A BUILT + the escape loop CLOSED.** The whole terminal
+hack `ai_key → trojan_key → hermes_card` runs at the obelisk + HERMES consoles, with
+autocopy/reprint recovery; 57 unit tests; live-verified card state machine. **Stages 6–7
+now close the loop (v1.90):** the `retire` command (hermes card in hand) refunctions
+Calypso and sets `player.calypsoLeave` (persisted in the save); boarding a beached boat at
+the shore (`player.boardBoat`, reached via the E-key `useHands` path) reads that flag —
+with it you sail off Ogygia (a victory certificate, "you sailed from Ogygia"); without it
+Poseidon's storm hurls you back onto the sand (decision #8). Still deferred to the fortress
+work: R3 `winMode:'depart'` (raft-launch break-out replacing the destructible core),
+Calypso's soporific rejection of un-armed commands at her terminal, and per-island voice.
 
 
 **Exists:** `copy`(key) / `decrypt` / `unlock` / `backup` / `restore` / `eliza`(DOCTOR) /

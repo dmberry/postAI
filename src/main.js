@@ -194,6 +194,7 @@ try {
       if (Array.isArray(st.pockets)) player.pockets = st.pockets;
       if (st.backpack) player.backpack = st.backpack;
       if (st.walkman !== undefined) player.walkman = st.walkman; // null = tape moved out, respected across reload
+      if (st.calypsoLeave) player.calypsoLeave = true; // sticky: refunctioning Calypso persists across reload
     }
     // Guard against stale item keys carried over from a save written by an
     // earlier build — e.g. the pre-v1.15 tape keys (tape_ward / tape_meme),
@@ -262,6 +263,7 @@ function buildSaveBlob() {
       health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
       wifiPower: player.wifiPower, x: player.x, y: player.y, hands: player.hands,
       pockets: player.pockets, backpack: player.backpack, walkman: player.walkman,
+      calypsoLeave: player.calypsoLeave, // Calypso refunctioned: the sea will let you go
     },
     world: {
       obDown: calypso.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code),
@@ -998,6 +1000,10 @@ function ronmlCtx() {
         replPrint('ERR: the guards answer only to a command they cannot refuse. Forge the hermes card first (it carries zeus-lightning.ml).');
         return;
       }
+      // Firing the command refunctions CALYPSO herself: her hold on the tide
+      // breaks and the sea will let you go (decision #8 / Stage 1b).
+      const firstRelease = !player.calypsoLeave;
+      player.calypsoLeave = true;
       let n = 0;
       for (const r of currentWorld.robots) {
         if (r.dead || r.fused) continue;
@@ -1012,6 +1018,10 @@ function ronmlCtx() {
         player.say(`${fortress.AI_NAME}'s guards go still, then kneel to the earth. By the god's command they are gardeners now, planting where they hunted.`);
       } else {
         replPrint('No guards left to retire — the muster is quiet.');
+      }
+      if (firstRelease) {
+        replPrint(`OK: ${fortress.AI_NAME} yields. Her hold on the tide loosens — launch your boat at the shore and the sea will let you pass.`);
+        player.say('The island itself seems to exhale. You are released: take to the water and go.');
       }
     },
   };
