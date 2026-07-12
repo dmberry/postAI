@@ -878,6 +878,14 @@ function fsCd(dev) {
 function fsLs() { return fsFilesOn(fsCwd()); }
 function fsCopyFile(name, destRaw) {
   const dest = fsNormDev(destRaw);
+  // Forgiving: players type `copy zeus-lightning card`, not the full
+  // `zeus-lightning.ml`. If the bare name isn't a file on any reachable drive but
+  // name+.ml / name+.md is, use that — so the extension is optional.
+  const onAnyDrive = (n) => ['ob', 'aikey', 'hermes'].some((d) => fsDevAvail(d) && fsFilesOn(d).includes(n));
+  if (!onAnyDrive(name)) {
+    const withExt = [name + '.ml', name + '.md'].find(onAnyDrive);
+    if (withExt) name = withExt;
+  }
   // Find the file wherever it currently sits — no need to cd to the source first
   // (a real playtest snag). Search the reachable drives: the OB bench, the held
   // card, and (at a relay) the HERMES folder.

@@ -218,20 +218,31 @@ function makeBuiltins(station) {
     copy: {
       arity: 1,
       fn: ([what], ctx) => {
-        // Polymorphic on the first argument. A FILE means `copy <file> <device>`
-        // — return a partial bound to COPY_FILE so the next atom (the device)
-        // completes it. Anything else is the classic `copy aikey`: bind the
-        // held AI key into the session as a sealed token for decrypt/unlock.
+        // Polymorphic on the first argument.
+        //  - a FILE (foo.ml)      -> `copy <file> <device>`: a partial bound to
+        //    COPY_FILE that the next atom (the device) completes.
+        //  - `aikey`/`card`/`key` -> the classic key-bind: bind the held AI key
+        //    into the session as a sealed token for decrypt/unlock.
+        //  - any OTHER bare word  -> a filename someone typed without its
+        //    extension (players type `copy zeus-lightning card`, not
+        //    `zeus-lightning.ml`): treat it as a file too, and let COPY_FILE + the
+        //    fs resolve the extension. Forgiving beats a misleading error.
         if (what && what.tag === 'file') {
           return { tag: 'fn', name: 'copy', builtin: COPY_FILE, args: [what], ctx };
         }
-        if (!ctx.hasAiKey || !ctx.hasAiKey()) {
-          throw new RonmlError('nothing to copy — you are not holding an AI key. (a wrecked W-factory drops one.)');
+        const id = (what && what.id ? String(what.id) : '').toLowerCase();
+        if (id === 'aikey' || id === 'card' || id === 'key') {
+          if (!ctx.hasAiKey || !ctx.hasAiKey()) {
+            throw new RonmlError('nothing to copy — you are not holding an AI key. (a wrecked W-factory drops one.)');
+          }
+          const token = { tag: 'key', kind: 'aikey', enc: true };
+          if (ctx.bindSession) ctx.bindSession(id === 'key' ? 'aikey' : id, token);
+          return token;
         }
-        const token = { tag: 'key', kind: 'aikey', enc: true };
-        const bindName = (what && what.id ? String(what.id) : 'aikey').toLowerCase();
-        if (ctx.bindSession) ctx.bindSession(bindName, token);
-        return token;
+        if (id) {
+          return { tag: 'fn', name: 'copy', builtin: COPY_FILE, args: [{ tag: 'file', name: id }], ctx };
+        }
+        throw new RonmlError('copy what? — try: copy <file> <drive>   or   copy aikey');
       },
     },
     // `cd <device>` / `ls`: the RON-DOS drive navigation. Devices are the AI key
