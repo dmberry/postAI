@@ -859,8 +859,9 @@ function refunctionCalypso() {
     lines.push('No guards left to retire — the muster is quiet.');
   }
   if (firstRelease) {
-    lines.push(`OK: ${fortress.AI_NAME} yields. Her hold on the tide loosens — launch your boat at the shore and the sea will let you pass.`);
-    say = 'The island itself seems to exhale. You are released: take to the water and go.';
+    player.stow('golden_axe', 1); // her shipwright's recipe (Stage 1d): unlocks the greek-ship craft
+    lines.push(`OK: ${fortress.AI_NAME} yields. She presses her shipwright's recipe — the golden axe — into your hand. Build a proper ship (wood, oar, rope, sail) and the sea will let you pass.`);
+    say = 'The island itself seems to exhale. Calypso gives up her recipe, the golden axe. Build a sea-worthy ship, oar and rope and sail, and go.';
   }
   return { ok: true, lines, say };
 }
@@ -2222,6 +2223,7 @@ function update(dt) {
     else if (player.canCraftChip()) player.craftChip();
     else if (player.canCraftSword()) player.craftSword();
     else if (player.canCraftFortressMap()) player.craftFortressMap();
+    else if (player.canCraftGreekShip(map)) player.craftGreekShip(map);
     else if (player.canCraftBoat(map)) player.craftBoat(map);
   }
   if (input.zoomTogglePressed()) camera.toggleZoom();
@@ -2930,13 +2932,14 @@ function frame(now) {
       aiVictory: player.aiVictory,
       showSkills,
       showWeapons,
-      craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun') || player.canCraftChip() || player.canCraftSword() || player.canCraftFortressMap() || player.canCraftBoat(map),
+      craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun') || player.canCraftChip() || player.canCraftSword() || player.canCraftFortressMap() || player.canCraftGreekShip(map) || player.canCraftBoat(map),
       craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',
       craftChip: player.canCraftChip() && !player.canCraftWaveGun() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       craftSword: player.canCraftSword() && !player.canCraftChip() && !player.canCraftWaveGun() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       // Lowest craft priority (see the C chain): the boat prompt shows only when
       // no weapon/tool/map craft is pending, so it never contradicts what C does.
-      craftBoat: player.canCraftBoat(map) && !player.canCraftChip() && !player.canCraftSword() && !player.canCraftWaveGun() && !player.canCraftFortressMap() && !(player.canCraftObGun() && player.hands !== 'obgun'),
+      craftGreekShip: player.canCraftGreekShip(map) && !player.canCraftChip() && !player.canCraftSword() && !player.canCraftWaveGun() && !player.canCraftFortressMap() && !(player.canCraftObGun() && player.hands !== 'obgun'),
+      craftBoat: player.canCraftBoat(map) && !player.canCraftGreekShip(map) && !player.canCraftChip() && !player.canCraftSword() && !player.canCraftWaveGun() && !player.canCraftFortressMap() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       // POSEIDON is an overworld network — its lights/lines must never draw over
       // the Backspace.
       skylinkActive: player.skylinkActive && !player._ended && currentWorld === calypso,

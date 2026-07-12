@@ -275,6 +275,28 @@ export const ITEMS = {
     stack: 1,
     color: '#8a6437',
   },
+  // A proper sea-going ship, built to Calypso's recipe from wood + the three
+  // found parts. Unlike the plain boat, it is seaworthy — only a greek_ship
+  // survives the crossing off Ogygia.
+  greek_ship: {
+    name: 'Greek ship',
+    kind: 'vehicle',
+    stack: 1,
+    color: '#9a7038',
+  },
+  // Calypso's shipwright recipe — the "golden axe". Dropped when you refunction
+  // her at the fortress (RON-ML `retire`). Holding it unlocks the greek_ship
+  // craft; it is not consumed, so you can build more than one ship.
+  golden_axe: {
+    name: "Golden axe (Calypso's recipe)",
+    kind: 'recipe',
+    stack: 1,
+    color: '#e8c24a',
+  },
+  // The three ship parts — found at wrecks and huts along the coast, not crafted.
+  oar: { name: 'Oar', kind: 'part', stack: 4, color: '#8a6437' },
+  rope: { name: 'Rope', kind: 'part', stack: 4, color: '#b8a066' },
+  sail: { name: 'Sail', kind: 'part', stack: 2, color: '#d8d2c0' },
   // Electro-compass: click it (in hand, pocket, or pack) to arm it — once
   // armed and carried, your facing chevron becomes a cluster of homing
   // pointers, one per notable thing nearby, colour-coded (see

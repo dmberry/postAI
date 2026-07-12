@@ -15,6 +15,7 @@ import { spawnBirds } from '../game/birds.js';
 import { placeTors } from '../game/hermes.js';
 import { placeRuins } from '../game/ruins.js';
 import { stampCoast } from '../engine/coast.js';
+import { placeShipParts } from '../game/ships.js';
 import { createFortress } from '../game/fortress.js';
 import { makeRng } from '../game/rng.js';
 import { TAPES } from '../game/items.js';
@@ -385,6 +386,9 @@ export function createIsland(seed) {
   // Grove centres are kept: standing among the old stones heals you faster
   // (player.js TEMPLE_HEAL_R / TEMPLE_HEAL_MULT reads map.temples).
   map.temples = placeRuins(map, makeRng(seed ^ 0x2c01dd), { spawn, clusters: 4 });
+  // Ship parts for the greek-ship craft: sail at a beached wreck, oar + rope in
+  // fishermen's huts. After the coast so shore tiles exist. (src/game/ships.js)
+  placeShipParts(map, seed, spawn);
   // The dormant fortress's only garrison: one or two light M4 report drones on
   // the quad. Sneak past them; if one holds you in sight the breach reports and
   // the core spits out its M6 pack + M5 snipers (worldStir.spawnWave below).

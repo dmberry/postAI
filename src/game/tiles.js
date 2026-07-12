@@ -58,6 +58,7 @@ export const OBJECTS = {
   // up to and, from Stage 1b, board to cross POSEIDON's sea. Placed on a beach
   // tile at the water's edge, never pocketed.
   boat:    { solid: true },
+  greek_ship: { solid: true },
   wfactory: { solid: true }, // W-unit foundry; periodically fields a W3 repair drone
   furniture: { solid: true }, // stacked junk cluttering the underworld's rooms; solid, you weave around it
   exitdoor: { solid: true },  // a plain door in the underworld: walk up to it to leave. Solid; you exit on approach

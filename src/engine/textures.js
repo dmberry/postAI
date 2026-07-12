@@ -84,6 +84,21 @@ export const BOAT_TEXTURES = [
   loadDownscaled(T + 'boat-wood-2.jpg', 96),
 ];
 
+// Ship sprites (drawn as billboarded PNGs, transparency preserved, so `load`
+// not `loadDownscaled`). `noSail` is the wood boat you can lash together without
+// Calypso's recipe — launchable but never sea-ready; `greek` is the proper ship
+// built to her recipe (wood + oar + rope + sail) that actually leaves Ogygia.
+export const SHIP_SPRITES = {
+  noSail: load(T + 'ships/boat-no-sail.png'),
+  greek: load(T + 'ships/greek-ship.png'),
+};
+// The three found parts, drawn as their own item icons.
+export const PART_SPRITES = {
+  oar: load(T + 'ships/oar.png'),
+  rope: load(T + 'ships/rope.png'),
+  sail: load(T + 'ships/sail.png'),
+};
+
 // Keyed by the wall object's `material` field (tiles.js/worldgen.js).
 export const WALL_TEXTURES = {
   stone: loadDownscaled(T + 'wall-stone.jpg'),

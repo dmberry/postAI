@@ -8,7 +8,7 @@ import { drawBird } from '../game/birds.js';
 import { drawRobot } from '../game/robots.js';
 import { drawWaterDroid } from '../game/waterdroids.js';
 import { drawUnderworldCreature } from '../game/underworld.js';
-import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, ROCK_TEXTURES, BOX_TEXTURES, BOAT_TEXTURES, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS, TREE_SHEET, TREE_SPRITES, EDGE_TEXTURE, SEA_TEXTURE, CAR_SPRITES, CAR_MODEL_KEYS, CAR_DIR_KEYS, CAR_RUIN_TEXTURE, FACTORY_TEXTURE, MARBLE_TEXTURE, PAPER_TEXTURE, GRAFFITI_TEXTURES } from './textures.js';
+import { FLOOR_TEXTURES, WALL_TEXTURES, GRASS_PATCH_TEXTURE, ROCK_TEXTURES, BOX_TEXTURES, BOAT_TEXTURES, SHIP_SPRITES, PART_SPRITES, CHARACTER_SPRITE_SETS, CHAR_COMPASS_DIRS, TREE_SHEET, TREE_SPRITES, EDGE_TEXTURE, SEA_TEXTURE, CAR_SPRITES, CAR_MODEL_KEYS, CAR_DIR_KEYS, CAR_RUIN_TEXTURE, FACTORY_TEXTURE, MARBLE_TEXTURE, PAPER_TEXTURE, GRAFFITI_TEXTURES } from './textures.js';
 
 // The underworld floor palette: seven images, loaded here (not via textures.js)
 // so this stays self-contained. map.liminalTex holds a per-tile index into
@@ -582,13 +582,15 @@ export class Renderer {
           ? 'You have eight chip fragments — press C to assemble an access chip'
           : hud.craftSword
             ? 'You have ten scrap — press C to forge a robot sword'
-            : hud.craftBoat
-              ? 'You have the wood and a cutting tool — press C to build a boat'
-              : 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
+            : hud.craftGreekShip
+              ? "You have the recipe, wood, oar, rope and sail — press C to build a sea-worthy ship"
+              : hud.craftBoat
+                ? 'You have the wood and a cutting tool — press C to build a boat'
+                : 'You hold a stun-gun, electro-gun and Wi-Fi block — press C to build an OB-gun';
       ctx.font = 'bold 13px system-ui, sans-serif';
       const w = ctx.measureText(msg).width + 24;
       const x = (this.w - w) / 2, y = this.h - DASH_H - 40;
-      ctx.fillStyle = hud.craftWaveGun ? 'rgba(64,224,208,0.92)' : hud.craftChip ? 'rgba(106,208,160,0.92)' : hud.craftSword ? 'rgba(184,192,200,0.92)' : hud.craftBoat ? 'rgba(138,100,55,0.92)' : 'rgba(224,100,47,0.9)';
+      ctx.fillStyle = hud.craftWaveGun ? 'rgba(64,224,208,0.92)' : hud.craftChip ? 'rgba(106,208,160,0.92)' : hud.craftSword ? 'rgba(184,192,200,0.92)' : hud.craftGreekShip ? 'rgba(154,112,56,0.94)' : hud.craftBoat ? 'rgba(138,100,55,0.92)' : 'rgba(224,100,47,0.9)';
       ctx.fillRect(x, y, w, 26);
       ctx.fillStyle = '#fff';
       ctx.textAlign = 'center';
@@ -1557,7 +1559,8 @@ export class Renderer {
       case 'furniture': this.drawFurniture(obj); break;
       case 'exitdoor': this.drawExitDoor(obj); break;
       case 'lamp': this.drawLamp(obj); break;
-      case 'boat': this.drawBoat(obj); break;
+      case 'boat': this.drawShip(obj, SHIP_SPRITES && SHIP_SPRITES.noSail); break;
+      case 'greek_ship': this.drawShip(obj, SHIP_SPRITES && SHIP_SPRITES.greek); break;
     }
   }
 
@@ -1565,6 +1568,35 @@ export class Renderer {
   // stern, its extremities projected through worldToScreen so it sits flat in
   // the iso plane on the beach tile. obj.hull is spent crossing in Stage 1b;
   // here the boat is purely a placed object you walk up to and board.
+  // A beached vessel drawn as a billboarded PNG sprite (boat-no-sail or the
+  // greek ship). Falls back to the procedural drawBoat until the sprite loads,
+  // so there's never a blank tile on the first frames.
+  drawShip(obj, img) {
+    if (!img || !img.complete || !img.naturalWidth) { this.drawBoat(obj); return; }
+    const ctx = this.ctx;
+    const cx = obj.x + 0.5, cy = obj.y + 0.5;
+    const c = worldToScreen(cx, cy);
+    // One iso tile's screen width, derived from the diamond so no magic constant.
+    const west = worldToScreen(obj.x, obj.y + 1), east = worldToScreen(obj.x + 1, obj.y);
+    const tileW = Math.max(24, east.x - west.x);
+    const w = tileW * 1.9;
+    const h = w * (img.naturalHeight / img.naturalWidth);
+    const wob = obj.shake ? Math.sin(obj.shake * 40) * obj.shake * 4 : 0;
+    ctx.save();
+    ctx.translate(wob, 0);
+    // Soft ground shadow at the waterline.
+    const sh = ctx.createRadialGradient(c.x, c.y, 6, c.x, c.y, w * 0.5);
+    sh.addColorStop(0, 'rgba(0,0,0,0.32)');
+    sh.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = sh;
+    ctx.beginPath();
+    ctx.ellipse(c.x, c.y + 4, w * 0.46, w * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Anchor the hull so it sits on the tile (bottom of the sprite ~ the waterline).
+    ctx.drawImage(img, c.x - w / 2, c.y - h + h * 0.18, w, h);
+    ctx.restore();
+  }
+
   drawBoat(obj) {
     const ctx = this.ctx;
     const cx = obj.x + 0.5, cy = obj.y + 0.5;
@@ -3644,6 +3676,30 @@ export class Renderer {
         ctx.fillStyle = '#f2d060';
         ctx.beginPath(); ctx.arc(4.5, -6, 2, 0, Math.PI * 2); ctx.fill();
         break;
+      case 'oar':
+      case 'rope':
+      case 'sail': {
+        const pimg = PART_SPRITES && PART_SPRITES[key];
+        if (pimg && pimg.complete && pimg.naturalWidth) {
+          const iw = 20, ih = iw * (pimg.naturalHeight / pimg.naturalWidth);
+          ctx.drawImage(pimg, -iw / 2, -ih / 2, iw, ih);
+        } else {
+          ctx.fillStyle = itemDef.color;
+          ctx.fillRect(-8, -3, 16, 6);
+        }
+        break;
+      }
+      case 'golden_axe': {
+        // A small gold axe: shaft + head, for Calypso's recipe.
+        ctx.strokeStyle = '#7a5a2a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-2, 9); ctx.lineTo(3, -8); ctx.stroke();
+        ctx.fillStyle = itemDef.color;
+        ctx.beginPath();
+        ctx.moveTo(3, -9); ctx.quadraticCurveTo(12, -7, 9, 1);
+        ctx.quadraticCurveTo(5, -1, 1, -2); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(120,90,20,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+        break;
+      }
       case 'wood':
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-9, -5, 18, 5);

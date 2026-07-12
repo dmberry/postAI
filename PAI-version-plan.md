@@ -34,6 +34,33 @@ isn't boardable until 1b (departure + crossing), so the bump waits for end of
 Stage 1. Next: 1b, then 1c (campaign save). Fetch before touching those five
 files; the boat additions are localized but they are in the shared hubs.
 
+**Stage 1d — the proper ship, recipe + parts (David's [other] session, IN
+PROGRESS 2026-07-12).** Reconciled with 1a/1b above after a design collision —
+DECIDED with David: refunctioning Calypso (the existing `retire` → `calypsoLeave`)
+now ALSO grants her **recipe**; the sea-ready **greek-ship** is built from
+**recipe + wood + oar + rope + sail**; the plain wood boat is reskinned as
+**boat-no-sail** and ALWAYS washes back. So `boardBoat` changes from
+`if (calypsoLeave)` to `if (boat.seaworthy)` (only a greek-ship leaves; recipe
+gates *building* the greek-ship, so you can't build a seaworthy boat before
+Calypso releases you). New items: `oar`/`rope`/`sail` (found at wrecks/huts, not
+crafted), `golden_axe` (the recipe item `retire` drops), `greek_ship`. Assets:
+`assets/textures/ships/{greek-ship,boat-no-sail,unfinished-boat,sail,oar,rope}.png`
+(downscaled). Touches: `items.js`, `player.js` (`craftGreekShip`, `boardBoat`
+seaworthy check), `main.js` (`retire` grants recipe; greek-ship in the C chain),
+`renderer.js` (`drawShip` sprites + oar/rope/sail icons), `tiles.js`
+(`greek_ship`). Parts placement is its OWN file `src/game/ships.js`
+(`placeShipParts`) with a one-line hook in `calypso.js` after `stampCoast`: sail
+at a beached wreck (sea-edge tile), oar + rope in fishermen's huts (`boards`
+interiors), all `keep`. **No boatyard** — the recipe comes from Calypso (Q2), so
+the boatyard idea is dropped; you build at the shore like the plain boat. Assets
+use `boat-no-sail.png` (plain boat) + `greek-ship.png` (ship); `unfinished-boat.png`
+is currently UNUSED. **BUILT + verified headless** (63 tests green incl. new
+`test/ship.test.js`: craft gating, consume-parts-keep-recipe, seaworthy-only
+departure, part placement across 3 seeds). Not yet browser-verified (preview
+server wouldn't start locally) and not yet pushed. **Heads-up to the other
+session: `boardBoat` now gates on `boat.seaworthy` instead of `calypsoLeave` —
+pull before touching the boat code.**
+
 ## Art conventions
 
 - **Always put a texture on a glowing thing.** No glow is ever a flat coloured blob — a grille/panel texture is laid over it (the factory-vent trick). Everything luminous goes through `Renderer.texturedGlow`, which caps the glow with an AI grate texture; if you add a new light, use it rather than a bare `fill`. (David, 2026-07-07.)

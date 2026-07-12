@@ -19,6 +19,7 @@ const SCRAP_PER_SWORD = 10; // scrap beaten into a robot sword
 const WOOD_PER_BOAT = 12;   // wood felled and lashed into a boat (Player.craftBoat)
 const BOAT_HULL = 100;      // a beached boat's starting hull HP (Stage 1b spends it crossing)
 const BOAT_LAUNCH_RADIUS = 2; // must be right at the sea's edge to launch (within ~2 tiles of the shore)
+const WOOD_PER_SHIP = 12;    // wood for a proper greek ship (plus oar + rope + sail + Calypso's recipe)
 // How each machine's hull rings under a blade (sfx 'clang' pitch factor):
 // small and thin rings high and short, heavy plate rings low and long.
 const CLANG_PITCH = {
@@ -170,6 +171,7 @@ export class Player {
 
     this.hands = 'penknife';                 // starting tool
     this.boatBuilt = false;                  // one boat at a time; a session flag (Stage 1c persists it as campaign state)
+    this.shipBuilt = false;                  // one greek ship at a time (independent of the plain boat)
     this.calypsoLeave = false;               // Calypso refunctioned (retire): the sea will let you go (decision #8)
     this.pockets = [{ item: 'note_home', qty: 1 }, null, null, null]; // start with the Odyssey note in-pocket
     this.backpack = null;                    // {slots: [16], weapon} once found; dropped on death
@@ -410,13 +412,44 @@ export class Player {
     return true;
   }
 
-  // Board a beached boat and cross the sea (Stage 1b, decision #8). Leaving
-  // Ogygia needs Calypso's leave: refunction her at the fortress terminal (the
-  // `retire` command sets calypsoLeave). Without it, the sea rises and Poseidon
-  // flings you back onto the sand.
+  // A proper sea-going ship (Stage 1d). Needs Calypso's recipe (the golden axe,
+  // dropped when you refunction her via `retire`) plus wood and the three found
+  // parts — oar, rope, sail. The recipe is NOT consumed, so you can build again.
+  // Beached at the shore like the boat, but seaworthy: only a greek_ship leaves.
+  canCraftGreekShip(map) {
+    if (this.shipBuilt) return false;
+    if (!this.hasItem('golden_axe')) return false;
+    if (this.countItem('wood') < WOOD_PER_SHIP) return false;
+    if (!this.hasItem('oar') || !this.hasItem('rope') || !this.hasItem('sail')) return false;
+    return !!this._findLaunchTile(map);
+  }
+
+  craftGreekShip(map) {
+    if (this.shipBuilt) { this.say('Your ship is already beached at the shore.'); return false; }
+    if (!this.hasItem('golden_axe')) { this.say("You need Calypso's recipe — the golden axe — to build a sea-worthy ship. Refunction her at the fortress first."); return false; }
+    if (this.countItem('wood') < WOOD_PER_SHIP) { this.say(`You need ${WOOD_PER_SHIP} wood for a proper ship; you have ${this.countItem('wood')}.`); return false; }
+    if (!this.hasItem('oar') || !this.hasItem('rope') || !this.hasItem('sail')) {
+      this.say('A sea-worthy ship needs an oar, a rope, and a sail. Find them at the wrecks and huts along the coast.');
+      return false;
+    }
+    const tile = this._findLaunchTile(map);
+    if (!tile) { this.say("You must be at the water's edge to lay a ship's keel."); return false; }
+    const ship = map.addObject('greek_ship', tile.x, tile.y, { hull: BOAT_HULL, maxHull: BOAT_HULL, seaworthy: true });
+    if (!ship) { this.say('No room at the shore to set the ship down.'); return false; }
+    for (let n = 0; n < WOOD_PER_SHIP; n++) this.removeItem('wood');
+    this.removeItem('oar'); this.removeItem('rope'); this.removeItem('sail');
+    this.shipBuilt = true;
+    sfx.play('zap');
+    this.say("To Calypso's recipe you raise a proper ship — oar shipped, rope fast, sail bent on. It rides the swell at the water's edge. Board it and cross the sea.");
+    return true;
+  }
+
+  // Board a beached vessel and cross the sea (Stage 1b/1d). Only a seaworthy
+  // greek_ship survives the crossing off Ogygia; the plain boat-no-sail is never
+  // sea-ready, so Poseidon's swell flings it back onto the sand.
   boardBoat(map, boat) {
     if (this._ended || this.deathCert) return;
-    if (this.calypsoLeave) {
+    if (boat && boat.seaworthy) {
       this._ended = true;
       this.deathCert = {
         name: this.name, gender: this.gender,
@@ -428,7 +461,10 @@ export class Player {
       this.say('You push off the sand and step aboard. The sea heaves but does not close over you. Calypso has let you go. You have left Ogygia.');
     } else {
       sfx.play('hurt');
-      this.say("You launch, and the sea rises against you. Poseidon's storm hurls the boat back onto the beach. Calypso will not release you yet: refunction her at the fortress terminal first.");
+      const hint = this.hasItem('golden_axe')
+        ? "This is no ship for the open sea. Build a proper one to Calypso's recipe — wood, oar, rope, and sail."
+        : "This is no ship for the open sea, and Calypso has not released you. Refunction her at the fortress, then build a proper ship to her recipe.";
+      this.say(`You launch, and the swell rises against you. Poseidon hurls the boat back onto the beach. ${hint}`);
       // Shove back inland so you are not left overlapping the hull.
       this.x -= this.facing.x * 1.5;
       this.y -= this.facing.y * 1.5;
@@ -1275,7 +1311,7 @@ export class Player {
     const facingBox = obj && obj.type === 'box';
     // Board a beached boat -> the departure (Stage 1b / decision #8): with
     // Calypso's leave you sail off; without it, Poseidon storms you back.
-    if (obj && obj.type === 'boat') { this.boardBoat(map, obj); return; }
+    if (obj && (obj.type === 'boat' || obj.type === 'greek_ship')) { this.boardBoat(map, obj); return; }
 
     // Defensive gear is passive — a shield blocks by being held and facing the
     // shot, a forcefield by simply being up. Using it just searches a cache
