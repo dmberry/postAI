@@ -2196,6 +2196,15 @@ export class Player {
     // lasers all fall short. (A bomb blast still catches you; flying machines,
     // to come, will too.) So they keep trying in vain while you're safe up high.
     if (source !== 'the blast' && this.onBlockTop()) return;
+    // Reverse-log depletion in the low zone: once the bar is flashing, soften
+    // incoming combat damage toward a floor, so it drains slower and slower the
+    // closer you are to death — a beat to notice and run instead of dropping dead
+    // the instant it flashes. (Combat only; starve/venom/drowning still bite.)
+    const LOW = this.maxHealth * 0.30;
+    if (this.health < LOW && amount > 0) {
+      const t = Math.max(0, this.health / LOW);   // 1 at the threshold -> 0 at empty
+      amount *= 0.30 + 0.70 * t;                   // full at the threshold, down to 0.30x near empty
+    }
     this.health -= amount;
     this.hurtTimer = 0.35;
     if (source === 'viper') sfx.play('hiss');

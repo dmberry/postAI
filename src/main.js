@@ -280,13 +280,13 @@ const persist = () => {
 // you can resume from a stage you'd earned. See mobile-gate.js for the list.
 const STAGES_KEY = 'postai-stages';
 const STAGE_LADDER = [
-  { id: 'ashore',    label: 'Washed ashore',           reached: () => true },
-  { id: 'chip',      label: 'Jacked in',               reached: () => player.hasItem('chip') },
-  { id: 'aikey',     label: 'The AI key',              reached: () => player.hasAiKeyFamily() },
-  { id: 'trojan',    label: 'Trojan card',             reached: () => player.hasItem('trojan_key') || player.hasItem('hermes_card') },
-  { id: 'hermes',    label: 'Hermes card',             reached: () => player.hasItem('hermes_card') },
-  { id: 'lionsgate', label: "Through the Lion's Gate", reached: () => !!(fortress && fortress.open) },
-  { id: 'core',      label: 'The core falls',          reached: () => !!(fortress && fortress.core && fortress.core.obj && fortress.core.obj.defeated) },
+  { id: 'ashore',    label: 'Washed ashore',           reward: 0,  reached: () => true },
+  { id: 'chip',      label: 'Jacked in',               reward: 10, reached: () => player.hasItem('chip') },
+  { id: 'aikey',     label: 'The AI key',              reward: 20, reached: () => player.hasAiKeyFamily() },
+  { id: 'trojan',    label: 'Trojan card',             reward: 25, reached: () => player.hasItem('trojan_key') || player.hasItem('hermes_card') },
+  { id: 'hermes',    label: 'Hermes card',             reward: 30, reached: () => player.hasItem('hermes_card') },
+  { id: 'lionsgate', label: "Through the Lion's Gate", reward: 40, reached: () => !!(fortress && fortress.open) },
+  { id: 'core',      label: 'The core falls',          reward: 50, reached: () => !!(fortress && fortress.core && fortress.core.obj && fortress.core.obj.defeated) },
 ];
 let _savedStages;
 try { _savedStages = new Set(Object.keys(JSON.parse(localStorage.getItem(STAGES_KEY) || '{}'))); }
@@ -309,8 +309,9 @@ function checkMilestones() {
   for (const m of STAGE_LADDER) {
     if (!_savedStages.has(m.id) && m.reached()) {
       _savedStages.add(m.id);
+      if (m.reward && player.addScore) player.addScore(m.reward); // link progress to rank — modestly
       saveStage(m.id, m.label);
-      if (m.id !== 'ashore') player.say(`Checkpoint: ${m.label} — you can load back to here from the title.`);
+      if (m.id !== 'ashore') player.say(`Checkpoint: ${m.label} (+${m.reward}) — load back to here from the title.`);
     }
   }
 }
