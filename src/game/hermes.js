@@ -76,7 +76,7 @@ export const HERMES_DOCS = {
   },
   fortress: {
     title: 'Schematic: ZEUS\'s fortress',
-    text: 'The first AI sits in a sealed annex on the south edge, walled in stone you cannot climb — the hacked doorway is the only way in. A red uplink mast wires it into the overworld POSEIDON: hammer that mast down and a breach no longer rouses the whole map. The Lion's Gate is bolted from within; it opens to a Trojan card — refunction your AI key at an obelisk (copy factory-id.ml ob / eliza factory-id.ml / copy root-access.ml aikey) and carry the card up to it. Inside, the maze lights a faint way-out and the mainframe core waits at the far end. Expect the interior thick with garrison.',
+    text: 'The first AI sits in a sealed annex on the south edge, walled in stone you cannot climb — the hacked doorway is the only way in. A red uplink mast wires it into the overworld POSEIDON: hammer that mast down and a breach no longer rouses the whole map. The Lion\'s Gate is bolted from within; it opens to a Trojan card — refunction your AI key at an obelisk (copy factory-id.ml ob / eliza factory-id.ml / copy root-access.ml aikey) and carry the card up to it. Inside, the maze lights a faint way-out and the mainframe core waits at the far end. Expect the interior thick with garrison.',
   },
   obelisks: {
     title: 'Field notes: the obelisk classes',
