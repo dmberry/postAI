@@ -224,6 +224,12 @@ try {
         }
       }
       if (wsv.factoryDestroyed && wfactory) wfactory.destroyed = true;
+      if (Array.isArray(wsv.boxesOpened)) {
+        const open = new Set(wsv.boxesOpened.map((b) => `${b.x},${b.y}`));
+        for (const o of overworldMap.objects) {
+          if (o.type === 'box' && open.has(`${o.x},${o.y}`)) { o.opened = true; o.lore = []; }
+        }
+      }
       if (typeof wsv.daemonsDown === 'number') daemonsDown = wsv.daemonsDown;
       if (wsv.fortress && fortress && fortress.restore) fortress.restore(wsv.fortress);
     }
@@ -260,6 +266,8 @@ function buildSaveBlob() {
     world: {
       obDown: calypso.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code),
       factoryDestroyed: !!(wfactory && wfactory.destroyed),
+      // Looted caches, keyed by tile — the world regenerates them full otherwise.
+      boxesOpened: overworldMap.objects.filter((o) => o.type === 'box' && o.opened).map((o) => ({ x: o.x, y: o.y })),
       daemonsDown,
       fortress: (fortress && fortress.serialize) ? fortress.serialize() : null,
     },
@@ -305,6 +313,7 @@ function saveStage(id, label) {
 // Polled once per frame — the reached() checks are cheap and a stage is written
 // only the first time (per store), so it never thrashes. Saved once ever, so a
 // checkpoint keeps the state from when you first reached it.
+let _lastAutosave = 0; // wall-clock of the last periodic persist (see frame())
 function checkMilestones() {
   for (const m of STAGE_LADDER) {
     if (!_savedStages.has(m.id) && m.reached()) {
@@ -625,6 +634,7 @@ volumeSlider.addEventListener('input', () => {
   const v = Number(volumeSlider.value) / 100;
   sfx.setVolume(v);
   volumeLabel.textContent = `${volumeSlider.value}%`;
+  volumeSlider.style.setProperty('--v', `${volumeSlider.value}%`); // drive the fill
 });
 for (const radio of helpEl.querySelectorAll('input[name="musicMode"]')) {
   radio.addEventListener('change', () => { if (radio.checked) sfx.setMusicMode(radio.value); });
@@ -633,6 +643,7 @@ function syncSettingsPanel() {
   const pct = Math.round(sfx.volume * 100);
   volumeSlider.value = pct;
   volumeLabel.textContent = `${pct}%`;
+  volumeSlider.style.setProperty('--v', `${pct}%`); // drive the fill
   const current = helpEl.querySelector(`input[name="musicMode"][value="${sfx.musicMode}"]`);
   if (current) current.checked = true;
 }
@@ -2707,6 +2718,7 @@ function frame(now) {
     acc -= STEP;
   }
   checkMilestones(); // auto-snapshot stage checkpoints as they're reached
+  if (now - _lastAutosave > 8000) { _lastAutosave = now; persist(); } // keep Continue current (position + loot), not just on events
 
   if (now - lastRenderTime >= MIN_RENDER_MS) {
     lastRenderTime = now;

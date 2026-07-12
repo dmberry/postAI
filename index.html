@@ -105,7 +105,15 @@
   #help .helpPanel { display: none; }
   #help .helpPanel.active { display: block; }
   #help .settingsRow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  #help .settingsRow input[type="range"] { width: 220px; accent-color: #9db284; }
+  /* Custom range: the fill goes edge-to-edge (0%→100%) via a gradient driven by
+     the --v var (set in main.js), so it truly hits empty/full with no end gap. */
+  #help .settingsRow input[type="range"] { width: 220px; height: 10px; -webkit-appearance: none; appearance: none;
+    border-radius: 5px; cursor: pointer; outline: none; margin: 0;
+    background: linear-gradient(to right, #9db284 0, #9db284 var(--v, 100%), #3b4231 var(--v, 100%), #3b4231 100%); }
+  #help .settingsRow input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px;
+    border-radius: 50%; background: #eef3e6; border: 2px solid #4a5340; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
+  #help .settingsRow input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 2px solid #4a5340;
+    border-radius: 50%; background: #eef3e6; box-shadow: 0 1px 3px rgba(0,0,0,0.4); }
   #help .musicChoice label { display: inline-flex; align-items: center; gap: 5px;
     color: #cfd8c3; font-size: 13px; margin-right: 4px; cursor: pointer; }
   #help .musicChoice input[type="radio"] { accent-color: #9db284; flex: 0 0 auto; width: 14px; height: 14px; margin: 0; }
