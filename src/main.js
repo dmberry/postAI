@@ -75,7 +75,12 @@ const overworldMap = map; // stable handle: `map` gets reassigned to the underwo
 // handle. Declared here (not lower) so persist()'s "only save on calypso" guard is
 // safe when an eval-time persist() fires during boot, before the old site.
 let currentWorld = calypso;
-const { spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs, fortress, wfactory, mainframe, torObjs } = calypso;
+// `let`, not `const`: the combat-world controllers/arrays are repointed to the
+// current island on every switch into a combat world (goToWorld), so the ~66
+// bare-alias sites (worldStir, onCoreDefeated, the factory helpers, the full
+// update loop) all follow the island you are actually on. A second martial island
+// (POLYPHEMUS) reuses the entire loop this way with no per-site edits.
+let { spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs, fortress, wfactory, mainframe, torObjs } = calypso;
 const player = new Player(spawn.x, spawn.y);
 player.map = map; // for death drops when damage comes from animals (kept in sync on underworld enter/exit)
 // Dispatch/repair fires from the factory centre, and stops once it's destroyed.
@@ -501,6 +506,16 @@ function ensureBackspace() {
 function goToWorld(target) {
   currentWorld = switchWorld(currentWorld, target, player);
   map = currentWorld.map;
+  // Repoint the combat-world aliases at the island we're now on, so the full
+  // update loop + worldStir + onCoreDefeated + the factory helpers all operate on
+  // this island's entities/controllers (a second martial island reuses the loop).
+  // Only combat worlds carry these; non-combat worlds (Backspace, ITHACA) run the
+  // slim loop and never touch the aliases, so we leave the last combat island's in
+  // place for them.
+  if (currentWorld.combat) {
+    ({ robots, animals, birds, waterdroids, obelisks, obeliskObjs, fortress, wfactory, mainframe, torObjs } = currentWorld);
+    Object.assign(window.__game, { robots, animals, birds, waterdroids, obelisks, obeliskObjs, fortress, wfactory });
+  }
   window.__game.map = map;
   window.__game.currentWorld = currentWorld;
   camera.snap(player.x, player.y);
@@ -2541,8 +2556,10 @@ function update(dt) {
   // update() hook, the camera, and the way back up — everything else in this
   // function (obelisks, the W-factory, animals, day/night, RON resupply, lore
   // terminals...) belongs to the overworld and simply holds still while you're
-  // not there to see it, because it only ticks when currentWorld === calypso.
-  if (currentWorld !== calypso) {
+  // not there to see it, because it only ticks on a combat island (CALYPSO or a
+  // martial daemon island like POLYPHEMUS). Non-combat worlds (the Backspace,
+  // ITHACA) run the slim loop below.
+  if (!currentWorld.combat) {
     player.update(dt, input, map, [], [], mouseWorld);
     currentWorld.update(dt, player); // the lurker + the ambient shrieks
     camera.follow(player.x, player.y, dt);
@@ -3022,9 +3039,9 @@ function frame(now) {
       // no weapon/tool/map craft is pending, so it never contradicts what C does.
       craftGreekShip: player.canCraftGreekShip(map) && !player.canCraftChip() && !player.canCraftSword() && !player.canCraftWaveGun() && !player.canCraftFortressMap() && !(player.canCraftObGun() && player.hands !== 'obgun'),
       craftBoat: player.canCraftBoat(map) && !player.canCraftGreekShip(map) && !player.canCraftChip() && !player.canCraftSword() && !player.canCraftWaveGun() && !player.canCraftFortressMap() && !(player.canCraftObGun() && player.hands !== 'obgun'),
-      // POSEIDON is an overworld network — its lights/lines must never draw over
-      // the Backspace.
-      skylinkActive: player.skylinkActive && !player._ended && currentWorld === calypso,
+      // POSEIDON is a combat-island network — its lights/lines must never draw
+      // over the Backspace or peaceful ITHACA.
+      skylinkActive: player.skylinkActive && !player._ended && currentWorld.combat,
       skylinkTimer,
       obeliskObjs: currentWorld.obeliskObjs,
       paused,

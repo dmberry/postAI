@@ -402,6 +402,7 @@ export function createIsland(seed) {
   const world = createWorld('calypso', {
     map, spawn, robots, animals, birds, waterdroids, obelisks, obeliskObjs,
     obColor: '#232a46', obAlertColor: '#4b5cc4', // Ogygia: kalyptō — indigo at rest, brightening on alert (R1)
+    combat: true, // a martial island: main.js runs the full combat/fortress/obelisk loop here
   });
   // calypso-specific controllers, aliased by name in main.js (its ~60 runtime sites use these names).
   world.fortress = fortress;

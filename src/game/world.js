@@ -20,6 +20,10 @@ export function createWorld(id, opts = {}) {
     id,                                   // 'calypso' | 'backspace' | 'ithaca' | ...
     map: opts.map ?? null,                // a GameMap (overworldMap for calypso)
     spawn: opts.spawn ?? { x: 0, y: 0 },  // {x, y} arrival point (the beach for islands)
+    // Martial island? main.js runs the full combat/fortress/obelisk/factory loop on
+    // combat worlds (CALYPSO, POLYPHEMUS, …) and the slim loop on the rest (the
+    // Backspace, ITHACA). Off by default so a plain island is peaceful.
+    combat: opts.combat ?? false,
 
     // Entity collections. 0a passes CALYPSO's already-built arrays in; other islands
     // may omit any and populate the empty array themselves.
