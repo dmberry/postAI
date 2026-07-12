@@ -1,11 +1,23 @@
 # The Archipelago — multi-island plan (ITHACA + the other three AIs)
 
+> **CANONICAL ROSTER (Odyssey revision, David 2026-07-11) — supersedes the
+> Apollo/Athena/Hades naming that still appears in the body below.** The four
+> fell-able daemons are **CALYPSO · POLYPHEMUS · CIRCE · HELIOS**; the ordered
+> path is **CALYPSO → POLYPHEMUS → CIRCE → HELIOS → ITHACA** (danger-gated, not
+> locked). **HADES is retired as an island** — it is the Backspace / Nekyia
+> (already built), not a fifth surface daemon, which is why there are exactly four
+> daemons and `daemonsDown >= 4` is the ending. **ITHACA** = home, no AI (built,
+> v1.97). Per-island OB colours, signature mechanics, and the Backspace-door
+> design live in [`islands-odyssey-revision.md`](islands-odyssey-revision.md)
+> (R1–R5), which is authoritative wherever it disagrees with this file. Below,
+> read "Apollo → Polyphemus, Athena → Circe, (Hades island) → Helios / Backspace".
+
 Design and build plan for expanding NostOS from one island to an archipelago:
-the current island (CALYPSO's), three new islands seated by the remaining AIs
-(**APOLLO**, **ATHENA**, **HADES**), and the player's home island (**ITHACA**),
-reached by swimming (exhausting but possible) or by a **boat crafted from wood
-using tools**. Each island is laid out differently according to its god's/AI's
-character.
+the current island (CALYPSO's), three new daemon islands (**POLYPHEMUS**,
+**CIRCE**, **HELIOS**), the House of Hades as the **Backspace** underworld (not a
+landfall), and the player's home island (**ITHACA**), reached by swimming
+(exhausting but possible) or by a **boat/ship crafted from wood using tools**.
+Each island is laid out differently according to its AI's Odyssey character.
 
 **Status: design APPROVED (David, 2026-07-10) — §10 decisions are settled
 except island owners. Stage 0 COMPLETE: 0a (the `currentWorld` wrap, 2026-07-11)
@@ -260,13 +272,17 @@ line per island. This is where parallel builds happen with zero contention.
 Character briefs (starting points, not straitjackets — each island's owner
 develops these):
 
-| Island | AI | Character → mechanics |
-|---|---|---|
-| **CALYPSO** | CALYPSO | The keeper (current island, becomes the reference implementation). Survivable *because* she wants you kept. |
-| **APOLLO** | APOLLO | Light and prophecy. Sun-bleached palette, **no true night** (stealth and torches useless, different survival rhythm), oracle terminals that answer truthfully at a price, the siren mechanic escalated to a choir. |
-| **ATHENA** | ATHENA | Craft and strategy. Machines fight in **formation** (generalise the M6 pack logic), fortifications rather than wilderness, but also the best workshops/craftables in the game: the island that rewards planning over force. |
-| **HADES** | HADES | The dead. Dark palette, sparse life, and the structural gift: **his fortress connects to the Backspace** — the deletion realm is his underworld, and the two systems finally meet (a tear that opens from his side; the lurker explained). |
-| **ITHACA** | none | Home. Small, machine-free or nearly. Someone waiting (the Argos thread). No fortress; reaching it *after* the four AIs fall is the ending. Cheapest island — **build it first** as the full test of "an island that is not CALYPSO". |
+Canonical roster (from [`islands-odyssey-revision.md`](islands-odyssey-revision.md)
+§1.3 / David's tables). OB colours: rest (dark) → alert (bright).
+
+| Island (Homeric) | AI | Character → signature mechanic | OB rest → alert |
+|---|---|---|---|
+| **Ogygia** | CALYPSO | Captivity as comfort. Doesn't hunt you; makes leaving feel pointless. Win by *refusing to stay* — break out to the raft/ship (`winMode:'depart'`). **Built** (reference impl). | indigo `#232a46` → `#4b5cc4` |
+| **Land of the Cyclopes** (Aegilia) | POLYPHEMUS | The single burning eye — surveillance, the panopticon in one giant sensor. Extreme line-of-sight detection, but blindable; the **"Nobody / No-man" gambit** = evading identification (ties into the existing LOS system). **The full kill-raid template's home — build first (before R3).** | ember `#4e1410` → `#ff2a20` |
+| **Aeaea** | CIRCE | Transformation — reclassifies humans into beasts, the model that rewrites *what you are*. Alters the player (transmutation, debuffs) until you find the counter-item, **moly**. | venom `#1f3a24` → `#46d06a` |
+| **Thrinacia** | HELIOS | Prohibition + solar power. A forbidden herd: a resource you must *not* consume; take it and the island turns on you (ties to the solar-cell / HERMES motif). | burnt gold `#5c4310` → `#e0a010` |
+| **House of Hades** | HADES (= the **Backspace**) | The deleted dead. **Not a surface island** — the underworld you drop *into* via the Ubik tear, and an alternative crossing road (R4). **Already built**; keep as the Nekyia, not a fifth daemon. | ash `#45443e` → dull bone `#9a978a` |
+| **Ithaca** | — | Home. The *nostos*, not an AI. Machine-free, Argos waiting; the network never reached it (no OBs). Reaching it after all four daemons fall is the ending. **Built (v1.97).** | none / dead towers |
 
 Island-local rules live in the island file or its controllers, never in the
 engine: a per-island countdown replaces the global one (POSEIDON's purge
@@ -355,9 +371,13 @@ fortress-map work, landed as v1.58; the core-kill endgame landed as v1.59.)
    sails CALYPSO↔ITHACA (it replaced the stub islet, now deleted). `onEnter` is
    the homecoming: with all four AIs fallen (`daemonsDown >= 4`) it is the ending
    (a victory certificate); before that it is a landfall, not yet home. **Next:**
-   APOLLO / ATHENA / HADES in parallel, one owner each; each wires
-   `Player.onCoreDefeated` to its own robots set (see §2) — the endgame loop is
-   already built. **Known gaps:** the "N:NN to POSEIDON" HUD countdown still shows
+   **POLYPHEMUS** (the panopticon island — ember OBs, the single-eye LOS / "Nobody"
+   gambit; it is the full kill-raid template's proper home, and per the revision
+   §4 it must land *before* R3 softens Calypso into the depart-mode tutorial),
+   then **CIRCE** (transformation debuffs + the moly counter) and **HELIOS** (the
+   forbidden solar herd). Each wires `Player.onCoreDefeated` to its own robots set
+   (see §2) — the endgame loop is already built. **Known gaps:** the "N:NN to
+   POSEIDON" HUD countdown still shows
    on ITHACA (it is CALYPSO-local — needs the per-island countdown from §6); no
    marked "home" building or the Argos-recognition beat yet; ITHACA reuses the
    full 128² base rather than being genuinely small.
