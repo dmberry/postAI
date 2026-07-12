@@ -243,32 +243,77 @@ function fullReset() {
   localStorage.removeItem(SEED_KEY);
   location.reload();
 }
+// The full run snapshot (identity + progress + run state + world MUTATIONS). The
+// world regenerates from the seed on load, so we store only what changed (felled
+// obelisks, factory, daemon tally, fortress doors/core/uplink) and re-apply it
+// (see the restore block above). Shared by the autosave and the stage checkpoints.
+function buildSaveBlob() {
+  return {
+    name: player.name, gender: player.gender, skills: [...player.skills], skillLog: player.skillLog,
+    weaponsFound: [...player.weaponsFound], killLog: player.killLog, circuitNums: [...player.circuitNums],
+    xp: player.xp, score: player.score, deaths: player.deaths || 0,
+    state: {
+      health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
+      wifiPower: player.wifiPower, x: player.x, y: player.y, hands: player.hands,
+      pockets: player.pockets, backpack: player.backpack, walkman: player.walkman,
+    },
+    world: {
+      obDown: calypso.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code),
+      factoryDestroyed: !!(wfactory && wfactory.destroyed),
+      daemonsDown,
+      fortress: (fortress && fortress.serialize) ? fortress.serialize() : null,
+    },
+  };
+}
 const persist = () => {
   if (resettingGame) return;
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify({
-      name: player.name, gender: player.gender, skills: [...player.skills], skillLog: player.skillLog,
-      weaponsFound: [...player.weaponsFound], killLog: player.killLog, circuitNums: [...player.circuitNums],
-      xp: player.xp, score: player.score, deaths: player.deaths || 0,
-      state: {
-        health: player.health, stamina: player.stamina, food: player.food, venom: player.venom,
-        wifiPower: player.wifiPower, x: player.x, y: player.y, hands: player.hands,
-        pockets: player.pockets, backpack: player.backpack, walkman: player.walkman,
-      },
-      // World progress. The world regenerates from the seed on load, so we save
-      // only the MUTATIONS and re-apply them (see the restore block above): which
-      // obelisks are felled, the factory wrecked, the daemon tally, and the
-      // fortress's own state (doors/core/uplink, via fortress.serialize()).
-      world: {
-        obDown: calypso.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code),
-        factoryDestroyed: !!(wfactory && wfactory.destroyed),
-        daemonsDown,
-        fortress: (fortress && fortress.serialize) ? fortress.serialize() : null,
-      },
-    }));
+    localStorage.setItem(SAVE_KEY, JSON.stringify(buildSaveBlob()));
     localStorage.setItem(IDENTITY_KEY, JSON.stringify({ name: player.name, gender: player.gender }));
   } catch { /* storage unavailable */ }
 };
+
+// ---- Stage checkpoints (the Load list) -------------------------------------
+// Milestones auto-snapshot the whole run (blob + seed) into their own store the
+// first time you reach them. The gate's Load list reads these, so death (which
+// wipes the run via fullReset, but NOT this key) drops you back to the gate where
+// you can resume from a stage you'd earned. See mobile-gate.js for the list.
+const STAGES_KEY = 'postai-stages';
+const STAGE_LADDER = [
+  { id: 'ashore',    label: 'Washed ashore',           reached: () => true },
+  { id: 'chip',      label: 'Jacked in',               reached: () => player.hasItem('chip') },
+  { id: 'aikey',     label: 'The AI key',              reached: () => player.hasAiKeyFamily() },
+  { id: 'trojan',    label: 'Trojan card',             reached: () => player.hasItem('trojan_key') || player.hasItem('hermes_card') },
+  { id: 'hermes',    label: 'Hermes card',             reached: () => player.hasItem('hermes_card') },
+  { id: 'lionsgate', label: "Through the Lion's Gate", reached: () => !!(fortress && fortress.open) },
+  { id: 'core',      label: 'The core falls',          reached: () => !!(fortress && fortress.core && fortress.core.obj && fortress.core.obj.defeated) },
+];
+let _savedStages;
+try { _savedStages = new Set(Object.keys(JSON.parse(localStorage.getItem(STAGES_KEY) || '{}'))); }
+catch { _savedStages = new Set(); }
+function saveStage(id, label) {
+  try {
+    const stages = JSON.parse(localStorage.getItem(STAGES_KEY) || '{}');
+    stages[id] = {
+      id, label, order: STAGE_LADDER.findIndex((s) => s.id === id),
+      score: player.score || 0, ts: Date.now(),
+      seed: String(WORLD_SEED), save: buildSaveBlob(), // in-memory seed = always the live world's
+    };
+    localStorage.setItem(STAGES_KEY, JSON.stringify(stages));
+  } catch { /* storage unavailable */ }
+}
+// Polled once per frame — the reached() checks are cheap and a stage is written
+// only the first time (per store), so it never thrashes. Saved once ever, so a
+// checkpoint keeps the state from when you first reached it.
+function checkMilestones() {
+  for (const m of STAGE_LADDER) {
+    if (!_savedStages.has(m.id) && m.reached()) {
+      _savedStages.add(m.id);
+      saveStage(m.id, m.label);
+      if (m.id !== 'ashore') player.say(`Checkpoint: ${m.label} — you can load back to here from the title.`);
+    }
+  }
+}
 player.onSkillLearned = persist;
 player.onXpGain = persist;
 player.onScore = persist;
@@ -2635,6 +2680,7 @@ function frame(now) {
     update(STEP);
     acc -= STEP;
   }
+  checkMilestones(); // auto-snapshot stage checkpoints as they're reached
 
   if (now - lastRenderTime >= MIN_RENDER_MS) {
     lastRenderTime = now;

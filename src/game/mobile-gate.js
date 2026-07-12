@@ -54,6 +54,14 @@ export function initMobileGate(mode = 'gate') {
   const isTitle = mode === 'title';
   let hasSave = false;
   try { hasSave = !!localStorage.getItem('postai-character'); } catch (e) { /* storage blocked */ }
+  // Stage checkpoints (main.js writes these) — the Load list, newest milestone
+  // first. Loading one restores its seed + save and boots the resume path, so
+  // you can drop back to a point you'd earned (the way to recover after death).
+  let stageEntries = [];
+  try {
+    const stages = JSON.parse(localStorage.getItem('postai-stages') || '{}');
+    stageEntries = Object.values(stages).sort((a, b) => (b.order || 0) - (a.order || 0));
+  } catch (e) { /* storage blocked */ }
   let running = true;   // frame loop / clock keep going until we boot the game
   let skyTimer = null;
   const el = document.createElement('div');
@@ -125,8 +133,14 @@ export function initMobileGate(mode = 'gate') {
        </div>`
     : `<p class="mg-sub">It's the end of the world.<span class="mg-sub2">This is an early alpha — you can play it right here with touch controls (hold to move, tap to act), or grab a laptop for the full keyboard-and-mouse game. Either way, here's the soundtrack.</span></p>
        <div class="mg-actions"><button id="mg-tryanyway" class="mg-btn primary">▶ Play (alpha)</button></div>`;
+  const checkpointHtml = (isTitle && stageEntries.length)
+    ? `<div class="mg-stages">
+         <div class="mg-stages-h">Load a checkpoint</div>
+         <div class="mg-stages-row">${stageEntries.map((s) => `<button class="mg-stage-btn" data-id="${s.id}">${s.label}<span class="mg-stage-score">${s.score || 0}</span></button>`).join('')}</div>
+       </div>`
+    : '';
   const bodyHtml = isTitle
-    ? `${videoHtml}<div class="mg-hero">${brandHtml}${copyHtml}</div>
+    ? `${videoHtml}<div class="mg-hero">${brandHtml}${copyHtml}${checkpointHtml}</div>
        <div class="mg-player">${deckHtml}${rackHtml}${themesHtml}</div>
        ${stageHtml}${footerHtml}${aboutHtml}`
     : `${videoHtml}${brandHtml}${copyHtml}${stageHtml}${deckHtml}${rackHtml}${menuHtml}${footerHtml}${aboutHtml}`;
@@ -177,6 +191,16 @@ export function initMobileGate(mode = 'gate') {
       .mg-btn:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
       .mg-btn.primary:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
       .mg-btn:active { transform: scale(0.96); }
+      /* stage checkpoints (Load list) */
+      .mg-stages { margin: 10px 0 2px; text-align: center; flex: 0 0 auto; }
+      .mg-stages-h { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); opacity: 0.7; margin-bottom: 6px; }
+      .mg-stages-row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; }
+      .mg-stage-btn { font: 600 12px system-ui, sans-serif; cursor: pointer; font-family: inherit;
+        color: var(--accent); background: rgba(255,255,255,0.05); border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+        border-radius: 6px; padding: 6px 12px; display: inline-flex; align-items: center; gap: 8px; transition: transform 0.1s; }
+      .mg-stage-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+      .mg-stage-btn:active { transform: scale(0.95); }
+      .mg-stage-score { font-size: 10px; opacity: 0.6; }
       /* theme switch (under the tape rack) */
       .mg-themes { display: flex; gap: 6px; margin-top: 18px; justify-content: center; flex: 0 0 auto; }
       .mg-themes button { font: 600 11px system-ui, sans-serif; letter-spacing: 0.06em; text-transform: uppercase;
@@ -371,6 +395,21 @@ export function initMobileGate(mode = 'gate') {
     el.querySelector('#mg-start').addEventListener('click', () => boot(true));
     const cont = el.querySelector('#mg-continue');
     if (cont) cont.addEventListener('click', () => boot(false));
+    // Load a checkpoint: restore its seed + save into the run keys, then boot the
+    // resume path (main.js's restore reads them, exactly like Continue).
+    el.querySelectorAll('.mg-stage-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        try {
+          const stages = JSON.parse(localStorage.getItem('postai-stages') || '{}');
+          const st = stages[btn.dataset.id];
+          if (st) {
+            if (st.seed != null) localStorage.setItem('postai-seed', st.seed);
+            localStorage.setItem('postai-character', JSON.stringify(st.save));
+          }
+        } catch (e) { /* storage blocked */ }
+        boot(false);
+      });
+    });
   } else {
     // Escape hatch: if the gate fired by mistake (a touch laptop, say), let them
     // dismiss it and boot the real game anyway (resuming any save).
