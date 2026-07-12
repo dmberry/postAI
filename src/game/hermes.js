@@ -111,3 +111,20 @@ export const HERMES_DOCS = {
 export function hermesTopics() {
   return Object.keys(HERMES_DOCS);
 }
+
+// The zeus-virus folder RON left runnable on the relays — the mechanism of
+// Odysseus's release (Odyssey V: Zeus commands, Hermes carries, Calypso yields).
+// `cd hermes / ls` lists these; `read readme.md` is the forge recipe; `forge
+// zeus-virus.ml` (with a Trojan card in hand) arms it into zeus-lightning.ml.
+// See docs/calypso-escape-chain.md.
+export const ZEUS_VIRUS_FILES = ['readme.md', 'zeus-virus.ml'];
+export const ZEUS_VIRUS_DOCS = {
+  'readme.md': {
+    title: 'zeus-virus / readme.md',
+    text: "ZEUS-VIRUS — RON build notes. The payload is inert alone. Arm it with the two credentials a Trojan card carries: root-access.ml (the factory's own grant, reflected out of it by ELIZA) and access-ai-code.ml (the AI's access key). At this relay, card in hand, type: forge zeus-virus.ml. That folds both credentials into the shell and writes zeus-lightning.ml — Zeus's command, made runnable. Copy it onto the Trojan card (copy zeus-lightning.ml card) and the card becomes a hermes card: the herald Calypso cannot refuse. Homer had the shape of it — the god commands, the messenger carries, the nymph lets him go.",
+  },
+  'zeus-virus.ml': {
+    title: 'zeus-virus.ml (sealed)',
+    text: "let zeus = seal (* the sky-father's command, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. forge zeus-virus.ml at a relay, card in hand. *)",
+  },
+};

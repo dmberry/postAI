@@ -18,7 +18,7 @@ import { sfx } from './engine/sound.js';
 import { worldToScreen } from './engine/iso.js';
 import { runRonml } from './game/ronml.js';
 import { createEliza } from './game/eliza.js';
-import { placeTors, HERMES_DOCS, hermesTopics } from './game/hermes.js';
+import { placeTors, HERMES_DOCS, hermesTopics, ZEUS_VIRUS_FILES, ZEUS_VIRUS_DOCS } from './game/hermes.js';
 import { VERSION } from './version.js';
 import { drawRobotVision } from './game/robotvision.js';
 import { screenDirToWorld } from './engine/iso.js';
@@ -646,7 +646,8 @@ function fsDevAvail(dev) {
 function fsFilesOn(dev) {
   if (dev === 'ob') return Object.keys(replSession.__obfiles || {});
   if (dev === 'aikey') { const c = fsCardItem(); return c && ITEMS[c].files ? ITEMS[c].files.slice() : []; }
-  return []; // hermes folder: S4
+  if (dev === 'hermes') return [...ZEUS_VIRUS_FILES, ...Object.keys(replSession.__hermesfiles || {})];
+  return [];
 }
 function fsCwd() {
   return replSession.__cwd || (fsCardItem() ? 'aikey' : (terminalKind === 'hermes' ? 'hermes' : 'ob'));
@@ -733,10 +734,19 @@ function ronmlCtx() {
     hasAiKey: () => player.hasAiKeyFamily(), // ai_key / trojan_key / hermes_card all count
     currentNode: () => (terminalOb ? terminalOb.code : null),
     printKey: () => {
-      if (!player.hasAiKeyFamily()) { replPrint('ERR: no AI key to copy — you are not holding one.'); return; }
+      // Hold a card -> stamp a spare. Hold nothing but the network cached your
+      // code (autocopy / backup) -> REPRINT one, so losing the card mid-chain is
+      // recoverable (S5 of the Calypso escape chain). Neither -> nothing to copy.
+      const holds = player.hasAiKeyFamily();
+      if (!holds && !player.aikeyBackedUp) { replPrint('ERR: no AI key to copy — you are not holding one, and none is cached on the network.'); return; }
       map.groundItems.push({ item: 'ai_key', qty: 1, x: player.x + 0.4, y: player.y + 0.6, keep: true });
-      replPrint('OK: the console stamps a fresh AI key — it drops at your feet.');
-      player.say('The terminal stamps a copy of the AI key. It clatters to the floor at your feet, a spare against losing the first.');
+      if (holds) {
+        replPrint('OK: the console stamps a fresh AI key — it drops at your feet.');
+        player.say('The terminal stamps a copy of the AI key. It clatters to the floor at your feet, a spare against losing the first.');
+      } else {
+        replPrint('OK: the network still holds your access code — the console reprints an AI key. It drops at your feet.');
+        player.say('The node still had your access code cached. It reprints a fresh AI key at your feet — redo the ELIZA transform to rebuild the Trojan card.');
+      }
     },
     listObelisks: () => currentWorld.obeliskObjs.filter((o) => !o.destroyed).map((o) => o.code),
     distanceToNode: (id) => {
@@ -904,6 +914,7 @@ function hermesCtx() {
     drive: () => startDrive(),
     backup: () => hermesBackupKey(),
     restore: () => hermesRestoreKey(),
+    forge: (name) => hermesForge(name),
   };
 }
 
@@ -1113,16 +1124,31 @@ function drawDriveOverlay(now) {
 }
 
 // `read <topic>`: show a document on the terminal (print it to keep a copy).
+// `forge zeus-virus.ml` at a relay (S4 of the Calypso escape chain). Off the
+// wire still, but a maker's bench: it folds the Trojan card's two credentials
+// (root-access.ml + access-ai-code.ml) into the sealed payload and writes
+// zeus-lightning.ml to the relay bench. Copy that onto the card -> hermes card.
+function hermesForge(name) {
+  if (name !== 'zeus-virus.ml') return { ok: false, msg: `${name} is not a payload to forge. try: forge zeus-virus.ml` };
+  if (player.hasItem('hermes_card')) return { ok: false, msg: 'already forged — the card is a hermes card. run zeus-lightning.ml at Calypso.' };
+  if (!player.hasItem('trojan_key')) return { ok: false, msg: 'forge needs a Trojan card in hand — it carries root-access.ml and access-ai-code.ml. (read readme.md)' };
+  if (!hermesSpend(HERMES_BATT.print)) return { ok: false, msg: 'not enough charge to forge — let the cell recover.' };
+  replSession.__hermesfiles = replSession.__hermesfiles || {};
+  replSession.__hermesfiles['zeus-lightning.ml'] = true;
+  player.say("The relay folds root-access.ml and access-ai-code.ml into the sealed shell. zeus-lightning.ml — Zeus's command, made runnable — writes to the bench. Copy it onto the card. (cd hermes / copy zeus-lightning.ml card)");
+  return { ok: true, out: 'zeus-lightning.ml' };
+}
 function hermesRead(topic) {
   if (!topic) {
     replPrint('read <topic>. archive lists them. Held: ' + hermesTopics().join(', ') + '.');
     return;
   }
-  const doc = HERMES_DOCS[topic];
+  const doc = HERMES_DOCS[topic] || ZEUS_VIRUS_DOCS[topic];
   if (!doc) {
     replPrint(`No document "${topic}". Try: ${hermesTopics().join(', ')}.`);
     return;
   }
+  const printable = !!HERMES_DOCS[topic]; // the zeus-virus folder files aren't notepad docs
   if (!hermesSpend(HERMES_BATT.read)) { replPrint('Not enough charge to pull that up — let the cell recover.'); return; }
   // Wrap to the console width so a long entry reads as paragraphs, not one line.
   const words = doc.text.split(' ');
@@ -1133,7 +1159,7 @@ function hermesRead(topic) {
     else line += ' ' + w;
   }
   if (line.trim()) out.push(line.trim());
-  replPrint('', `== ${doc.title} ==`, ...out, '(print ' + topic + ' to keep a copy in your notepad)', '');
+  replPrint('', `== ${doc.title} ==`, ...out, ...(printable ? ['(print ' + topic + ' to keep a copy in your notepad)'] : []), '');
 }
 
 // The RON-ML `map` command: a green schematic of this AI's territory drawn
@@ -1411,6 +1437,14 @@ function openObTerminal(ob) {
   terminalOb = ob;          // `name` reads this; the console shows its code
   replSession = {};         // fresh top-level bindings for this visit
   player.terminalSafe = true;
+  // Autocopy (Calypso escape chain, S5): jacking a card into the network caches
+  // its access code — reusing the aikey backup — so a lost card can be reprinted
+  // at any obelisk (print aikey). A one-time nudge the first time it happens.
+  if (player.hasAiKeyFamily() && !player.aikeyBackedUp) {
+    player.aikeyBackedUp = true;
+    try { localStorage.setItem(AIKEY_BACKUP_KEY, '1'); } catch { /* storage blocked: keep the in-memory flag */ }
+    player.say('The node caches your AI key as you jack in — lose the card and you can reprint one here: print aikey.');
+  }
   obTermEl.style.display = 'flex';
   obTermScreen.parentElement.style.display = 'none';
   obTermConnect.style.display = 'block';
@@ -1525,7 +1559,7 @@ obTermEl.addEventListener('click', (e) => { if (e.target === obTermEl) closeObTe
 // verbs, a HERMES relay only RON verbs — no seepage between the two. (sing is
 // secret, so it's in neither list.)
 const OB_COMPLETE = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 'sleep', 'rewind', 'repel', 'map', 'print', 'copy', 'cd', 'ls', 'decrypt', 'unlock', 'eliza', 'notes', 'help', 'let'];
-const HERMES_COMPLETE = ['read', 'print', 'archive', 'records', 'drive', 'backup', 'restore', 'copy', 'cd', 'ls', 'notes', 'help', 'let'];
+const HERMES_COMPLETE = ['read', 'print', 'archive', 'records', 'drive', 'backup', 'restore', 'forge', 'copy', 'cd', 'ls', 'notes', 'help', 'let'];
 const escapeHtml = (s) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 function ronmlCompletion(value) {
   if (elizaBot) return ''; // no RON-ML hints mid-conversation with the DOCTOR

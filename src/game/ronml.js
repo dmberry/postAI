@@ -304,17 +304,33 @@ function makeBuiltins(station) {
       },
     },
     // ---- HERMES station verbs (RON hilltop relays only) ------------------
-    // RON tech is off-grid on purpose, and it's an INFORMATION resource, not a
-    // workshop: no network verb (touching the wire would give the relay away),
-    // nothing fabricated. It keeps the human record — read it here, or print a
-    // copy for your notes. (A HERMES `print` is added in makeBuiltins below, so
-    // it can take a topic; the obelisk's own arity-0 `print` maps the network.)
+    // RON tech is off-grid on purpose: no network verb (touching the wire would
+    // give the relay away). It is the human record — read it, print a copy — AND
+    // a maker's bench that forges only from what you carry in (see `forge`), so
+    // the no-wire rule holds while the relay still arms Zeus's command. (A HERMES
+    // `print` is added in makeBuiltins below, so it can take a topic; the
+    // obelisk's own arity-0 `print` maps the network.)
     read: {
       arity: 1,
       fn: ([topic], ctx) => {
-        const name = topic && (topic.id || '') || '';
+        // Accept a doc topic (read history) or a file (read readme.md) — file
+        // values carry .name, topics come through as .id/node.
+        const name = topic && (topic.name || topic.id || '') || '';
         ctx.read(String(name).toLowerCase());
         return { tag: 'unit' };
+      },
+    },
+    // `forge zeus-virus.ml` (HERMES relay): arm the sealed payload with the two
+    // credentials on your Trojan card -> zeus-lightning.ml on the relay bench.
+    // The relay stays off the wire; it forges only from what you carry in.
+    forge: {
+      arity: 1,
+      fn: ([file], ctx) => {
+        if (!file || file.tag !== 'file') throw new RonmlError('forge needs the payload file — try: forge zeus-virus.ml');
+        if (!ctx.forge) throw new RonmlError('nothing to forge at this terminal.');
+        const r = ctx.forge(file.name);
+        if (!r || !r.ok) throw new RonmlError((r && r.msg) || `can't forge ${file.name}.`);
+        return { tag: 'file', name: r.out };
       },
     },
     // Lists the human knowledge this relay still holds — RON kept it alive when
@@ -482,7 +498,7 @@ const OB_VERBS = ['scan', 'nearest', 'keys', 'name', 'hack', 'crash', 'loop', 's
 // Note: HERMES's `print` is added as an override in makeBuiltins (it takes a
 // topic), not tagged here — tagging it would steal the obelisk's own arity-0
 // `print`. `print` is already in OB_VERBS, so ALL_VERBS still covers it.
-const HERMES_VERBS = ['read', 'archive', 'records', 'drive', 'backup', 'restore'];
+const HERMES_VERBS = ['read', 'archive', 'records', 'drive', 'backup', 'restore', 'forge'];
 // Retired verbs kept only so typing one gives a clean "not a command" instead
 // of a cryptic node error (make/ping were removed when TORs became info-only).
 const RETIRED_VERBS = ['make', 'ping'];
@@ -595,6 +611,7 @@ const USAGE_HINTS = {
   backup: 'backup needs a key — try: backup aikey',
   restore: 'restore needs a key — try: restore aikey',
   read: 'read needs a topic — try: read history (archive lists them)',
+  forge: 'forge needs the payload — try: forge zeus-virus.ml (at a relay, Trojan card in hand)',
 };
 
 // `help` reference, shown when the operator types it at the terminal. Per-verb
@@ -629,6 +646,7 @@ const HELP_VERBS = [
   ['drive', 'unit -> unit', 'override a nearby machine and see through its eyes — drive it till it leaves range', 'HERMES relay only', 'hermes'],
   ['backup aikey', 'key -> unit', "copy your AI key to RON's relay mesh — survives death", 'HERMES relay only', 'hermes'],
   ['restore aikey', 'key -> unit', 'mint a backed-up AI key back into your pack', 'HERMES relay only', 'hermes'],
+  ['forge f', 'file -> file', 'forge zeus-virus.ml into zeus-lightning.ml from your Trojan card', 'HERMES relay, Trojan card', 'hermes'],
   ['notes', 'unit -> unit', 'open the notepad — browse the pages you\'ve found worth keeping', '', ''],
   ['help', 'unit -> unit', 'this reference, or `help <verb>` for one verb', '', ''],
 ];

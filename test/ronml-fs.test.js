@@ -124,3 +124,36 @@ test('eliza transform failure surfaces the ctx message', () => {
   assert.ok(!r.ok);
   assert.match(r.text, /ob bench/);
 });
+
+// ---- S4: the HERMES forge (forge <file>) -----------------------------------
+
+test('forge <file> runs the ctx forge and returns the output file', () => {
+  let called = null;
+  const ctx = { station: 'hermes', session: {}, forge: (n) => { called = n; return { ok: true, out: 'zeus-lightning.ml' }; } };
+  const r = runRonml('forge zeus-virus.ml', ctx);
+  assert.ok(r.ok, r.text);
+  assert.equal(called, 'zeus-virus.ml');
+  assert.equal(r.text, 'zeus-lightning.ml');
+});
+
+test('forge failure surfaces the ctx message', () => {
+  const ctx = { station: 'hermes', session: {}, forge: () => ({ ok: false, msg: 'forge needs a Trojan card in hand' }) };
+  const r = runRonml('forge zeus-virus.ml', ctx);
+  assert.ok(!r.ok);
+  assert.match(r.text, /Trojan card/);
+});
+
+test('forge is a HERMES verb — refused at an obelisk', () => {
+  const ctx = { station: 'ob', session: {}, forge: () => ({ ok: true, out: 'x' }) };
+  const r = runRonml('forge zeus-virus.ml', ctx);
+  assert.ok(!r.ok);
+  assert.match(r.text, /isn't a command on this terminal/);
+});
+
+test('read accepts a file value (readme.md), not just a topic', () => {
+  let readArg = null;
+  const ctx = { station: 'hermes', session: {}, read: (t) => { readArg = t; } };
+  const r = runRonml('read readme.md', ctx);
+  assert.ok(r.ok, r.text);
+  assert.equal(readArg, 'readme.md');
+});
