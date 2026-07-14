@@ -104,6 +104,11 @@ function rgbScale([r, g, b], f) {
   return `rgb(${(r * f) | 0},${(g * f) | 0},${(b * f) | 0})`;
 }
 
+function hexRgb(hex) {
+  const n = parseInt((hex || '#8f9dff').slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
 
 // Cheap deterministic hash for per-tile pseudo-randomness (grass blades)
 // that stays put frame to frame instead of shimmering like Math.random().
@@ -2128,10 +2133,18 @@ export class Renderer {
       const ey = { x: BL.x - TL.x, y: BL.y - TL.y };
       const LW = Math.hypot(ex.x, ex.y), LH = Math.hypot(ey.x, ey.y);
 
+      // The console's hue — the core's own colour (fortress stamps core.screenColor).
+      // The dark screen is that colour crushed to near-black; the text is the colour
+      // itself; the bezel a lighter tint. So the SE-face screen wears the island's
+      // colour, and matches the pop-up REPL (main.js reads the same core.screenColor).
+      const [sr, sg, sb] = hexRgb(obj.screenColor);
+      const screenBg = `rgba(${(sr * 0.12 + 5) | 0},${(sg * 0.12 + 7) | 0},${(sb * 0.12 + 12) | 0},0.97)`;
+      const screenBorder = `rgba(${Math.min(255, sr + 44)},${Math.min(255, sg + 44)},${Math.min(255, sb + 44)},0.75)`;
+
       ctx.save();
       panel();
-      ctx.shadowColor = 'rgba(120,150,255,0.9)'; ctx.shadowBlur = 16;
-      ctx.fillStyle = 'rgba(14,20,48,0.97)';   // the dark screen itself
+      ctx.shadowColor = `rgba(${sr},${sg},${sb},0.9)`; ctx.shadowBlur = 16;
+      ctx.fillStyle = screenBg;   // the dark screen itself
       ctx.fill();
       ctx.shadowBlur = 0;
       if (LW > 6 && LH > 8) {
@@ -2155,7 +2168,7 @@ export class Renderer {
         for (let k = k0; k <= k1; k++) {
           const ly = LH + k * lineH - p;
           const a = 0.26 + 0.6 * Math.min(1, ly / LH);   // dims as it climbs away
-          ctx.fillStyle = `rgba(176,202,255,${a.toFixed(3)})`;
+          ctx.fillStyle = `rgba(${sr},${sg},${sb},${a.toFixed(3)})`;
           ctx.fillText(LINES[((k % N) + N) % N], 2, ly);
         }
         ctx.fillStyle = 'rgba(0,0,0,0.18)';               // CRT scanlines
@@ -2163,7 +2176,7 @@ export class Renderer {
       }
       ctx.restore();
       panel();
-      ctx.strokeStyle = 'rgba(205,218,255,0.75)'; ctx.lineWidth = 1.5; ctx.stroke();
+      ctx.strokeStyle = screenBorder; ctx.lineWidth = 1.5; ctx.stroke();
       this.coreTermHit = { obj, x: scx, y: scy, r: Math.max(16, Math.hypot(q[1].x - q[0].x, q[1].y - q[0].y) * 0.7) };
     }
     const labelC = worldToScreen(cx, obj.y + fh);

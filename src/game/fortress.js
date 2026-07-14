@@ -92,6 +92,16 @@ const STANDDOWN_DELAY = 90; // seconds of quiet before an alarmed fortress stand
 const PRODUCE_INTERVAL = 6; // seconds between reinforcement dispatches while alarmed
 const GUARD_CAP = 12;       // max live M5/M6 the core will sustain at once (frame-rate guard)
 
+// The core console's hue per daemon — each island's own colour, brightened so it
+// stays readable as glowing text on the near-black screen. The SE-face screen and
+// the pop-up REPL both read core.screenColor (stamped below), so they always match.
+const CORE_SCREEN_COLOR = {
+  CALYPSO: '#8f9dff',     // indigo (Ogygia)
+  POLYPHEMUS: '#ff6a4a',  // ember (Aegilia)
+  CIRCE: '#5fe08a',       // venom green (Aeaea)
+  HELIOS: '#edc24a',      // burnt gold (Thrinacia)
+};
+
 // Grow the map's grid southward, in place, by `rows`. A tile's linear index is
 // y*w+x and the width is unchanged, so every existing (x,y) keeps its index —
 // appending rows at the bottom needs no remap of the overworld's floor,
@@ -281,6 +291,11 @@ export function createFortress(map, seed, spawn, opts = {}) {
   // mutters its own log to the screen and answers its own console when you reach
   // it. main.js opens it when you click the screen from close by (nearCoreTerminal).
   core.hasTerminal = true;
+  // The console's hue — the island's own colour, brightened so it reads on black.
+  // ONE source of truth: the SE-face screen (renderer) and the pop-up REPL (main.js)
+  // both read core.screenColor, so external and internal always match. Keyed by AI
+  // (CALYPSO passes no colour to the fortress), falling back to the alert colour.
+  core.screenColor = CORE_SCREEN_COLOR[aiName] || opts.obAlertColor || '#8f9dff';
 
   // The labyrinth: a full-width band between the doorway and the sanctum. Its
   // entrance/exit column is aligned to the doorway/core so the raid runs on a

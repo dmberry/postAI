@@ -923,7 +923,30 @@ const obTermConnect = document.getElementById('obterminal-connect');
 const obTermBar = document.getElementById('obterminal-bar');
 const obTermInput = document.getElementById('obterminal-input');
 const obTermGhost = document.getElementById('obterminal-ghost');
+const obTermPrompt = document.getElementById('obterminal-prompt');
 const obTermBattEl = document.getElementById('obterminal-batt');
+
+// Recolour the pop-up terminal to a core's hue, or reset to the default amber CRT.
+// The core screen (renderer, core.screenColor) and this REPL read the same colour,
+// so a core's two terminals — the one on its SE face and the one you type into —
+// always match. Passing null restores amber (the OB / HERMES terminals keep it).
+function setTerminalTheme(hex) {
+  const hint = obTermEl.querySelector('.crt-hint');
+  const solids = [obTermScreen, obTermPrompt, obTermInput];
+  if (!hex) {
+    for (const el of [...solids, obTermGhost, hint]) if (el) { el.style.color = ''; el.style.textShadow = ''; el.style.caretColor = ''; }
+    obTermEl.style.boxShadow = '';
+    return;
+  }
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  const glow = `0 0 4px rgba(${r},${g},${b},0.7)`;
+  for (const el of solids) if (el) { el.style.color = hex; el.style.textShadow = glow; }
+  if (obTermInput) obTermInput.style.caretColor = hex;
+  if (obTermGhost) { obTermGhost.style.color = `rgba(${r},${g},${b},0.32)`; obTermGhost.style.textShadow = `0 0 4px rgba(${r},${g},${b},0.35)`; }
+  if (hint) hint.style.color = `rgba(${r},${g},${b},0.4)`;
+  obTermEl.style.boxShadow = `0 0 0 2px #000, inset 0 0 70px rgba(0,0,0,0.9), inset 0 0 130px rgba(${r},${g},${b},0.09)`;
+}
 // The relay's solar-cell gauge in the HERMES terminal — a bar you watch wear
 // down as you use it and creep back up in the sun.
 function updateHermesBattEl() {
@@ -1852,6 +1875,7 @@ function openObTerminal(ob) {
   // Chip present: jack in. Go invisible, then run the connect progress bar.
   terminalKind = 'ob';
   terminalOb = ob;          // `name` reads this; the console shows its code
+  setTerminalTheme(null);   // the OB console keeps the default amber CRT
   replSession = {};         // fresh top-level bindings for this visit
   player.terminalSafe = true;
   // Autocopy (Calypso escape chain, S5): jacking a card into the network caches
@@ -2033,6 +2057,7 @@ let _coreRebuffIdx = 0;
 function openCoreTerminal() {
   terminalKind = 'core';
   terminalOb = fortress.coreTerminal ? fortress.coreTerminal.obj : null;
+  setTerminalTheme(fortress.core.obj.screenColor); // this daemon's hue — matches its SE-face screen
   replSession = {};
   player.terminalSafe = true;
   obTermEl.style.display = 'flex';
@@ -2170,6 +2195,7 @@ function openHermesTerminal(tor) {
   terminalKind = 'hermes';
   hermesTor = tor;
   terminalOb = null;
+  setTerminalTheme(null);   // HERMES keeps its own amber CRT (recoloured by the .hermes class)
   replSession = {};
   if (tor.battery == null) tor.battery = 0.55 + Math.random() * 0.4;
   player.terminalSafe = true;
@@ -2197,7 +2223,7 @@ function openHermesTerminal(tor) {
   obTermGhost.textContent = '';
   obTermInput.focus();
 }
-function closeObTerminal() { elizaBot = null; terminalKind = 'ob'; terminalOb = null; replSession = {}; obTermEl.classList.remove('hermes'); obTermEl.style.display = 'none'; obTermGhost.textContent = ''; obTermInput.blur(); player.terminalSafe = false; }
+function closeObTerminal() { elizaBot = null; terminalKind = 'ob'; terminalOb = null; replSession = {}; setTerminalTheme(null); obTermEl.classList.remove('hermes'); obTermEl.style.display = 'none'; obTermGhost.textContent = ''; obTermInput.blur(); player.terminalSafe = false; }
 obTermEl.addEventListener('click', (e) => { if (e.target === obTermEl) closeObTerminal(); });
 // Autocomplete: once you've read the RON-DOS manual (book_ronml), the console
 // suggests the rest of a verb as faded ghost text you can accept with Tab.
