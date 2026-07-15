@@ -27,6 +27,10 @@ export function createWorld(id, opts = {}) {
     // AEAEA (CIRCE): her swine-magic rewrites what you ARE while you are ashore.
     // main.js runs the transmutation pass on worlds that set this.
     transmute: opts.transmute ?? false,
+    // THRINACIA (HELIOS): the cattle of the Sun graze here, and are forbidden.
+    // main.js runs the prohibition pass on worlds that set this — a warning near
+    // the herd, and the god's wrath if you slaughter one.
+    prohibition: opts.prohibition ?? false,
     // OGYGIA (CALYPSO) only: the island whose whole gate is the boat. Launch an
     // unfinished hull here and you get the voyage — out to sea, and Poseidon turns
     // you back — over and over until you build a proper ship to her recipe. It

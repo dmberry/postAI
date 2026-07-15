@@ -94,3 +94,15 @@ test('departTrial: the Poseidon crossing belongs to OGYGIA and to no other islan
     assert.equal(createWorld(id, { map: {} }).departTrial, false, `${id} must not gate on the boat`);
   }
 });
+
+test('prohibition + transmute flags default off and are independent per world', () => {
+  const plain = createWorld('x', {});
+  assert.equal(plain.prohibition, false);
+  assert.equal(plain.transmute, false);
+  const helios = createWorld('helios', { prohibition: true });
+  assert.equal(helios.prohibition, true);
+  assert.equal(helios.transmute, false, 'HELIOS does not transmute');
+  const circe = createWorld('circe', { transmute: true });
+  assert.equal(circe.transmute, true);
+  assert.equal(circe.prohibition, false, 'CIRCE has no forbidden herd');
+});

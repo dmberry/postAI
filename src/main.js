@@ -32,6 +32,7 @@ import { createIsland } from './islands/calypso.js';
 import { createIthaca } from './islands/ithaca.js';
 import { createPolyphemus } from './islands/polyphemus.js';
 import { createCirce } from './islands/circe.js';
+import { createHelios } from './islands/helios.js';
 import { CHOIR_NOTES, CHOIR_DURATION } from './engine/choir-notes.js';
 
 // Note onsets split into four pitch registers, so each singing machine can be
@@ -572,12 +573,21 @@ function ensureCirce() {
       : 'You step onto Aeaea. The air is sweet and wrong, and something begins, very gently, to rewrite you. Find moly — it grows where HERMES stands.');
   };
 }
+let helios = null;
+function ensureHelios() {
+  if (helios) return;
+  helios = registerWorld(createHelios(WORLD_SEED));
+  helios.onEnter = () => {
+    player.say('The keel grinds up onto Thrinacia in a great flat light. Cattle graze the headland, golden and unafraid. This is HELIOS — and the herd is not yours to take.');
+  };
+}
 // Resolve an island id to its (lazily-built) World.
 function worldById(id) {
   if (id === 'calypso') return calypso;
   if (id === 'ithaca') { ensureIthaca(); return ithaca; }
   if (id === 'polyphemus') { ensurePolyphemus(); return polyphemus; }
   if (id === 'circe') { ensureCirce(); return circe; }
+  if (id === 'helios') { ensureHelios(); return helios; }
   return null;
 }
 
@@ -588,13 +598,27 @@ const CROSSINGS = [
   { id: 'calypso', place: 'OGYGIA', desc: "Calypso's island, where you were kept." },
   { id: 'polyphemus', place: 'AEGILIA', desc: 'The Land of the Cyclopes. A single eye watches.' },
   { id: 'circe', place: 'AEAEA', desc: "Circe's island. She does not kill you — she rewrites you." },
+  { id: 'helios', place: 'THRINACIA', desc: 'The island of the Sun. Its cattle are forbidden.' },
   { id: 'ithaca', place: 'ITHACA', desc: 'Home — if the sea will let you.' },
 ];
 const headingEl = document.getElementById('heading');
 const headingListEl = document.getElementById('heading-list');
-document.getElementById('heading-cancel').addEventListener('click', () => { headingEl.style.display = 'none'; });
+const headingTitleEl = document.getElementById('heading-title');
+const headingSubEl = document.getElementById('heading-sub');
+const headingCancelEl = document.getElementById('heading-cancel');
+headingCancelEl.addEventListener('click', () => { headingEl.style.display = 'none'; });
 headingEl.addEventListener('click', (e) => { if (e.target === headingEl) headingEl.style.display = 'none'; });
-function openHeadingChart() {
+// The chart the ship opens, and — in `surface` mode (R4) — the one the Backspace
+// opens: the underworld is a second road between the islands. Same island list, a
+// different way of travelling it. `surface` reworks the copy and, on pick, comes
+// UP through a tear rather than sailing.
+function openHeadingChart(mode = 'sail') {
+  const surface = mode === 'surface';
+  headingTitleEl.textContent = surface ? 'Choose a way up' : 'Set a heading';
+  headingSubEl.textContent = surface
+    ? 'The dead have roads. Every tear is a way up somewhere. Where do you surface?'
+    : 'You put out from the shore. Where do you steer?';
+  headingCancelEl.textContent = surface ? 'Stay below' : 'Stay ashore';
   headingListEl.innerHTML = '';
   for (const c of CROSSINGS) {
     if (c.id === currentWorld.id) continue;
@@ -602,7 +626,9 @@ function openHeadingChart() {
     btn.innerHTML = `<span class="place">${c.place}</span><span class="desc">${c.desc}</span>`;
     btn.addEventListener('click', () => {
       headingEl.style.display = 'none';
-      player.say('You set your heading and pull for open water.');
+      player.say(surface
+        ? 'You climb the dark toward a tear of daylight, and push up through it.'
+        : 'You set your heading and pull for open water.');
       pendingCrossing = c.id; // performed at the next frame top (see update())
     });
     headingListEl.appendChild(btn);
@@ -2640,6 +2666,44 @@ function update(dt) {
     // stick, because each robot's own AI re-acquires you later in the same frame.)
   }
 
+  // HELIOS's prohibition (THRINACIA). The cattle of the Sun are forbidden. This
+  // island does not hunt you — until you slaughter one, and then it never stops.
+  // A one-time warning fires when you first come near the herd; after that it is
+  // on you. Runs only on a `prohibition` world (Helios is a combat world, so the
+  // worldStir aliases already point at its obelisks + factory).
+  if (currentWorld.prohibition && currentWorld.sacredHerd && !player.deathCert && !player._ended) {
+    const herd = currentWorld.sacredHerd;
+    if (!currentWorld.heliosWrath) {
+      // The trespass: any of the herd gone from the tally means you took one.
+      const live = herd.reduce((n, c) => n + (c.dead ? 0 : 1), 0);
+      if (live < currentWorld.sacredCount) {
+        currentWorld.heliosWrath = true;
+        currentWorld._heliosStirClock = 0;
+        player.say('You have killed the cattle of the Sun. HELIOS darkens overhead, and the whole island turns its face to you. There is no unmaking this — fell the core, or die hunted.');
+        sfx.play('charge');
+        worldStir.stir();
+        if (typeof worldStir.spawnWave === 'function') worldStir.spawnWave(4, 2);
+      } else if (!currentWorld._heliosWarned) {
+        // A single warning the first time you stray in among the herd.
+        for (const c of herd) {
+          if (!c.dead && Math.hypot(c.x - player.x, c.y - player.y) < 4) {
+            currentWorld._heliosWarned = true;
+            player.say('These are the cattle of the Sun, and HELIOS counts them. Lay no hand on them: take one, and the island is your enemy to the end.');
+            break;
+          }
+        }
+      }
+    } else {
+      // Wrath holds: keep the network roused so the obelisks stay red and the
+      // factory keeps scrambling hunters until the core falls.
+      currentWorld._heliosStirClock = (currentWorld._heliosStirClock || 0) + dt;
+      if (currentWorld._heliosStirClock > 4) {
+        currentWorld._heliosStirClock = 0;
+        worldStir.stir();
+      }
+    }
+  }
+
   // Out on the water in a boat that was never going to make it. The world holds
   // still — no input, no AI, no clock — while the voyage plays out and the sea
   // sends you home. (updateCrossFail drives the camera itself.)
@@ -2933,12 +2997,18 @@ function update(dt) {
     currentWorld.update(dt, player); // the lurker + the ambient shrieks
     camera.follow(player.x, player.y, dt);
     if (player._ubikTeleportCooldown > 0) player._ubikTeleportCooldown -= dt;
-    // The exit is a plain door set in the wall — approach it (it's solid, so
-    // you stand a tile off) and you step back out into the real world.
+    // The exit is a plain door set in the wall — approach it (it's solid, so you
+    // stand a tile off) and it opens the surface chart. R4: the Backspace is an
+    // ALTERNATIVE CROSSING ROAD — the road of the dead. The tear no longer just
+    // dumps you back on Calypso; you come up on whichever island you choose, so
+    // the underworld is a second way to travel the archipelago. Open the chart
+    // once (debounced) and let the pick ride the normal pendingCrossing path.
     else if (currentWorld.exit && Math.hypot(player.x - currentWorld.exit.x, player.y - currentWorld.exit.y) < 1.7) {
-      goToWorld(calypso);
-      player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN;
-      sfx.play('zap');
+      if (headingEl.style.display !== 'flex') {
+        openHeadingChart('surface');
+        player._ubikTeleportCooldown = UBIK_TELEPORT_COOLDOWN; // debounce: don't re-open every frame at the door
+        sfx.play('zap');
+      }
     }
     return;
   }

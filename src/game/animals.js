@@ -116,6 +116,21 @@ export function spawnTameDog(map, x, y, seed = 1) {
   return dog;
 }
 
+// One head of the cattle of the Sun (HELIOS / Thrinacia). Drawn on the deer
+// model but gold-haloed (drawAnimal) and `tame` — it grazes, never bolts, never
+// fights, an easy and forbidden kill. `sacred` is the flag the island's
+// prohibition pass (main.js) watches: slaughter one and HELIOS turns the island
+// on you. Deterministic from the given seed.
+export function spawnSacredCattle(map, x, y, seed = 1) {
+  const rng = makeRng((seed >>> 0) || 1);
+  const cow = baseAnimal('deer', x, y, DEER_HP, rng);
+  cow.freezeTimer = 0;
+  cow.stuckTimer = 0;
+  cow.tame = true;       // grazes placidly; the temptation is that it will not run
+  cow.sacred = true;     // the prohibition pass keys off this
+  return cow;
+}
+
 // True if there is a road/boards floor or a wall/rubble object nearby, i.e.
 // the tile is "near buildings or roads" for dog placement.
 function nearFeature(map, x, y) {
@@ -386,6 +401,9 @@ export function updateAnimals(dt, animals, player, map) {
 // Placid: grazes (wander), bolts on sight of the player, never fights back.
 function updateDeer(a, dt, player, map) {
   a.freezeTimer = Math.max(0, a.freezeTimer - dt);
+  // The cattle of the Sun (tame) never bolt — they graze on, whatever approaches.
+  // That is the whole snare: an easy kill, and a forbidden one.
+  if (a.tame) { wander(a, DEER_WANDER_SPEED * 0.6, dt, map); return; }
   const d = distTo(a, player);
 
   if (d >= DEER_FLEE_RANGE) {
@@ -585,6 +603,16 @@ function updateViper(a, dt, player, map) {
 export function drawAnimal(ctx, animal, worldToScreen) {
   if (animal.dead) return;
   const c = worldToScreen(animal.x, animal.y);
+  // The cattle of the Sun wear a gold halo at the hooves, so they read as sacred
+  // (and forbidden) at a glance rather than as ordinary game.
+  if (animal.sacred) {
+    const pulse = 0.6 + 0.4 * Math.sin(animal.animT * 2 + (performance.now ? performance.now() / 600 : 0));
+    const g = ctx.createRadialGradient(c.x, c.y, 1, c.x, c.y, 22);
+    g.addColorStop(0, `rgba(240,196,74,${(0.45 * pulse).toFixed(3)})`);
+    g.addColorStop(1, 'rgba(240,196,74,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(c.x, c.y + 3, 20, 10, 0, 0, Math.PI * 2); ctx.fill();
+  }
   if (animal.type === 'dog') {
     if (!drawDogSprite(ctx, animal, c)) drawDog(ctx, animal, c, worldToScreen);
   } else if (animal.type === 'boar') {
