@@ -734,7 +734,8 @@ export class Renderer {
       const tail = worldToScreen(bx, by);
       const col = p.kind === 'stun' ? '#5fe0ff' : p.kind === 'fuse' ? '#b78bff'
         : p.kind === 'laser' ? '#ff3b2a' : p.kind === 'laser_t3' ? '#ff8a1e'
-        : p.kind === 'laser_m5' ? '#ff9a2e' : '#ffe27a';
+        : p.kind === 'laser_m5' ? '#ff9a2e'
+        : p.kind === 'torpor' ? '#7b6cff' : '#ffe27a'; // torpor: Calypso indigo, soporific
       ctx.strokeStyle = col;
       ctx.lineWidth = 2;
       ctx.lineCap = 'round';
@@ -743,9 +744,18 @@ export class Renderer {
       ctx.lineTo(head.x, head.y - 18);
       ctx.stroke();
       ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(head.x, head.y - 18, 2, 0, Math.PI * 2);
-      ctx.fill();
+      // The torpor bolt reads as a slow, soft orb — a fat glowing head with a
+      // halo — not a thin laser dart, so it telegraphs "dodge me".
+      if (p.kind === 'torpor') {
+        ctx.globalAlpha = 0.35;
+        ctx.beginPath(); ctx.arc(head.x, head.y - 18, 7, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.beginPath(); ctx.arc(head.x, head.y - 18, 3.5, 0, Math.PI * 2); ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.arc(head.x, head.y - 18, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.lineCap = 'butt';
     }
   }

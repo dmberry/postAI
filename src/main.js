@@ -2764,6 +2764,7 @@ function hoverSlotTip() {
 }
 let drag = null;     // in-progress pointer drag {from: slotDescriptor}
 const PROJECTILE_SPEED = 16; // tiles/sec for gun tracers
+const TORPOR_BOLT_HIT_R = 0.85; // depart mode (R3): how close to the bolt's aim point you must still be for it to detain — step outside and you dodge
 
 // When an obelisk falls, a fresh Wi-Fi block (consumed to craft the OB-gun)
 // respawns somewhere random in the ruins so the loop can continue.
@@ -3311,12 +3312,30 @@ function update(dt) {
   const foes = currentWorld.waterdroids.length ? currentWorld.robots.concat(currentWorld.waterdroids) : currentWorld.robots;
   player.update(dt, input, map, currentWorld.animals, foes, mouseWorld);
   updateWaterDroids(dt, currentWorld.waterdroids, player, map);
-  // Advance in-flight rounds.
+  // Advance in-flight rounds. Most are cosmetic tracers at PROJECTILE_SPEED; a
+  // few carry their own slower speed (R3's torpor bolt crawls so it can be
+  // dodged).
   for (const p of map.projectiles) {
     const dist = Math.hypot(p.x1 - p.x0, p.y1 - p.y0) || 0.001;
-    p.prog += (PROJECTILE_SPEED * dt) / dist;
+    p.prog += ((p.speed ?? PROJECTILE_SPEED) * dt) / dist;
   }
-  if (map.projectiles.length) map.projectiles = map.projectiles.filter((p) => p.prog < 1);
+  if (map.projectiles.length) {
+    // A torpor bolt (depart mode) resolves ON ARRIVAL: it detains only if you are
+    // still near where it was aimed (x1/y1, your position at fire time). Step
+    // away and it lands on empty sand — a real dodge. Everything else is a
+    // cosmetic tracer that simply expires at prog >= 1.
+    for (const p of map.projectiles) {
+      if (p.prog >= 1 && p.kind === 'torpor' && !p._resolved) {
+        p._resolved = true;
+        if (Math.hypot(player.x - p.x1, player.y - p.y1) <= TORPOR_BOLT_HIT_R) {
+          if (player.detainHit) player.detainHit(p.dmg ?? 5, 'machine'); else player.takeDamage(p.dmg ?? 5, 'machine');
+        } else {
+          sfx.play('keydrop'); // a soft puff as it settles into the ground, missing
+        }
+      }
+    }
+    map.projectiles = map.projectiles.filter((p) => p.prog < 1);
+  }
 
   // Dropped items decay off the ground so the world doesn't silt up with
   // salvage — perishables (meat, berries) go fast, common scrap/materials

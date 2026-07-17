@@ -161,6 +161,7 @@ const M5_RANGE = 12;            // fires from way back
 const M5_MIN_RANGE = 6.5;       // holds this far off; backs away (hides) if you close
 const M5_FIRE_COOLDOWN = 1.5;   // a steady, nagging plink
 const M5_DAMAGE = 5;            // low power — annoying, not lethal
+const TORPOR_BOLT_SPEED = 5.5;  // depart mode (R3): her soporific bolt crawls (vs the 16-t/s war-laser) so you can dodge it
 const M4_HP = 16;               // fragile; a couple of hits drops it before it can report far
 const M4_VISION = 11;
 const M4_CONE_DOT = -0.25;      // a wide ~105°-either-side scout cone
@@ -1648,6 +1649,19 @@ function updateM5(r, dt, player, map, ease, d) {
   }
   if (canSee && d <= M5_RANGE && d > 1e-4 && r.attackTimer <= 0) {
     r.attackTimer = M5_FIRE_COOLDOWN;
+    // Depart mode (R3): her sniper fires a SOPORIFIC bolt, not a laser. It is
+    // slow and indigo — you can see it coming and step out of its path. It flies
+    // to where you STOOD (x1/y1 fixed at fire time) and only detains if you are
+    // still there when it lands (main.js resolves torpor bolts on arrival), so
+    // moving is a real dodge. No instant hit, no reflect — a slow lotus-shot.
+    if (player.detainMode) {
+      (map.projectiles ??= []).push({
+        x0: r.x, y0: r.y, x1: player.x, y1: player.y, prog: 0,
+        kind: 'torpor', speed: TORPOR_BOLT_SPEED, dmg: M5_DAMAGE * ease,
+      });
+      sfx.play('laser', { pitch: 0.55 }); // a lower, sleepier note than the war-laser
+      return;
+    }
     (map.projectiles ??= []).push({ x0: r.x, y0: r.y, x1: player.x, y1: player.y, prog: 0, kind: 'laser_m5' });
     sfx.play('laser');
     const block = player.blockRangedShot ? player.blockRangedShot(r.x, r.y) : null;

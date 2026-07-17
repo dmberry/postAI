@@ -175,7 +175,12 @@ records CALYPSO in the daemons-down tally on first release (the fall she has in
 depart mode). Her fortress guards route through `player.detainHit`: the warn-
 then-lethal escalation David chose — DETAIN_LIMIT (3) strikes of lotus torpor +
 turn-back, then real damage once patience runs out; the count resets after
-DETAIN_COOL_TIME off her radar. Poseidon's roaming machines stay lethal
+DETAIN_COOL_TIME off her radar. Her M5 sniper's ranged attack is a slow, indigo
+SOPORIFIC BOLT (v1.124): a real travelling projectile at TORPOR_BOLT_SPEED
+(5.5 t/s vs the 16 t/s war-laser) that flies to where you stood and detains only
+if you are still within TORPOR_BOLT_HIT_R on arrival — so it is genuinely
+dodgeable, and reads as one (fat haloed orb, not a laser dart). Kill-mode M5s
+keep their instant orange laser. Poseidon's roaming machines stay lethal
 (guardHit gates only the M4/M5/M6 sites on `player.detainMode`). 6 unit tests
 in `test/depart-mode.test.js`; live-verified. The kill path is untouched for the
 martial daemons.
