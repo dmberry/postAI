@@ -18,7 +18,7 @@ import { placeRuins } from '../game/ruins.js';
 import { stampCoast } from '../engine/coast.js';
 import { createFortress } from '../game/fortress.js';
 import { makeRng } from '../game/rng.js';
-import { applyIslandPalette } from '../game/palettes.js';
+import { applyIslandPalette, islandTerrain } from '../game/palettes.js';
 import { createWorld } from '../game/world.js';
 
 const OB_COLOR = '#4e1410';       // ember at rest — the single burning eye
@@ -45,7 +45,7 @@ function findBeach(map, rng) {
 export function createPolyphemus(seed) {
   // A distinct seed so the Cyclopes' island is its own terrain, not CALYPSO's twin.
   const IS = (seed ^ 0x0c7c10e5) >>> 0;
-  const { map, spawn } = buildWorld(IS);
+  const { map, spawn } = buildWorld(IS, islandTerrain('polyphemus'));
 
   const animals = spawnAnimals(map, IS, { x: spawn.x, y: spawn.y, r: 12 });
 

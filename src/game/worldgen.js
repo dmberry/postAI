@@ -16,19 +16,58 @@ const SPUR_ROAD_Y = 28;   // east-west spur to the hamlet (rows 28-29)
 const EAST_ROAD_X = 84;   // north-south road through the main town (cols 84-85)
 const WEST_ROAD_X = 14;   // north-south lane through the hamlet (cols 14-15)
 
+// Per-island terrain character (B1). `buildWorld(seed)` used to take nothing but
+// a seed, so every island was the SAME map with a different RNG stream — same
+// river at x=40, same road grid, same thirteen building lots, same hills. These
+// knobs let an island file say what kind of place it is; omitting cfg entirely
+// reproduces the original Ogygia layout exactly, so nothing regresses.
+//
+//   river     null for a riverless island, else { cx, amp, freq, halfMin, halfMax }
+//   roads     'grid' (the original four runs) | 'coastal' | 'spur' | 'none'
+//   lots      how many of the building lots to use (0 = wilderness), and a shuffle
+//   hills     { count, peak }   — how mountainous
+//   hollows   { count }         — pits and dells
+//   forests   { density }       — scales every forest region's tree count
+//   meadows   { count }
+//   wrecks    { count }
+//   lotus     false on every island but Ogygia (it was generated on ALL of them,
+//             at the identical spot — her signature grove was everywhere)
+const TERRAIN_DEFAULTS = {
+  river: { cx: 40, amp: 9, freq: 0.045, halfMin: 1.0, halfMax: 2.0 },
+  roads: 'grid',
+  lots: null,          // null = every lot, in the original order
+  hills: { count: null, peak: 1 },
+  hollows: { count: null },
+  forests: { density: 1 },
+  meadows: { count: null },
+  wrecks: { count: 4 },
+  lotus: false,
+};
+
 // Build the whole world for a seed. Returns the map and a spawn point on
 // the main road at the eastern edge of the town (continuous world coords).
-export function buildWorld(seed) {
+export function buildWorld(seed, cfg = {}) {
+  const t = {
+    ...TERRAIN_DEFAULTS,
+    ...cfg,
+    hills: { ...TERRAIN_DEFAULTS.hills, ...(cfg.hills || {}) },
+    hollows: { ...TERRAIN_DEFAULTS.hollows, ...(cfg.hollows || {}) },
+    forests: { ...TERRAIN_DEFAULTS.forests, ...(cfg.forests || {}) },
+    meadows: { ...TERRAIN_DEFAULTS.meadows, ...(cfg.meadows || {}) },
+    wrecks: { ...TERRAIN_DEFAULTS.wrecks, ...(cfg.wrecks || {}) },
+    // `river: null` must survive the spread as a genuine null, not be re-defaulted.
+    river: 'river' in cfg ? cfg.river : TERRAIN_DEFAULTS.river,
+  };
   const map = new GameMap(MAP_W, MAP_H, 'grass');
   const rng = makeRng(seed);
 
-  carveRiver(map, rng);
-  layRoads(map);
+  if (t.river) carveRiver(map, rng, t.river);
+  layRoads(map, t.roads);
 
   // Buildings, tracking a small margin around each so scatter and meadows
   // never blockade a doorway or fill a yard.
   const keepClear = [];
-  for (const lot of buildingLots()) {
+  for (const lot of buildingLots(t.lots, rng)) {
     placeBuilding(map, rng, lot);
     keepClear.push({
       x0: lot.x0 - 2, y0: lot.y0 - 2,
@@ -40,17 +79,17 @@ export function buildWorld(seed) {
   // streams are carved from the hill feet down to the river, and finally the
   // height field is zeroed on all locked ground and relaxed so no two
   // adjacent tiles ever differ by more than one step.
-  const hills = raiseHills(map, rng);
-  carveStreams(map, rng, hills);
+  const hills = raiseHills(map, rng, t.hills);
+  if (t.river) carveStreams(map, rng, hills);
   finalizeHeights(map, keepClear);
-  carveHollows(map, rng, keepClear);
+  carveHollows(map, rng, keepClear, t.hollows);
 
-  plantForests(map, rng, keepClear);
-  layMeadows(map, rng, keepClear);
-  plantLotusGrove(map, rng, keepClear);
+  plantForests(map, rng, keepClear, t.forests);
+  layMeadows(map, rng, keepClear, t.meadows);
+  if (t.lotus) plantLotusGrove(map, rng, keepClear);
   scatterFlowers(map, rng, keepClear);
   scatterLoners(map, rng, keepClear);
-  scatterWrecks(map, rng);
+  scatterWrecks(map, rng, t.wrecks);
   paintGraffiti(map, rng);
 
   const spawn = { x: 112.5, y: MAIN_ROAD_Y + 0.5 };
@@ -59,19 +98,31 @@ export function buildWorld(seed) {
 
 // River: a gently meandering north-south channel of solid water, 3-5 tiles
 // wide, with a sand rim along both banks.
-function carveRiver(map, rng) {
+// cfg: { cx, amp, freq, halfMin, halfMax, axis }. `axis: 'ew'` transposes the
+// whole channel so the river runs east-west instead of north-south — the single
+// biggest change to how an island reads, since everything else (bridges, banks,
+// where the town sits relative to the water) follows the water.
+function carveRiver(map, rng, cfg = {}) {
+  const { cx: CX = 40, amp = 9, freq = 0.045, halfMin = 1.0, halfMax = 2.0, axis = 'ns' } = cfg;
+  const ew = axis === 'ew';
+  const along = ew ? map.w : map.h;   // the axis the river runs down
+  const across = ew ? map.h : map.w;  // the axis it meanders across
   const phase = rng() * Math.PI * 2;
-  let cx = 40 + (rng() - 0.5) * 6;
-  let half = 2.0;
-  for (let y = 0; y < map.h; y++) {
-    const target = 40 + 9 * Math.sin(y * 0.045 + phase);
+  let cx = CX + (rng() - 0.5) * 6;
+  let half = halfMax;
+  const lo = Math.max(3, CX - amp - 2), hi = Math.min(across - 4, CX + amp + 2);
+  for (let i = 0; i < along; i++) {
+    const target = CX + amp * Math.sin(i * freq + phase);
     cx += (target - cx) * 0.15 + (rng() - 0.5) * 0.9;
-    cx = Math.max(31, Math.min(51, cx));
+    cx = Math.max(lo, Math.min(hi, cx));
     half += (rng() - 0.5) * 0.3;
-    half = Math.max(1.0, Math.min(2.0, half));
-    const width = Math.round(half * 2 + 1); // 3-5 tiles wide
-    const x0 = Math.round(cx - width / 2);
-    for (let x = x0; x < x0 + width; x++) map.setFloor(x, y, 'water');
+    half = Math.max(halfMin, Math.min(halfMax, half));
+    const width = Math.round(half * 2 + 1);
+    const c0 = Math.round(cx - width / 2);
+    for (let c = c0; c < c0 + width; c++) {
+      if (ew) map.setFloor(i, c, 'water');   // i = x, c = y
+      else map.setFloor(c, i, 'water');      // c = x, i = y
+    }
   }
   // Sand rim: any grass tile touching water (8-neighbour) becomes bank.
   for (let y = 0; y < map.h; y++) {
@@ -91,32 +142,51 @@ function carveRiver(map, rng) {
 // Roads, two tiles wide. Wherever a road meets the river it becomes a
 // wooden bridge, so both east-west crossings are laid automatically and the
 // road surface runs straight onto each bridge end.
-function layRoads(map) {
+// `layout` picks the settlement's road pattern — the strongest single cue that
+// two islands are different places, since the roads are what the buildings and
+// the wrecks hang off.
+//   'grid'    the original: main east-west, north-south through town, hamlet spur
+//   'spur'    just the main road and a short stub: a thinner, lonelier settlement
+//   'coastal' one long road hugging the south, with two short inland fingers
+//   'none'    no roads at all — wilderness (and so no car wrecks, which need tarmac)
+function layRoads(map, layout = 'grid') {
+  if (layout === 'none') return;
   const pave = (x, y) => {
     const f = map.floorAt(x, y);
     if (f === 'water') map.setFloor(x, y, 'bridge');
     else if (f !== null) map.setFloor(x, y, 'road');
   };
-  for (let x = 0; x < map.w; x++) {
-    pave(x, MAIN_ROAD_Y); pave(x, MAIN_ROAD_Y + 1);
+  const runX = (y, x0 = 0, x1 = map.w - 1) => { for (let x = x0; x <= x1; x++) { pave(x, y); pave(x, y + 1); } };
+  const runY = (x, y0 = 0, y1 = map.h - 1) => { for (let y = y0; y <= y1; y++) { pave(x, y); pave(x + 1, y); } };
+  if (layout === 'coastal') {
+    runX(map.h - 22);                       // the shore road
+    runY(EAST_ROAD_X, map.h - 46, map.h - 21);
+    runY(WEST_ROAD_X + 10, map.h - 40, map.h - 21);
+    return;
   }
-  for (let y = 0; y < map.h; y++) {
-    pave(EAST_ROAD_X, y); pave(EAST_ROAD_X + 1, y);
+  if (layout === 'spur') {
+    runX(MAIN_ROAD_Y);
+    runY(EAST_ROAD_X, MAIN_ROAD_Y - 18, MAIN_ROAD_Y + 1);
+    return;
   }
-  for (let x = WEST_ROAD_X; x <= EAST_ROAD_X + 1; x++) {
-    pave(x, SPUR_ROAD_Y); pave(x, SPUR_ROAD_Y + 1);
-  }
-  for (let y = SPUR_ROAD_Y; y <= MAIN_ROAD_Y + 1; y++) {
-    pave(WEST_ROAD_X, y); pave(WEST_ROAD_X + 1, y);
-  }
+  runX(MAIN_ROAD_Y);
+  runY(EAST_ROAD_X);
+  runX(SPUR_ROAD_Y, WEST_ROAD_X, EAST_ROAD_X + 1);
+  runY(WEST_ROAD_X, SPUR_ROAD_Y, MAIN_ROAD_Y + 1);
 }
 
 // Building lots: position, size, which side the door faces (towards the
 // nearest road), and a base ruin level. The main town (east of the river)
 // has ten buildings from cottage to warehouse, a couple near-intact and
 // most damaged; the hamlet (west) has three, more ruined.
-function buildingLots() {
-  return [
+// `n` caps how many lots are used (null = all thirteen, the original town).
+// Fewer lots reads as a sparser, wilder island; the subset is shuffled so it
+// isn't always the same buildings that survive. NOTE for island authors: several
+// islands mine `boards` (building interior) tiles for loot and caches, so an
+// island with very few lots has correspondingly few indoor drops — keep n high
+// enough to hold whatever that island seeds indoors.
+function buildingLots(n = null, rng = null) {
+  const lots = [
     // Main town, around the crossroads at (84, 64).
     { x0: 66, y0: 54, w: 12, h: 8, door: 'S', ruin: 0.45 }, // warehouse
     { x0: 90, y0: 56, w: 7,  h: 6, door: 'S', ruin: 0.08 }, // near-intact
@@ -133,6 +203,12 @@ function buildingLots() {
     { x0: 18, y0: 44, w: 5,  h: 4, door: 'W', ruin: 0.65 },
     { x0: 6,  y0: 52, w: 7,  h: 5, door: 'E', ruin: 0.60 },
   ];
+  if (n == null || n >= lots.length) return lots;
+  if (n <= 0) return [];
+  if (!rng) return lots.slice(0, n);
+  const pick = lots.slice();
+  for (let i = pick.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [pick[i], pick[j]] = [pick[j], pick[i]]; }
+  return pick.slice(0, n);
 }
 
 // One building: boards interior, a wall perimeter with a door gap of 1-2
@@ -230,7 +306,7 @@ function placeBuilding(map, rng, lot) {
 // relaxes the field so no adjacent step ever exceeds one. The first three
 // zones are always used (they seed the streams); the rest are optional.
 // All zones sit well clear of roads, buildings, and the river channel.
-function raiseHills(map, rng) {
+function raiseHills(map, rng, cfg = {}) {
   const mandatory = [
     { x: 16, y: 13 },   // north-west, in the hamlet-side forest
     { x: 66, y: 13 },   // north-east, between river and town road
@@ -248,7 +324,10 @@ function raiseHills(map, rng) {
     const j = Math.floor(rng() * (i + 1));
     [optional[i], optional[j]] = [optional[j], optional[i]];
   }
-  const extra = 3 + Math.floor(rng() * 3); // 6-8 hills in total: rugged, not just the town's edge
+  // cfg.count = total hills wanted (the three mandatory ones always stand, since
+  // carveStreams destructures them); cfg.peak scales how high they rise.
+  const want = cfg.count == null ? mandatory.length + 3 + Math.floor(rng() * 3) : cfg.count;
+  const extra = Math.max(0, Math.min(optional.length, want - mandatory.length));
   const chosen = [...mandatory, ...optional.slice(0, extra)];
 
   const hills = [];
@@ -400,7 +479,7 @@ function finalizeHeights(map, keepClear) {
 // so the two fields never overlap (their difference would otherwise be able
 // to step by two). Locked ground (roads, water, streams, buildings, aprons)
 // stays at depth 0, so all valley floors and rims remain walkable.
-function carveHollows(map, rng, keepClear) {
+function carveHollows(map, rng, keepClear, cfg = {}) {
   const w = map.w, h = map.h;
   const zones = [
     { x: 70, y: 38 },  // open country east of the river, north of the main road
@@ -409,7 +488,7 @@ function carveHollows(map, rng, keepClear) {
     { x: 100, y: 122 },// south-east corner
     { x: 96, y: 60 },  // east of the main road crossing, clear of the town
   ];
-  const n = 3 + Math.floor(rng() * 3); // 3-5, more undulation
+  const n = cfg.count == null ? 3 + Math.floor(rng() * 3) : Math.max(0, Math.min(zones.length, cfg.count));
   const D = new Int8Array(w * h);
 
   for (const z of zones.slice(0, n)) {
@@ -494,7 +573,7 @@ function inKeepClear(x, y, rects) {
 
 // Three dense forest regions, like the test-map cluster but larger: one on
 // each side of the river in the north, one in the south-east.
-function plantForests(map, rng, keepClear) {
+function plantForests(map, rng, keepClear, cfg = {}) {
   const regions = [
     { x: 2,  y: 2,  w: 25, h: 22, n: 260 }, // north-west, hamlet side
     { x: 56, y: 4,  w: 26, h: 20, n: 250 }, // north-east
@@ -502,8 +581,10 @@ function plantForests(map, rng, keepClear) {
     { x: 8,  y: 92, w: 22, h: 24, n: 220 }, // south-west wilds
     { x: 40, y: 100, w: 24, h: 20, n: 210 }, // deep south
   ];
+  const density = cfg.density == null ? 1 : cfg.density; // scales every region at once
   for (const r of regions) {
-    for (let i = 0; i < r.n; i++) {
+    const n = Math.max(0, Math.round(r.n * density));
+    for (let i = 0; i < n; i++) {
       const x = r.x + Math.floor(rng() * r.w);
       const y = r.y + Math.floor(rng() * r.h);
       if (map.floorAt(x, y) !== 'grass' || map.objectAt(x, y)) continue;
@@ -515,11 +596,12 @@ function plantForests(map, rng, keepClear) {
 
 // Tall-grass meadows: ragged round patches 6-12 tiles across, converting
 // grass only, well away from buildings. These hide snakes in later phases.
-function layMeadows(map, rng, keepClear) {
+function layMeadows(map, rng, keepClear, cfg = {}) {
   const centres = [
     [22, 92], [8, 74], [60, 100], [100, 30], [112, 90], [62, 10], [26, 112],
   ];
-  for (const [mx, my] of centres) {
+  const use = cfg.count == null ? centres : centres.slice(0, Math.max(0, cfg.count));
+  for (const [mx, my] of use) {
     const cx = mx + Math.floor((rng() - 0.5) * 4);
     const cy = my + Math.floor((rng() - 0.5) * 4);
     const r = 3 + rng() * 3;
@@ -633,11 +715,12 @@ function scatterLoners(map, rng, keepClear) {
 // reads as a landmark rather than a car park. Placed on or beside a road with
 // all footprint tiles clear; the whole footprint points back at one car
 // object so a hit on any tile strips the same wreck.
-function scatterWrecks(map, rng) {
+function scatterWrecks(map, rng, cfg = {}) {
   const placed = [];
   const minGap = 18;
   let guard = 0;
-  while (placed.length < 4 && guard++ < 6000) {
+  const want = cfg.count == null ? 4 : cfg.count;
+  while (placed.length < want && guard++ < 6000) {
     const x = Math.floor(rng() * (map.w - 3));
     const y = Math.floor(rng() * (map.h - 3));
     // A tight 2x2 solid core. The car sprite is a touch wider than this on

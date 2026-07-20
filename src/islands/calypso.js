@@ -19,12 +19,12 @@ import { placeShipParts } from '../game/ships.js';
 import { placeBoatYard } from '../game/boatyard.js';
 import { createFortress } from '../game/fortress.js';
 import { makeRng } from '../game/rng.js';
-import { applyIslandPalette } from '../game/palettes.js';
+import { applyIslandPalette, islandTerrain } from '../game/palettes.js';
 import { TAPES } from '../game/items.js';
 import { createWorld } from '../game/world.js';
 
 export function createIsland(seed) {
-  const { map, spawn } = buildWorld(seed);
+  const { map, spawn } = buildWorld(seed, islandTerrain('calypso'));
 
   const animals = spawnAnimals(map, seed, { x: spawn.x, y: spawn.y, r: 12 });
 

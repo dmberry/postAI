@@ -19,7 +19,7 @@ import { placeRuins } from '../game/ruins.js';
 import { stampCoast } from '../engine/coast.js';
 import { createFortress } from '../game/fortress.js';
 import { makeRng } from '../game/rng.js';
-import { applyIslandPalette } from '../game/palettes.js';
+import { applyIslandPalette, islandTerrain } from '../game/palettes.js';
 import { createWorld } from '../game/world.js';
 
 const OB_COLOR = '#1f3a24';       // venom green at rest — the drugged kykeon
@@ -44,7 +44,7 @@ function findBeach(map, rng) {
 
 export function createCirce(seed) {
   const IS = (seed ^ 0x0c19ce5) >>> 0;
-  const { map, spawn } = buildWorld(IS);
+  const { map, spawn } = buildWorld(IS, islandTerrain('circe'));
 
   const animals = spawnAnimals(map, IS, { x: spawn.x, y: spawn.y, r: 12 });
 

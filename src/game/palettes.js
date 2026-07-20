@@ -89,6 +89,82 @@ export const ISLAND_PALETTES = {
   },
 };
 
+// Per-island TERRAIN profiles (B1) — passed to buildWorld(seed, cfg). These are
+// what stop the five islands being the same map with a different RNG stream:
+// where the water runs (or whether there is any), how mountainous, how built-up,
+// how wooded. Omitting an island here gives it the original Ogygia layout.
+export const ISLAND_TERRAIN = {
+  // Ogygia: the reference layout, unchanged — north-south river, the full town,
+  // moderate hills. It is the island everyone has already played, and the one
+  // the tutorial's landmarks are tuned against. The lotus grove is HERS ALONE
+  // (it used to be generated on every island, at the identical spot).
+  calypso: {
+    lotus: true,
+  },
+
+  // Aegilia: the goat isle. Cyclopes keep no towns — a thin scatter of huts, no
+  // proper road grid, and the most mountainous ground in the archipelago (goats
+  // and caves). The river is a narrow torrent cutting the east.
+  polyphemus: {
+    river: { cx: 88, amp: 5, freq: 0.07, halfMin: 0.6, halfMax: 1.2 },
+    roads: 'spur',
+    lots: 5,
+    hills: { count: 9 },
+    hollows: { count: 5 },
+    forests: { density: 0.55 },
+    meadows: { count: 3 },
+    wrecks: { count: 2 },
+  },
+
+  // Aeaea: Circe's wooded island. Homer's men see smoke through dense oak and
+  // thicket — so the heaviest forest cover of the five, a broad slow river
+  // running EAST-WEST across the middle, and only the hall and its outbuildings.
+  circe: {
+    river: { cx: 58, amp: 12, freq: 0.03, halfMin: 1.6, halfMax: 3.0, axis: 'ew' },
+    roads: 'none',
+    lots: 4,
+    hills: { count: 4 },
+    hollows: { count: 2 },
+    forests: { density: 1.9 },
+    meadows: { count: 5 },
+    wrecks: { count: 0 },
+  },
+
+  // Thrinacia: the sun's meadows, where the cattle graze. Wide open pasture —
+  // barely any forest, no river at all (a parched island), gentle ground, and a
+  // single coastal road. The emptiness is the point: nowhere to hide from a sun
+  // that is also the sensor.
+  helios: {
+    river: null,
+    roads: 'coastal',
+    lots: 6,
+    hills: { count: 3 },
+    hollows: { count: 1 },
+    forests: { density: 0.3 },
+    meadows: { count: 7 },
+    wrecks: { count: 3 },
+  },
+
+  // Ithaca: home, and the most beautiful ground in the game. A generous river,
+  // rolling hills, deep woods AND open meadows, the full town intact — every
+  // landscape feature the archipelago has, at its kindest. Nothing here is
+  // stripped back; the abundance is the reward.
+  ithaca: {
+    river: { cx: 46, amp: 14, freq: 0.038, halfMin: 1.2, halfMax: 2.4 },
+    roads: 'grid',
+    lots: null,
+    hills: { count: 7 },
+    hollows: { count: 4 },
+    forests: { density: 1.4 },
+    meadows: { count: 7 },
+    wrecks: { count: 1 },  // one wreck, long grown over: the war barely touched here
+  },
+};
+
+export function islandTerrain(islandId) {
+  return ISLAND_TERRAIN[islandId] || {};
+}
+
 // Hang an island's palette on its map. Safe to call with an unknown id (the
 // island simply keeps the shared defaults).
 export function applyIslandPalette(map, islandId) {

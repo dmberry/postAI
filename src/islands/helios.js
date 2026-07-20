@@ -19,7 +19,7 @@ import { placeRuins } from '../game/ruins.js';
 import { stampCoast } from '../engine/coast.js';
 import { createFortress } from '../game/fortress.js';
 import { makeRng } from '../game/rng.js';
-import { applyIslandPalette } from '../game/palettes.js';
+import { applyIslandPalette, islandTerrain } from '../game/palettes.js';
 import { createWorld } from '../game/world.js';
 
 const OB_COLOR = '#5c4310';       // burnt gold at rest — the darkened sun
@@ -44,7 +44,7 @@ function findBeach(map, rng) {
 
 export function createHelios(seed) {
   const IS = (seed ^ 0x0e1105) >>> 0;
-  const { map, spawn } = buildWorld(IS);
+  const { map, spawn } = buildWorld(IS, islandTerrain('helios'));
 
   const animals = spawnAnimals(map, IS, { x: spawn.x, y: spawn.y, r: 12 });
 

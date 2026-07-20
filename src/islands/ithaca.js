@@ -16,7 +16,7 @@ import { spawnTameDog, updateAnimals } from '../game/animals.js';
 import { stampCoast } from '../engine/coast.js';
 import { placeRuins } from '../game/ruins.js';
 import { makeRng } from '../game/rng.js';
-import { applyIslandPalette } from '../game/palettes.js';
+import { applyIslandPalette, islandTerrain } from '../game/palettes.js';
 import { createWorld } from '../game/world.js';
 
 // A beach tile (sand with open sea on one cardinal side, buildable land on the
@@ -56,7 +56,7 @@ function placeArgos(map, ax, ay, seed) {
 export function createIthaca(seed) {
   // A distinct seed so Ithaca is its own island, not CALYPSO's twin terrain.
   const IS = (seed ^ 0x17aca) >>> 0;
-  const { map, spawn } = buildWorld(IS);
+  const { map, spawn } = buildWorld(IS, islandTerrain('ithaca'));
 
   // Light survival loot so an underpowered arrival can cope (islands-plan #4):
   // torches + tinned food in the buildings, berries in the meadows, one pack.
