@@ -2572,14 +2572,16 @@ export class Renderer {
       // A tight knot of pale banks turning slowly over the grove, each breathing
       // out of phase so the mass rolls rather than spins as a wheel. Denser and
       // closer than the old version, which was too thin and wide to read.
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 12; i++) {
         const seed = i * 2.399963;
         const ang = seed + t * (0.13 + (i % 3) * 0.05);
-        const rad = R * (0.15 + 0.4 * ((i * 5 % 7) / 7)) * (0.85 + 0.15 * Math.sin(t * 0.5 + seed));
+        const rad = R * (0.12 + 0.42 * ((i * 5 % 7) / 7)) * (0.85 + 0.15 * Math.sin(t * 0.5 + seed));
         const s = worldToScreen(g.x + Math.cos(ang) * rad, g.y + Math.sin(ang) * rad);
-        const size = 34 + 14 * Math.sin(t * 0.6 + seed);
-        const puff = 0.55 + 0.45 * Math.sin(t * 0.8 + seed);
-        const a = 0.34 * puff;
+        const size = 40 + 16 * Math.sin(t * 0.6 + seed);
+        // A high floor on the breath, so the mass stays dense rather than thinning
+        // to nothing at the trough — it should read as mist, not the odd wisp.
+        const puff = 0.7 + 0.3 * Math.sin(t * 0.8 + seed);
+        const a = 0.52 * puff;
         const grad = ctx.createRadialGradient(s.x, s.y - 6, 0, s.x, s.y - 6, size);
         grad.addColorStop(0, `rgba(236,244,240,${a.toFixed(3)})`);
         grad.addColorStop(0.55, `rgba(216,228,224,${(a * 0.55).toFixed(3)})`);
@@ -2604,15 +2606,22 @@ export class Renderer {
     const t = performance.now() / 1000;
     const lift = (map.heightAt ? map.heightAt(m.x, m.y) : 0) * ELEV; // ELEV px per height level
     ctx.save();
-    for (let i = 0; i < 9; i++) {
+    for (let i = 0; i < 16; i++) {
       const seed = i * 2.399963;
       const ang = seed + t * (0.09 + (i % 3) * 0.04);
-      const rad = 1.4 + 2.4 * ((i * 5 % 7) / 7);               // tight cap of cloud on the summit
+      const frac = (i * 5 % 7) / 7;
+      // Spill PAST the white snow-cap onto the darker slopes: pale vapour over
+      // white snow barely reads, so the cloud only looks like mist where it laps
+      // the grey rock around the peak. A wide ring does that framing.
+      const rad = 2.2 + 4.4 * frac;
       const s = worldToScreen(m.x + Math.cos(ang) * rad, m.y + Math.sin(ang) * rad);
-      const sy = s.y - lift;                                    // hang up at the peak's elevation
-      const size = 56 + 22 * Math.sin(t * 0.5 + seed);
-      const puff = 0.55 + 0.45 * Math.sin(t * 0.6 + seed);
-      const a = 0.4 * puff;
+      // Crown the peak: hang at the summit's elevation and billow a little higher,
+      // more so on the outer banks, so it reads as a cap of cloud sitting on top.
+      const sy = s.y - lift - (12 + 26 * frac);
+      const size = 66 + 24 * Math.sin(t * 0.5 + seed);
+      // High floor on the breath so the cap stays a solid cloud, not a thin veil.
+      const puff = 0.72 + 0.28 * Math.sin(t * 0.6 + seed);
+      const a = 0.62 * puff;
       const g = ctx.createRadialGradient(s.x, sy, 0, s.x, sy, size);
       g.addColorStop(0, `rgba(242,247,249,${a.toFixed(3)})`);
       g.addColorStop(0.55, `rgba(220,230,234,${(a * 0.55).toFixed(3)})`);

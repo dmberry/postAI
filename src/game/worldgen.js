@@ -437,19 +437,44 @@ function raiseMountain(map, rng, cfg, keepClear) {
 // fringe (see the 'treeLine' hook there).
 function dressMountain(map, rng, cfg) {
   const peak = cfg.peak || 14;
-  const snowLine = Math.max(6, peak - 3);   // white cap: the top few levels
+  // The white cap: a wider band than before (peak-4), painted PATCHY rather than
+  // solid. Snow starts as a scatter of patches over the rock at the bottom of the
+  // band and thickens with height, becoming a solid crown only at the very top —
+  // so the summit fades into the mountain instead of wearing a hard white block.
+  const snowLine = Math.max(6, peak - 4);
+  const snowSolid = peak - 1;               // the top ~two levels are fully snow
   const stoneLine = Math.max(4, Math.round(peak * 0.5)); // bare rock: the upper half
   map.treeLine = stoneLine;                 // plantForests / scatterLoners read this
+  // The cap concentrates on the summit: a solid core disc around the peak, patches
+  // thinning outward. Keyed to distance from the centre AND height, so the snow
+  // clusters at the top-middle rather than scattering evenly over every contour.
+  const mx = map.mountain ? map.mountain.x : cfg.x;
+  const my = map.mountain ? map.mountain.y : cfg.y;
+  const capR = Math.max(4, Math.round((peak - snowLine) * 1.6)); // rough cap radius
   for (let y = 0; y < map.h; y++) {
     for (let x = 0; x < map.w; x++) {
       const f = map.floorAt(x, y);
       if (f !== 'grass' && f !== 'tallgrass') continue;
       const h = map.heightAt(x, y);
-      if (h >= snowLine) map.setFloor(x, y, 'snow');
+      if (h >= snowLine) {
+        // frac: 0 at the snow line, 1 at the peak. central: 1 at the summit, 0 at
+        // the cap edge. A solid core (very top, or well inside the centre disc),
+        // then a snow chance that falls off with both, so patches gather at the
+        // middle and fray at the rim instead of dusting the whole cap evenly.
+        const frac = (h - snowLine) / Math.max(1, snowSolid - snowLine);
+        const central = Math.max(0, 1 - Math.hypot(x - mx, y - my) / capR);
+        const w = Math.max(frac, central);
+        const pSnow = 0.1 + 0.9 * w * w;
+        const solid = h >= snowSolid || central > 0.5;
+        map.setFloor(x, y, (solid || rng() < pSnow) ? 'snow' : 'stone');
+      }
       else if (h >= stoneLine) map.setFloor(x, y, 'stone');
       // A ragged rock/grass border just under the stone line so the transition
       // isn't a clean contour ring.
       else if (h === stoneLine - 1 && rng() < 0.35) map.setFloor(x, y, 'stone');
+      // A few stray snow patches just BELOW the cap, so its lower edge frays into
+      // the rock rather than ending on a clean contour.
+      if (map.floorAt(x, y) === 'stone' && h === snowLine - 1 && rng() < 0.18) map.setFloor(x, y, 'snow');
     }
   }
   // The alpine fringe: a scatter of small, spare conifers on the grass just
