@@ -97,12 +97,23 @@ export function allWorlds() { return [..._worlds.values()]; }
 //     Backspace) skip that and always arrive at `spawn`.
 //   - onExit fires before the move, onEnter after — matching the old
 //     enter/exitUnderworld ordering (position set, then the narration/sfx hook).
-export function switchWorld(from, to, player) {
+//   - `opts.beach` marks a SEA crossing (the boat, or the Backspace's crossing
+//     doors): you arrive by keel on the destination's beach (its `spawn`), and
+//     the world you leave is stamped for a beach return too — never at the
+//     mid-sea coordinate the row-out left the player on. Without this, leaving an
+//     island by boat stored an offshore returnPos and sailing back dropped you in
+//     the water (true for every island, first noticed returning to Ogygia).
+export function switchWorld(from, to, player, opts = {}) {
   if (from) {
-    if (from.keepsPosition) from.returnPos = { x: player.x, y: player.y };
+    // A sea departure re-beaches on return: clear the stale/offshore returnPos so
+    // the next arrival falls back to `spawn`. A land crossing (a door) remembers
+    // where you stood, as before.
+    if (opts.beach) from.returnPos = null;
+    else if (from.keepsPosition) from.returnPos = { x: player.x, y: player.y };
     from.onExit(player);
   }
-  const at = (to.keepsPosition && to.returnPos) ? to.returnPos : to.spawn;
+  const at = opts.beach ? to.spawn
+    : (to.keepsPosition && to.returnPos) ? to.returnPos : to.spawn;
   player.x = at.x;
   player.y = at.y;
   player.map = to.map;

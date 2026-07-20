@@ -82,6 +82,26 @@ test('a keepsPosition world restores returnPos; keepsPosition:false always uses 
   assert.deepEqual({ x: player.x, y: player.y }, { x: 3, y: 3 });
 });
 
+test('a beach crossing arrives at spawn and never strands you offshore on return', () => {
+  // Leaving an island by boat, the player's x/y is out at sea (the row-out). A
+  // plain switchWorld would stamp that offshore point as returnPos and sailing
+  // back would drop you in the water. opts.beach lands at the destination's spawn
+  // and clears the departed island's returnPos so the return re-beaches too.
+  const ogygia = createWorld('calypso', { map: {}, spawn: { x: 4, y: 40 } });
+  const isle = createWorld('polyphemus', { map: {}, spawn: { x: 30, y: 30 } });
+  const player = { x: 4, y: 40, map: {} };
+  // board and row ~15 tiles out to sea before the chart commits the crossing
+  player.x = 4; player.y = 25;
+  switchWorld(ogygia, isle, player, { beach: true });
+  assert.deepEqual({ x: player.x, y: player.y }, { x: 30, y: 30 }); // beached at the isle's spawn
+  assert.equal(ogygia.returnPos, null, 'the offshore coordinate was NOT remembered');
+  // leave the isle by boat too (again out at sea) and sail home
+  player.x = 30; player.y = 15;
+  switchWorld(isle, ogygia, player, { beach: true });
+  assert.deepEqual({ x: player.x, y: player.y }, { x: 4, y: 40 }); // back on Ogygia's beach, not the sea
+  assert.equal(isle.returnPos, null);
+});
+
 test('departTrial: the Poseidon crossing belongs to OGYGIA and to no other island', () => {
   // Ogygia's whole gate is the boat: launch an unfinished hull and the sea turns
   // you back, over and over, until you build a proper ship to Calypso's recipe.

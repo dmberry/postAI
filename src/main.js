@@ -363,6 +363,14 @@ const persist = () => {
 const STAGES_KEY = 'postai-stages';
 const STAGE_LADDER = [
   { id: 'ashore',    label: 'Washed ashore',           reward: 0,  reached: () => true },
+  // A checkpoint the first time you make landfall on each far island, so a death
+  // (which drops you back to the gate) can resume from the shore you reached
+  // rather than the start. Non-linear: whichever islands you sail to, in any
+  // order, each records its own landing once.
+  { id: 'land-polyphemus', label: 'Landfall: AEGILIA',   reward: 15, reached: () => currentWorld.id === 'polyphemus' },
+  { id: 'land-circe',      label: 'Landfall: AEAEA',     reward: 15, reached: () => currentWorld.id === 'circe' },
+  { id: 'land-helios',     label: 'Landfall: THRINACIA', reward: 15, reached: () => currentWorld.id === 'helios' },
+  { id: 'land-ithaca',     label: 'Landfall: ITHACA',    reward: 15, reached: () => currentWorld.id === 'ithaca' },
   { id: 'chip',      label: 'Jacked in',               reward: 10, reached: () => player.hasItem('chip') },
   { id: 'aikey',     label: 'The AI key',              reward: 20, reached: () => player.hasAiKeyFamily() },
   { id: 'trojan',    label: 'Trojan card',             reward: 25, reached: () => player.hasItem('trojan_key') || player.hasItem('hermes_card') },
@@ -563,8 +571,8 @@ function ensureBackspace() {
 // The single world-switch point. switchWorld moves the player + syncs player.map +
 // fires onExit/onEnter; here we also sync the outer `map` local, the debug hook, and
 // the camera. Everything reading currentWorld.* / `map` follows next frame.
-function goToWorld(target) {
-  currentWorld = switchWorld(currentWorld, target, player);
+function goToWorld(target, opts = {}) {
+  currentWorld = switchWorld(currentWorld, target, player, opts);
   map = currentWorld.map;
   // Repoint the combat-world aliases at the island we're now on, so the full
   // update loop + worldStir + onCoreDefeated + the factory helpers all operate on
@@ -1155,6 +1163,7 @@ function devRun(raw) {
         'open                    open the fortress gate + sanctum door + maze',
         'leave                   set calypsoLeave (the sea will let you go)',
         'tp <x> <y>              teleport on this island',
+        'time <day|night|0-23>   set the clock (day=noon, night=22:00)',
         'score <n> / heal / kill / where');
       return;
     case 'go': {
@@ -1222,6 +1231,23 @@ function devRun(raw) {
       if (!isFinite(tx) || !isFinite(ty)) { devPrint('tp <x> <y>'); return; }
       player.x = tx; player.y = ty; camera.snap(player.x, player.y);
       devPrint(`-> ${tx},${ty}`);
+      return;
+    }
+    case 'time':
+    case 'day':
+    case 'night': {
+      const v = verb.toLowerCase();
+      const a = (v === 'time' ? arg : v).toLowerCase();
+      let h;
+      // Noon and 22:00 both sit AFTER the 09:00 run-start on the same day, so the
+      // clock does not roll to tomorrow and trip POSEIDON's deadline — a testing
+      // toggle shouldn't end your run just to check the torch veil.
+      if (a === 'day' || a === '') h = 12;
+      else if (a === 'night') h = 22;
+      else h = Number(a);
+      if (!isFinite(h)) { devPrint('time <day|night|0-23>'); return; }
+      dayNight.setHour(h);
+      devPrint(`clock -> ${dayNight.label} (${dayNight.isNight() ? 'night' : 'day'})`);
       return;
     }
     case 'score':
@@ -3439,7 +3465,10 @@ function update(dt) {
     departOut = null;
     player.aboard = null;
     const dest = worldById(target);
-    if (dest) { goToWorld(dest); sfx.play('zap'); }
+    // A boat/road crossing arrives by keel: beach at the destination's spawn and
+    // clear the departed island's returnPos, so neither end strands you offshore
+    // where the row-out left the player's coordinates (see switchWorld).
+    if (dest) { goToWorld(dest, { beach: true }); sfx.play('zap'); }
     return;
   }
 

@@ -41,6 +41,18 @@ export class DayNight {
     this.elapsed += (gameMinutes / 60) * (this.dayLength / 24);
   }
 
+  // Testing helper (the lyre console): jump the clock to a given hour of the
+  // current day, so day/night rendering, ambience and the torch veil can be
+  // exercised on demand. Rolls to the same hour tomorrow if it lies before the
+  // run's start hour, since `elapsed` cannot go negative.
+  setHour(targetHour) {
+    const h = ((targetHour % 24) + 24) % 24;
+    const dayIndex = Math.floor(this.totalHours / 24);
+    let total = dayIndex * 24 + h;
+    if (total < this.startHour) total += 24;
+    this.elapsed = ((total - this.startHour) / 24) * this.dayLength;
+  }
+
   // RON-ML `rewind`: the inverse of advance — claws elapsed game *hours*
   // back out of the clock, pushing the POSEIDON deadline further off.
   // Clamped at `elapsed <= 0` (can't rewind before the run started), which
