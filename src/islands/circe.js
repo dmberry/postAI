@@ -11,7 +11,7 @@
 
 import { buildWorld } from '../game/worldgen.js';
 import { spawnAnimals } from '../game/animals.js';
-import { spawnRobots, spawnW5, spawnM4 } from '../game/robots.js';
+import { spawnRobots, spawnW5, spawnM4, spawnM5, spawnM6 } from '../game/robots.js';
 import { spawnWaterDroids } from '../game/waterdroids.js';
 import { spawnBirds } from '../game/birds.js';
 import { placeTors } from '../game/hermes.js';
@@ -173,6 +173,9 @@ export function createCirce(seed) {
   stampCoast(map, spawn);
   map.temples = placeRuins(map, makeRng((IS ^ 0x2c01dd) >>> 0), { spawn, clusters: 4 });
   robots.push(...fortress.spawnGuards(spawnM4));
+  // A garrisoned labyrinth: M6 packs patrol the corridors, M5 snipers hold the
+  // deep straights. Without this the maze is an empty walk to the quad.
+  robots.push(...fortress.garrisonMaze(spawnM6, spawnM5));
 
   // MOLY grows where HERMES stands. The relays are the god's gift on Aeaea: a
   // clutch of the herb at the foot of each TOR, so landing here is a race to a

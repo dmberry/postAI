@@ -408,17 +408,78 @@ export function createFortress(map, seed, spawn, opts = {}) {
     openMaze,
     get mazeOpened() { return !!state.mazeOpened; },
 
-    // The dormant patrol: just one or two light M4 report drones on the quad's
-    // muster points. Nothing else garrisons the fortress while it's sealed —
-    // the M5 snipers and M6 packs only come once the breach reports (see the
-    // alarm in update, which asks main.js to spawn the wave). `spawnM4` is
-    // passed in so this module never imports robots.js.
+    // The dormant patrol: one or two light M4 report drones on the quad's
+    // muster points. On a DEPART island that is the whole standing garrison,
+    // and the M5/M6 come only once the breach reports (the alarm in update asks
+    // main.js for the wave). Kill islands additionally garrison the labyrinth
+    // itself up front — see garrisonMaze below. `spawnM4` is passed in so this
+    // module never imports robots.js.
     spawnGuards(spawnM4) {
       const guards = [];
       muster.slice(0, 2).forEach((m, i) => {
         const g = spawnM4(map, (seed ^ (0x6a11 + i * 977)) >>> 0, m.x, m.y);
         if (g) guards.push(g);
       });
+      return guards;
+    },
+
+    // Garrison the LABYRINTH itself — kill-mode islands only. Without this the
+    // maze is an empty walk: two light scouts on the quad and nothing in the
+    // corridors, so the raid is won before the alarm ever trips. Here M6 pack
+    // robots patrol the corridors and M5 snipers hold the deep straights nearer
+    // the sanctum, seated far apart (minGap) and never in the gate mouth, so
+    // stepping through the door is not an instant ambush.
+    //
+    // They spawn UNAGGRO'd on purpose: the M-classes acquire by genuine sight
+    // only (line of sight, in range, inside the cone), so a careful raider can
+    // still ghost the maze — it is a stealth problem now, not an empty hallway.
+    // CALYPSO is deliberately exempt (winMode 'depart'): her island is the
+    // tutorial, and her guards detain rather than kill (R3).
+    garrisonMaze(spawnM6, spawnM5, cfg = {}) {
+      if (winMode !== 'kill') return [];
+      const { m6 = 5, m5 = 3, minGap = 7, mouthClear = 7 } = cfg;
+      const rng = makeRng((seed ^ 0x9a12c0) >>> 0);
+      const top = seamY + 3, bottom = mazeBottom;
+      // Open corridor tiles: the maze's walls are `fortwall` objects, so an
+      // unoccupied tile in the band is corridor.
+      const cells = [];
+      for (let y = top; y <= bottom; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          if (map.objectAt(x, y)) continue;
+          const f = map.floorAt(x, y);
+          if (f === 'water' || f === 'sea' || f === 'stream') continue;
+          // Leave the entrance mouth clear — you get a few steps inside before
+          // anything can see you.
+          if (y < top + mouthClear && Math.abs(x - (doorX0 + 1)) < 6) continue;
+          cells.push({ x: x + 0.5, y: y + 0.5 });
+        }
+      }
+      if (!cells.length) return [];
+      const placed = [];
+      const guards = [];
+      // Seat `n` guards of one class, spread by minGap. `deep` biases the pick
+      // toward the bottom of the band (the sniper posts nearer the sanctum).
+      const seat = (n, spawn, deep, tag) => {
+        for (let i = 0; i < n; i++) {
+          let spot = null;
+          for (let tries = 0; tries < 60 && !spot; tries++) {
+            const pool = deep ? cells.filter((c) => c.y > top + (bottom - top) * 0.45) : cells;
+            if (!pool.length) break;
+            const c = pool[Math.floor(rng() * pool.length)];
+            if (placed.some((p) => Math.hypot(p.x - c.x, p.y - c.y) < minGap)) continue;
+            spot = c;
+          }
+          if (!spot) continue;
+          const g = spawn(map, Math.floor(rng() * 0x7fffffff), spot.x, spot.y);
+          if (!g) continue;
+          g.aggro = false;              // acquire by sight, so stealth still works
+          if (tag === 'm5') g.holdPos = { x: spot.x, y: spot.y }; // snipe from this post, don't chase
+          placed.push(spot);
+          guards.push(g);
+        }
+      };
+      seat(m6, spawnM6, false, 'm6');
+      seat(m5, spawnM5, true, 'm5');
       return guards;
     },
 

@@ -10,7 +10,7 @@
 
 import { buildWorld } from '../game/worldgen.js';
 import { spawnAnimals } from '../game/animals.js';
-import { spawnRobots, spawnW5, spawnM4 } from '../game/robots.js';
+import { spawnRobots, spawnW5, spawnM4, spawnM5, spawnM6 } from '../game/robots.js';
 import { spawnWaterDroids } from '../game/waterdroids.js';
 import { spawnBirds } from '../game/birds.js';
 import { placeTors } from '../game/hermes.js';
@@ -180,6 +180,10 @@ export function createPolyphemus(seed) {
   stampCoast(map, spawn);
   map.temples = placeRuins(map, makeRng((IS ^ 0x2c01dd) >>> 0), { spawn, clusters: 3 });
   robots.push(...fortress.spawnGuards(spawnM4));
+  // The labyrinth is garrisoned, not empty. Polyphemus carries the HARD raid
+  // (islands-odyssey-revision §4), so it takes the heaviest watch of the three
+  // kill islands: M6 packs in the corridors, M5 snipers on the deep straights.
+  robots.push(...fortress.garrisonMaze(spawnM6, spawnM5, { m6: 7, m5: 4 }));
 
   const birds = spawnBirds(map, IS);
 
