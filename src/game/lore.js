@@ -1223,6 +1223,22 @@ const NOTE_LIFT = 10;      // pixels the note floats above its tile
 const FLASH_TIME = 9;      // seconds the found-fragment note lingers on screen
 const FRAGMENT_SCORE = 5;  // points for recovering a fragment
 
+// The Scrapbook's tabs. Two hundred-odd clippings in one scroll is a wall; these
+// sort them into the kinds of paper they are, so you can go straight to (say) the
+// RON transmissions without wheeling past forty lab memos. `kinds: null` is the
+// ALL tab. Kinds are grouped rather than one-tab-per-kind: the personal papers
+// (letters, diaries, notes) read as one drawer, and the odd single-fragment kinds
+// (liminal) ride along with the secrets rather than earning a tab of their own.
+const SCRAPBOOK_TABS = [
+  { label: 'ALL', kinds: null },
+  { label: 'PAPERS', kinds: ['handwritten', 'letter', 'note'] },
+  { label: 'SCIENCE', kinds: ['science'] },
+  { label: 'CODE', kinds: ['code'] },
+  { label: 'RON', kinds: ['ron'] },
+  { label: 'SECRETS', kinds: ['secret', 'liminal'] },
+  { label: 'CRAFT', kinds: ['crafting'] },
+];
+
 // Deterministic 0..1 hash of a string id — used for the Scrapbook's
 // per-fragment clipping tilt, so it holds still frame to frame instead of
 // jittering, without needing to persist a random value anywhere.
@@ -1254,6 +1270,8 @@ export class Lore {
     this.found = new Set();     // fragment ids the player has read
     this.archiveOpen = false;
     this.archiveScroll = 0;     // Archive list scroll offset (px)
+    this.archiveTab = 0;        // which SCRAPBOOK_TABS filter is showing
+    this._archiveTabRects = []; // hit rects, rebuilt each draw
     this._archiveMaxScroll = 0; // clamp, updated each draw
     this.placed = [];           // overworld fragments {frag, x, y, found}
     this.placedBs = [];         // Backspace-only fragments, placed on entry
@@ -1381,6 +1399,19 @@ export class Lore {
     } catch { /* storage unavailable */ }
   }
 
+  // Which Scrapbook tab is at this screen point, or -1. Driven from main.js (see
+  // the note in update below).
+  archiveTabAt(x, y) {
+    const t = this._archiveTabRects.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h);
+    return t ? t.i : -1;
+  }
+
+  setArchiveTab(i) {
+    if (i === this.archiveTab) return;
+    this.archiveTab = i;
+    this.archiveScroll = 0;   // a new drawer opens at its top
+  }
+
   update(dt, player, input) {
     if (input.archivePressed()) {
       this.archiveOpen = !this.archiveOpen;
@@ -1389,16 +1420,11 @@ export class Lore {
 
     // Click away from the panel closes it, same as the help modal's
     // backdrop-click dismissal (this._archiveRect is set by drawOverlay).
-    if (this.archiveOpen) {
-      const click = input.clickPos();
-      if (click) {
-        const r = this._archiveRect;
-        if (!r || click.x < r.x || click.x > r.x + r.w || click.y < r.y || click.y > r.y + r.h) {
-          input.consumeClick();
-          this.archiveOpen = false;
-        }
-      }
-    }
+    // NOTE: the Scrapbook's clicks (tabs, click-away) are handled in main.js's
+    // archive block, not here. This module updates via systems.runUpdate, which
+    // ticks AFTER player.update — and the player's click-to-swing consumes the
+    // press first, so a click tested here would never arrive. Same shape as the
+    // wheel/zoom bug: whoever runs earliest in the frame owns the input.
 
     // Scroll the open Archive with the mouse wheel or up/down keys.
     if (this.archiveOpen) {
@@ -1407,6 +1433,15 @@ export class Lore {
       if (input.isDown && input.isDown('ArrowDown')) this.archiveScroll += 480 * dt;
       if (input.isDown && input.isDown('ArrowUp')) this.archiveScroll -= 480 * dt;
       this.archiveScroll = Math.max(0, Math.min(this._archiveMaxScroll, this.archiveScroll));
+      // Left/right step between drawers (up/down already scroll the page).
+      if (input.consumePress && input.consumePress('ArrowLeft')) {
+        this.archiveTab = (this.archiveTab - 1 + SCRAPBOOK_TABS.length) % SCRAPBOOK_TABS.length;
+        this.archiveScroll = 0;
+      }
+      if (input.consumePress && input.consumePress('ArrowRight')) {
+        this.archiveTab = (this.archiveTab + 1) % SCRAPBOOK_TABS.length;
+        this.archiveScroll = 0;
+      }
     }
 
     // The just-found fragment shows briefly bottom-right; it fades on its own
@@ -1488,17 +1523,58 @@ export class Lore {
     ctx.fillText(`${this.found.size} of ${FRAGMENTS.length} pieces pasted in · scroll to read · J to close`,
       px + 34, py + 50);
 
-    // Every found fragment, both realms — the Scrapbook is one book.
-    const found = FRAGMENTS.filter((f) => this.found.has(f.id))
+    // The tab strip: index cards along the top of the book. Drawn before the
+    // clipping viewport so the tabs sit above the page, and their hit rects are
+    // rebuilt every frame (the uiSlots pattern) for update() to test clicks on.
+    const tab = SCRAPBOOK_TABS[this.archiveTab] || SCRAPBOOK_TABS[0];
+    this._archiveTabRects = [];
+    {
+      let tx = px + 34;
+      const ty = py + 60, th = 20;
+      ctx.font = 'bold 10px system-ui, sans-serif';
+      for (let i = 0; i < SCRAPBOOK_TABS.length; i++) {
+        const t = SCRAPBOOK_TABS[i];
+        // Count what this tab actually holds, so an empty drawer reads as empty.
+        const n = FRAGMENTS.reduce((acc, f) => acc
+          + ((this.found.has(f.id) && (!t.kinds || t.kinds.includes(f.kind))) ? 1 : 0), 0);
+        const label = `${t.label} ${n}`;
+        const tw = ctx.measureText(label).width + 16;
+        const on = i === this.archiveTab;
+        ctx.fillStyle = on ? 'rgba(240,230,207,0.92)' : 'rgba(240,230,207,0.10)';
+        ctx.beginPath();
+        // A card with the two top corners rounded — a paper tab, not a button.
+        const r = 4;
+        ctx.moveTo(tx, ty + th);
+        ctx.lineTo(tx, ty + r); ctx.arcTo(tx, ty, tx + r, ty, r);
+        ctx.lineTo(tx + tw - r, ty); ctx.arcTo(tx + tw, ty, tx + tw, ty + r, r);
+        ctx.lineTo(tx + tw, ty + th);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = on ? 'rgba(60,50,30,0.5)' : 'rgba(240,230,207,0.25)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = on ? '#2a2418' : 'rgba(240,230,207,0.62)';
+        ctx.fillText(label, tx + 8, ty + 14);
+        this._archiveTabRects.push({ x: tx, y: ty, w: tw, h: th, i });
+        tx += tw + 4;
+      }
+    }
+
+    // Every found fragment of the CURRENT TAB's kinds — the Scrapbook is one
+    // book, but you read it a drawer at a time.
+    const found = FRAGMENTS
+      .filter((f) => this.found.has(f.id) && (!tab.kinds || tab.kinds.includes(f.kind)))
       .map((frag) => ({ frag }))
       .sort((a, b) => a.frag.era - b.frag.era);
-    const top = py + 70;                 // first card's y at scroll 0
+    const top = py + 92;                 // first card's y at scroll 0 (below the tabs)
     const maxY = py + panelH - 16;       // bottom of the scroll viewport
     if (!found.length) {
       this._archiveMaxScroll = 0;
       ctx.fillStyle = 'rgba(240,230,207,0.55)';
       ctx.font = 'italic 13px Georgia, serif';
-      ctx.fillText('Nothing pasted in yet. Search the buildings.', px + 34, top + 10);
+      ctx.fillText(this.found.size
+        ? 'Nothing of this kind pasted in yet.'
+        : 'Nothing pasted in yet. Search the buildings.', px + 34, top + 10);
       return;
     }
 

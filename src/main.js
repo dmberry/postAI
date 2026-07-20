@@ -981,8 +981,16 @@ phSnakeEl.addEventListener('pointerdown', (e) => {
 // Nothing here reimplements game logic: jumps go through goToWorld/worldById
 // (so islands build lazily exactly as they do when you sail), items go through
 // player.stow, arming writes the same player.virusArmed the forge writes.
-const DEV_WORD = 'hermes';
+// The knock. "hermes" was a bad choice: h opens the help panel, e uses, r reads,
+// m cycles the music — typing it set half the game off. Only three letters in the
+// alphabet are unbound (l, u, y), which is too few to spell much with, so instead
+// the word must merely BEGIN with a free letter: the first keypress arms a
+// capture, and every key after it is swallowed before input.js can see it. So
+// `lyre` costs one harmless `l` if you mistype, and nothing fires either way.
+const DEV_WORD = 'lyre';
+const DEV_CAPTURE_MS = 2000;   // abandon a half-typed word after this
 let _devTyped = '';
+let _devTypedAt = 0;
 const devEl = document.getElementById('devbox');
 const devOutEl = document.getElementById('dev-out');
 const devInputEl = document.getElementById('dev-input');
@@ -1163,20 +1171,38 @@ devInputEl.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { devRun(devInputEl.value); devInputEl.value = ''; }
   else if (e.key === 'Escape') devClose();
 });
-// The secret knock. Letters typed while NOT in a text field accumulate; the word
-// opens the console. Capture phase so it sees the key before input.js swallows
-// tracked game keys (E, R, S...) — which "hermes" is full of.
+// The secret knock, in capture phase so it sees keys before input.js does.
+//
+// The rule that makes this safe: we only ever swallow a key while the buffer is
+// a genuine PREFIX of the word. The first letter of DEV_WORD is one of the three
+// unbound letters, so arming costs nothing; from then on each key is swallowed
+// (preventDefault + stopPropagation), which is what stops `r` reading and `e`
+// using mid-word. The moment a key breaks the prefix we abandon the attempt and
+// let that key through untouched, so ordinary play is never eaten.
 window.addEventListener('keydown', (e) => {
   if (devEl.style.display === 'flex') return;
   const tag = e.target && e.target.tagName;
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
   if (e.metaKey || e.ctrlKey || e.altKey || e.key.length !== 1) return;
-  _devTyped = (_devTyped + e.key.toLowerCase()).slice(-DEV_WORD.length);
-  if (_devTyped === DEV_WORD) {
-    _devTyped = '';
-    devBuildButtons();
-    devOpen();
+  const now = performance.now();
+  if (_devTyped && now - _devTypedAt > DEV_CAPTURE_MS) _devTyped = ''; // stale attempt
+  const next = _devTyped + e.key.toLowerCase();
+  if (DEV_WORD.startsWith(next)) {
+    _devTyped = next;
+    _devTypedAt = now;
+    e.preventDefault();
+    e.stopPropagation();   // the game never sees the letters of the word
+    if (next === DEV_WORD) {
+      _devTyped = '';
+      devBuildButtons();
+      devOpen();
+    }
+    return;
   }
+  // Not the word after all: forget it and let this key play normally. (If the
+  // key could itself start a fresh attempt, arm on it rather than dropping it.)
+  _devTyped = DEV_WORD.startsWith(e.key.toLowerCase()) ? e.key.toLowerCase() : '';
+  if (_devTyped) { _devTypedAt = now; e.preventDefault(); e.stopPropagation(); }
 }, true);
 
 // The failed crossing. Boarding an unfinished boat does NOT bounce you off the
@@ -3575,9 +3601,18 @@ function update(dt) {
   if (lore.archiveOpen) {
     const r = lore._archiveRect;
     const bc = input.clickPos();
-    if (bc && (!r || bc.x < r.x || bc.x > r.x + r.w || bc.y < r.y || bc.y > r.y + r.h)) {
-      input.consumeClick();
-      lore.archiveOpen = false;
+    if (bc) {
+      const tab = lore.archiveTabAt(bc.x, bc.y);
+      const outside = !r || bc.x < r.x || bc.x > r.x + r.w || bc.y < r.y || bc.y > r.y + r.h;
+      if (tab >= 0) {
+        input.consumeClick();          // a tab switches drawer...
+        lore.setArchiveTab(tab);
+      } else if (outside) {
+        input.consumeClick();          // ...outside the book shuts it...
+        lore.archiveOpen = false;
+      } else {
+        input.consumeClick();          // ...and a click on the page does nothing
+      }                                //    (but must not swing your axe either)
     }
     if (input.consumePress('Escape')) lore.archiveOpen = false;
   }
