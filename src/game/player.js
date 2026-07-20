@@ -186,6 +186,10 @@ export class Player {
     this.shipBuilt = false;                  // one greek ship at a time (independent of the plain boat)
     this.calypsoLeave = false;               // Calypso refunctioned (retire): the sea will let you go (decision #8)
     this.detainMode = false;                 // R3: on a depart-mode island her fortress guards detain, not slay (main.js sets it per world)
+    // Which daemons the card is armed against. Each island's HERMES relay holds
+    // only its own virus, so arming is PER ISLAND: a card forged on Ogygia opens
+    // nothing on Aeaea. Names are AI_NAMEs ('CALYPSO', 'POLYPHEMUS', ...).
+    this.virusArmed = new Set();
     // The Nokia 3310 — Calypso's channel (docs/calypso-nokia-plan.md). A worn
     // fixture like the walkman: never dropped, never a pocket slot. `calypsoHold`
     // is her hold on you AND her protection of you (0..1); `nokiaSent` records the
@@ -293,6 +297,13 @@ export class Player {
   // not. This is what opens the fortress gate now (fortress_key is retired).
   hasTrojanCard() {
     return this.hasItem('trojan_key') || this.hasItem('hermes_card');
+  }
+
+  // Is the card armed against THIS island's daemon? You must still be holding a
+  // card for the arming to mean anything — the code lives on the card, not in
+  // your head, so losing it costs you the arming until you reprint and reforge.
+  hasVirusFor(aiName) {
+    return this.hasTrojanCard() && this.virusArmed.has(aiName);
   }
 
   // MOLY, the ward against CIRCE's swine-magic (Odyssey 10.302-6). Merely CARRYING
@@ -1876,6 +1887,15 @@ export class Player {
       this.say('You strike the core and it does not care. She is not yours to break — the way out of Ogygia is the sea, not her ruin.');
       return;
     }
+    // Shielded (kill mode): the housing rides behind a field until this island's
+    // own virus is run at the core's terminal. The tell points at the terminal,
+    // so a player who has only ever hit things learns there is a code to find.
+    if (obj.shielded) {
+      this.swingTimer = tool.swingCooldown || 0.5;
+      sfx.play('clang', { pitch: 1.5 }); obj.shake = 0.08;
+      this.say(`A field turns the blow a hand's width from the housing. ${obj.ai || 'The core'} is shielded — its own code, forged at a relay on this island, is the only thing that drops it. Try its terminal.`);
+      return;
+    }
     this.swingTimer = tool.swingCooldown || 0.5;
     this.stamina = Math.max(0, this.stamina - (tool.staminaCost ?? 0));
     if ((tool.robotDamage ?? 1) < FACTORY_MIN_TOOL) {
@@ -1893,7 +1913,9 @@ export class Player {
   // Apply `amount` to the core (melee, a bomb blast, or the electro-gun's arc).
   // On kill, mark it defeated and fire the island-death hook exactly once.
   damageCore(obj, map, amount) {
-    if (obj.defeated || obj.indestructible) return; // depart mode: she cannot be razed (bombs/electro-arc land here too)
+    // depart mode: she cannot be razed. shielded: the field turns bombs and the
+    // electro-arc too, so no weapon route skips the code. (Both land here.)
+    if (obj.defeated || obj.indestructible || obj.shielded) return;
     obj.maxHp = obj.maxHp ?? obj.hp ?? 250;
     obj.hp = (obj.hp ?? obj.maxHp) - amount;
     if (obj.hp > 0) { this.daemonSpeak(obj); return; }

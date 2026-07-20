@@ -112,19 +112,59 @@ export function hermesTopics() {
   return Object.keys(HERMES_DOCS);
 }
 
-// The zeus-virus folder RON left runnable on the relays — the mechanism of
-// Odysseus's release (Odyssey V: Zeus commands, Hermes carries, Calypso yields).
-// `cd hermes / ls` lists these; `read readme.md` is the forge recipe; `forge
-// zeus-virus.ml` (with a Trojan card in hand) arms it into zeus-lightning.ml.
+// The virus folder RON left runnable on the relays. EVERY island has one, and
+// each holds a DIFFERENT sealed payload — the counter-force that particular
+// daemon cannot refuse, taken from what actually undoes them in Homer. A card
+// armed on Ogygia is armed against CALYPSO and nobody else: you must find the
+// island's own relay, read its recipe, and forge its own code. (This is what
+// stops one hermes card opening the whole archipelago.)
+//
+// `cd hermes / ls` lists these; `read readme.md` is the recipe; `forge
+// <name>-virus.ml` (Trojan card in hand) arms the card FOR THIS ISLAND.
 // See docs/calypso-escape-chain.md.
-export const ZEUS_VIRUS_FILES = ['readme.md', 'zeus-virus.ml'];
-export const ZEUS_VIRUS_DOCS = {
-  'readme.md': {
-    title: 'zeus-virus / readme.md',
-    text: "ZEUS-VIRUS — RON build notes. The payload is inert alone. Arm it with the two credentials a Trojan card carries: root-access.ml (the factory's own grant, reflected out of it by ELIZA) and access-ai-code.ml (the AI's access key). At this relay, card in hand, type: forge zeus-virus.ml. That folds both credentials into the shell and writes zeus-lightning.ml — Zeus's command, made runnable. Copy it onto the Trojan card (copy zeus-lightning.ml card) and the card becomes a hermes card: the herald Calypso cannot refuse. Homer had the shape of it — the god commands, the messenger carries, the nymph lets him go.",
+//
+//   CALYPSO    — zeus-virus     the sky-father's command; she yields to Zeus, never to you (Od. 5.28-148)
+//   POLYPHEMUS — nobody-virus   Outis: the name that unmakes the eye's alarm (Od. 9.366-414)
+//   CIRCE      — moly-virus     Hermes' herb, the ward against her changing (Od. 10.302-6)
+//   HELIOS     — eclipse-virus  the sun blotted out of heaven (Od. 20.356-7)
+export const VIRUS_BY_AI = {
+  CALYPSO: {
+    file: 'zeus-virus.ml',
+    armed: 'zeus-lightning.ml',
+    readme: "ZEUS-VIRUS — RON build notes. The payload is inert alone. Arm it with the two credentials a Trojan card carries: root-access.ml (the factory's own grant, reflected out of it by ELIZA) and access-ai-code.ml (the AI's access key). At this relay, card in hand, type: forge zeus-virus.ml. That folds both credentials into the shell and writes zeus-lightning.ml — Zeus's command, made runnable. Copy it onto the Trojan card (copy zeus-lightning.ml card) and the card becomes a hermes card: the herald Calypso cannot refuse. Homer had the shape of it — the god commands, the messenger carries, the nymph lets him go. Note: this code is cut for CALYPSO's keys alone. It will not speak to another island's daemon — each has its own relay, and its own undoing.",
+    sealed: "let zeus = seal (* the sky-father's command, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. forge zeus-virus.ml at a relay, card in hand. *)",
   },
-  'zeus-virus.ml': {
-    title: 'zeus-virus.ml (sealed)',
-    text: "let zeus = seal (* the sky-father's command, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. forge zeus-virus.ml at a relay, card in hand. *)",
+  POLYPHEMUS: {
+    file: 'nobody-virus.ml',
+    armed: 'nobody-lightning.ml',
+    readme: "NOBODY-VIRUS — RON build notes. POLYPHEMUS is one eye and one alarm: it sees, it names what it sees, and it screams the name to its fellows. You cannot outfight the scream. You unname yourself. Arm this with a Trojan card's two credentials (root-access.ml, access-ai-code.ml): forge nobody-virus.ml. It writes nobody-lightning.ml, which overwrites your entry in the eye's roster with the null string — the watch reports an intruder called Nobody, and no one comes. Copy it onto the card. The old trick, in the old words: when they ask who is hurting him, he will answer Nobody, and they will go back to sleep.",
+    sealed: "let outis = seal (* the null name, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. the eye must be told a name it cannot repeat. *)",
+  },
+  CIRCE: {
+    file: 'moly-virus.ml',
+    armed: 'moly-lightning.ml',
+    readme: "MOLY-VIRUS — RON build notes. CIRCE does not kill; she RECLASSIFIES. Her sanctum rewrites what the network thinks you are, and a thing classed as livestock cannot hold a weapon or work a terminal. The herb in the field wards your body. This wards your RECORD. Arm it with a Trojan card's two credentials (root-access.ml, access-ai-code.ml): forge moly-virus.ml, and it writes moly-lightning.ml — a lock on your own classification that her sanctum cannot take the pen to. Copy it onto the card. Black at the root, white in the flower; hard for mortal men to dig, but the gods can do all things.",
+    sealed: "let moly = seal (* the ward on the record, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. she rewrites what you ARE; this holds the pen still. *)",
+  },
+  HELIOS: {
+    file: 'eclipse-virus.ml',
+    armed: 'eclipse-lightning.ml',
+    readme: "ECLIPSE-VIRUS — RON build notes. HELIOS is the island's eye in the sky: nothing crosses THRINACIA unwatched, because the light itself is the sensor. You do not blind a sun. You put something in front of it. Arm this with a Trojan card's two credentials (root-access.ml, access-ai-code.ml): forge eclipse-virus.ml, and it writes eclipse-lightning.ml — a false night folded into the daylight channel, so the watch reads dark over ground that is not. Copy it onto the card. The seer said it plainly, and they laughed at him: the sun has perished out of heaven, and an evil mist has overspread the world.",
+    sealed: "let eclipse = seal (* the false night, sealed pending the herald's two keys *) in\n  await root-access.ml |> await access-ai-code.ml |> arm.\n(* inert until forged. the light is the sensor; interpose. *)",
   },
 };
+
+// The relay's virus folder for whichever daemon owns THIS island.
+export function virusFor(aiName) {
+  return VIRUS_BY_AI[aiName] || VIRUS_BY_AI.CALYPSO;
+}
+export function virusFilesFor(aiName) {
+  return ['readme.md', virusFor(aiName).file];
+}
+export function virusDocsFor(aiName) {
+  const v = virusFor(aiName);
+  return {
+    'readme.md': { title: `${v.file.replace('.ml', '')} / readme.md`, text: v.readme },
+    [v.file]: { title: `${v.file} (sealed)`, text: v.sealed },
+  };
+}

@@ -283,6 +283,10 @@ export function createFortress(map, seed, spawn, opts = {}) {
     // Depart mode (R3): the daemon you leave, not the one you kill. Her core
     // cannot be razed — hitCore refuses it in-voice; the way out is the sea.
     indestructible: winMode === 'depart',
+    // Kill mode: the core rides behind a shield until this island's own virus is
+    // run at its terminal (main.js openCoreTerminal). No amount of hitting gets
+    // through it — the raid's last lock is a code, not a bigger hammer.
+    shielded: winMode === 'kill',
   });
   for (const t of footprint) map.objectGrid[t.y * w + t.x] = core;
 
@@ -366,6 +370,29 @@ export function createFortress(map, seed, spawn, opts = {}) {
     state.open = true;
   };
 
+  // The SANCTUM DOOR: a second, inner gate across the maze's exit corridor, on
+  // kill islands only. The Lion's Gate takes any Trojan card — getting IN is
+  // still quick — but this one reads the card for THIS island's own virus, so a
+  // card armed on another island walks the maze and stops here. (Depart mode
+  // leaves the way to her sanctum open: CALYPSO's island is the tutorial.)
+  const sanctumTiles = [];
+  const sanctumDoors = [];
+  if (winMode === 'kill') {
+    const gx = MAZE_MX0 + gateCol * MAZE_PITCH; // matches buildMaze's cellX(gateCol)
+    const sy = mazeBottom + 1;                  // the exit corridor, below the band
+    for (let dx = 0; dx < 4; dx++) {            // CW = 4, the corridor width
+      const t = { x: gx + dx, y: sy };
+      if (!map.inBounds(t.x, t.y) || map.objectAt(t.x, t.y)) continue;
+      const d = map.addObject('fortdoor', t.x, t.y, { material: RAMPART_MAT, sanctum: true });
+      if (d) { sanctumTiles.push(t); sanctumDoors.push(d); }
+    }
+  }
+  const openSanctum = () => {
+    if (state.sanctumOpen) return;
+    for (const d of sanctumDoors) if (d) map.removeObject(d);
+    state.sanctumOpen = true;
+  };
+
   // A direct way out: fold back the labyrinth walls along the door column so a
   // straight corridor runs from the sanctum/quad up to the Lion's Gate — a fast
   // exit after the raid (exposed to a terminal `open` command). Also opens the
@@ -374,6 +401,8 @@ export function createFortress(map, seed, spawn, opts = {}) {
     if (state.mazeOpened) return false;
     state.mazeOpened = true;
     openDoor();
+    openSanctum(); // the inner door is a fortdoor, not a fortwall — the fold-back
+                   // below wouldn't clear it, and it would bar the fast exit.
     const x0 = Math.max(1, doorX0 - 1), x1 = Math.min(w - 2, doorX0 + DOOR_W);
     for (let y = seamY; y <= quadTop; y++) {
       for (let x = x0; x <= x1; x++) {
@@ -516,6 +545,24 @@ export function createFortress(map, seed, spawn, opts = {}) {
           if (!state.announced) { state.announced = true; player.addScore?.(40); }
         }
       }
+      // The SANCTUM DOOR at the maze's mouth onto the quad. It reads the card
+      // for THIS island's virus — a card armed elsewhere gets you all the way
+      // here and no further, which is the whole point of the per-island code.
+      if (sanctumDoors.length && !state.sanctumOpen) {
+        const nearSanctum = sanctumTiles.some((t) => Math.abs(player.y - t.y) <= 2.2 && Math.abs(player.x - t.x) <= 2.2);
+        if (nearSanctum) {
+          if (player.hasVirusFor && player.hasVirusFor(aiName)) {
+            openSanctum();
+            player.say(`The sanctum door reads ${aiName}'s own code off your card and draws back.`);
+            player.addScore?.(60);
+          } else if (!state._sanctumTold || state._sanctumTold < 1) {
+            state._sanctumTold = 1;
+            player.say(`A second door bars the way to ${aiName}'s sanctum. It wants ${aiName}'s OWN code — forged at a relay on this island. A card armed elsewhere means nothing to it.`);
+          }
+        } else if (state._sanctumTold) {
+          state._sanctumTold = 0; // step away and it will tell you again next time
+        }
+      }
       // The maze lights its solution the moment you ENTER it CARRYING the
       // assembled fortress map — the map is your guide (piece it from the
       // fragments scattered across the world). Without it you thread the maze
@@ -578,6 +625,8 @@ export function createFortress(map, seed, spawn, opts = {}) {
         open: state.open,
         coreHp: core.hp,
         coreDefeated: !!core.defeated,
+        coreShielded: !!core.shielded, // the virus you already ran stays run
+        sanctumOpen: !!state.sanctumOpen,
         jammed: state.jammed,
       };
     },
@@ -587,6 +636,8 @@ export function createFortress(map, seed, spawn, opts = {}) {
       if (snap.open) openDoor(); // removes the door objects + sets state.open
       if (typeof snap.coreHp === 'number') core.hp = snap.coreHp;
       if (snap.coreDefeated) core.defeated = true;
+      if (typeof snap.coreShielded === 'boolean') core.shielded = snap.coreShielded;
+      if (snap.sanctumOpen) openSanctum();
       if (snap.jammed) state.jammed = true;
     },
 

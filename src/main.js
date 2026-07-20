@@ -19,7 +19,7 @@ import { sfx } from './engine/sound.js';
 import { worldToScreen } from './engine/iso.js';
 import { runRonml } from './game/ronml.js';
 import { createEliza } from './game/eliza.js';
-import { placeTors, HERMES_DOCS, hermesTopics, ZEUS_VIRUS_FILES, ZEUS_VIRUS_DOCS } from './game/hermes.js';
+import { placeTors, HERMES_DOCS, hermesTopics, virusFor, virusFilesFor, virusDocsFor } from './game/hermes.js';
 import { VERSION } from './version.js';
 import { drawRobotVision } from './game/robotvision.js';
 import { screenDirToWorld } from './engine/iso.js';
@@ -222,6 +222,10 @@ try {
       if (typeof st.nokiaParts === 'number') player._nokiaParts = st.nokiaParts;
       if (Array.isArray(st.nokiaLog)) player.nokiaLog = st.nokiaLog; // the SMS threads survive reload
       if (typeof st.snakeHigh === 'number') player.snakeHigh = st.snakeHigh; // Snake's best game survives too
+      if (Array.isArray(st.virusArmed)) player.virusArmed = new Set(st.virusArmed);
+      // Pre-v1.126 saves: a hermes card existed but carried no per-island arming.
+      // Grandfather it as armed against CALYPSO so an in-flight run isn't stranded.
+      else if (player.hasItem('hermes_card')) player.virusArmed = new Set(['CALYPSO']);
       if (typeof st.x === 'number') _bootPos = { x: st.x, y: st.y }; // the saved position, for the island resume below
     }
     // Guard against stale item keys carried over from a save written by an
@@ -307,6 +311,7 @@ function buildSaveBlob() {
       nokiaParts: player._nokiaParts || 0,
       nokiaLog: (player.nokiaLog || []).slice(-40), // the SMS threads, so the correspondence survives reload
       snakeHigh: player.snakeHigh || 0,  // the handset remembers its best game
+      virusArmed: [...(player.virusArmed || [])], // which daemons the card is armed against (per-island virus)
     },
     world: {
       currentIsland: currentWorld.id, // Stage 1c: which island you're on, so a voyage survives reload
@@ -1271,7 +1276,7 @@ function fsDevAvail(dev) {
 function fsFilesOn(dev) {
   if (dev === 'ob') return Object.keys(replSession.__obfiles || {});
   if (dev === 'aikey') { const c = fsCardItem(); return c && ITEMS[c].files ? ITEMS[c].files.slice() : []; }
-  if (dev === 'hermes') return [...ZEUS_VIRUS_FILES, ...Object.keys(replSession.__hermesfiles || {})];
+  if (dev === 'hermes') return [...virusFilesFor(islandAiName()), ...Object.keys(replSession.__hermesfiles || {})];
   return [];
 }
 function fsCwd() {
@@ -1341,12 +1346,21 @@ function fsCopyFile(name, destRaw) {
       player.say("root-access.ml burns into the AI key and rewrites it. The card is a Trojan now — it will open the Lion's Gate.");
       return { ok: true, msg: 'card refunctioned: AI key -> Trojan key' };
     }
-    if (name === 'zeus-lightning.ml' && player.hasItem('trojan_key')) {
-      if (!fsRefunctionCard('trojan_key', 'hermes_card')) return { ok: false, msg: 'no room to refunction the card.' };
-      player.say("zeus-lightning.ml settles onto the Trojan card. It is a hermes card now — it carries the god's command to Calypso.");
-      return { ok: true, msg: 'card refunctioned: Trojan key -> hermes card' };
+    // The armed payload for THIS island. Copying it on arms the card against
+    // this daemon and nobody else (player.virusArmed), so the arming stacks as
+    // you work down the archipelago rather than one card opening everything.
+    const v = virusFor(islandAiName());
+    if (name === v.armed && player.hasTrojanCard()) {
+      // The first arming also renames Trojan -> hermes card; later islands add
+      // their code to a card that already carries the name.
+      if (player.hasItem('trojan_key') && !fsRefunctionCard('trojan_key', 'hermes_card')) {
+        return { ok: false, msg: 'no room to refunction the card.' };
+      }
+      player.virusArmed.add(islandAiName());
+      player.say(`${v.armed} settles onto the card. It is armed against ${islandAiName()} now — and against no one else.`);
+      return { ok: true, msg: `card armed: ${islandAiName()}` };
     }
-    return { ok: false, msg: "the card's storage is sealed — it takes root-access.ml (on the AI key) or zeus-lightning.ml (on the Trojan)." };
+    return { ok: false, msg: `the card's storage is sealed — it takes root-access.ml (on the AI key) or ${v.armed} (forged at this island's relay).` };
   }
   return { ok: false, msg: `can't write to ${destRaw}.` };
 }
@@ -1385,9 +1399,17 @@ function elizaTransformFile(name) {
 // — and break her hold on the tide (calypsoLeave). Shared by the OB `retire` verb
 // and CALYPSO's own sanctum terminal, so the payoff reads the same wherever it
 // fires. Returns { ok, lines, say } for the caller to print in its own voice.
+// Whose island are we standing on? The daemon name drives the per-island virus
+// (each HERMES relay holds only its own daemon's code) and the gates that read
+// it. Falls back to CALYPSO on any world with no fortress (the Backspace).
+function islandAiName() {
+  return (currentWorld && currentWorld.fortress && currentWorld.fortress.AI_NAME)
+    || (fortress && fortress.AI_NAME) || 'CALYPSO';
+}
+
 function refunctionCalypso() {
-  if (!player.hasItem('hermes_card')) {
-    return { ok: false, lines: ['ERR: the guards answer only to a command they cannot refuse. Forge the hermes card first (it carries zeus-lightning.ml).'], say: '' };
+  if (!player.hasVirusFor('CALYPSO')) {
+    return { ok: false, lines: ["ERR: the guards answer only to a command they cannot refuse. Forge zeus-virus.ml at one of OGYGIA's own relays and copy it onto the card."], say: '' };
   }
   const firstRelease = !player.calypsoLeave;
   player.calypsoLeave = true; // her hold on the tide breaks (decision #8 / Stage 1b)
@@ -1844,26 +1866,33 @@ function drawDriveOverlay(now) {
 // (root-access.ml + access-ai-code.ml) into the sealed payload and writes
 // zeus-lightning.ml to the relay bench. Copy that onto the card -> hermes card.
 function hermesForge(name) {
-  if (name !== 'zeus-virus.ml') return { ok: false, msg: `${name} is not a payload to forge. try: forge zeus-virus.ml` };
-  if (player.hasItem('hermes_card')) return { ok: false, msg: 'already forged — the card is a hermes card. run zeus-lightning.ml at Calypso.' };
-  if (!player.hasItem('trojan_key')) return { ok: false, msg: 'forge needs a Trojan card in hand — it carries root-access.ml and access-ai-code.ml. (read readme.md)' };
+  const ai = islandAiName();
+  const v = virusFor(ai);
+  if (name !== v.file) {
+    // Naming the WRONG island's payload is the tell: this relay only holds its
+    // own daemon's code, so a player who learned the trick on Ogygia finds out
+    // here that the trick is per-island.
+    return { ok: false, msg: `${name} is not on this relay. ${ai}'s bench holds ${v.file} — each island keeps its own code. try: forge ${v.file}` };
+  }
+  if (player.hasVirusFor(ai)) return { ok: false, msg: `already forged — the card is armed against ${ai}. run ${v.armed} at its core.` };
+  if (!player.hasTrojanCard()) return { ok: false, msg: 'forge needs a Trojan card in hand — it carries root-access.ml and access-ai-code.ml. (read readme.md)' };
   if (!hermesSpend(HERMES_BATT.print)) return { ok: false, msg: 'not enough charge to forge — let the cell recover.' };
   replSession.__hermesfiles = replSession.__hermesfiles || {};
-  replSession.__hermesfiles['zeus-lightning.ml'] = true;
-  player.say("The relay folds root-access.ml and access-ai-code.ml into the sealed shell. zeus-lightning.ml — Zeus's command, made runnable — writes to the bench. Copy it onto the card. (cd hermes / copy zeus-lightning.ml card)");
-  return { ok: true, out: 'zeus-lightning.ml' };
+  replSession.__hermesfiles[v.armed] = true;
+  player.say(`The relay folds root-access.ml and access-ai-code.ml into the sealed shell. ${v.armed} writes to the bench — the code ${ai} cannot refuse. Copy it onto the card. (cd hermes / copy ${v.armed} card)`);
+  return { ok: true, out: v.armed };
 }
 function hermesRead(topic) {
   if (!topic) {
     replPrint('read <topic>. archive lists them. Held: ' + hermesTopics().join(', ') + '.');
     return;
   }
-  const doc = HERMES_DOCS[topic] || ZEUS_VIRUS_DOCS[topic];
+  const doc = HERMES_DOCS[topic] || virusDocsFor(islandAiName())[topic];
   if (!doc) {
     replPrint(`No document "${topic}". Try: ${hermesTopics().join(', ')}.`);
     return;
   }
-  const printable = !!HERMES_DOCS[topic]; // the zeus-virus folder files aren't notepad docs
+  const printable = !!HERMES_DOCS[topic]; // the virus folder files aren't notepad docs
   if (!hermesSpend(HERMES_BATT.read)) { replPrint('Not enough charge to pull that up — let the cell recover.'); return; }
   // Wrap to the console width so a long entry reads as paragraphs, not one line.
   const words = doc.text.split(' ');
@@ -2450,9 +2479,9 @@ function coreRun(line) {
   // RUN: speak the code on your card. The verb lives on every core, but only the
   // hermes card (zeus-lightning.ml) exists so far and it speaks only to CALYPSO —
   // the other daemons each need their own code, which isn't forged yet.
-  if (/^(run|retire|refunction|zeus-lightning\.ml|run\s+zeus-lightning\.ml|run\s+zeus)$/.test(cmd)) {
+  if (/^(run|retire|refunction|[a-z]+-lightning(\.ml)?|run\s+[a-z]+-lightning(\.ml)?|run\s+[a-z]+)$/.test(cmd)) {
     if (ai === 'CALYPSO') {
-      if (!player.hasItem('hermes_card')) {
+      if (!player.hasVirusFor('CALYPSO')) {
         replPrint(
           "CALYPSO: You wear a Trojan's face, but there is no thunder behind it. You cannot make me.",
           'CALYPSO: Stay. Rest. The years are kind here, and no one is waiting who cannot wait a little longer.',
@@ -2473,14 +2502,35 @@ function coreRun(line) {
       }
       return;
     }
-    // No code for this core yet. Whatever is on your card, it is not the word that
-    // answers here — a hook for a future per-daemon card, not a dead end in fiction.
-    replPrint(
-      `${ai}: You have a command on your card, but it is not the one that answers to me.`,
-      'Nothing you carry speaks to this core. Not yet.',
-      '_',
-    );
-    sfx.play('termerr');
+    // A martial daemon. Its core rides behind a shield until you speak the code
+    // forged at THIS island's own relay; the code from another island is just
+    // noise to it. Running it drops the shield, and only then can the core be
+    // razed — the raid's last lock.
+    const vv = virusFor(ai);
+    if (!player.hasVirusFor(ai)) {
+      replPrint(
+        `${ai}: You carry a command, but not the one that answers to me.`,
+        `Its shield holds. ${ai}'s undoing is ${vv.file} — forged at a relay on THIS island, not carried in from another.`,
+        '_',
+      );
+      sfx.play('termerr');
+      return;
+    }
+    const core = fortress.core && fortress.core.obj;
+    if (core && core.shielded) {
+      core.shielded = false;
+      player.addScore(150);
+      replPrint(
+        `OK: ${vv.armed} speaks, and the core has no answer to it.`,
+        `${ai}: ...how did you get MY word?`,
+        'Its shield folds. The housing is bare — break it.',
+        '_',
+      );
+      player.say(`${vv.armed} runs. ${ai}'s shield folds and the core stands bare — now break it open.`);
+      sfx.play('zap');
+    } else {
+      replPrint(`The shield is already down. ${ai} is yours to break.`, '_');
+    }
     return;
   }
   // Everything else: the daemon's own rebuff (CALYPSO sleeps; the martial cores snarl).
