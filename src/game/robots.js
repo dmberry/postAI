@@ -168,8 +168,9 @@ const M4_CONE_DOT = -0.25;      // a wide ~105°-either-side scout cone
 const M4_PATROL_SPEED = 1.5;
 const M4_KEEP_RANGE = 7;        // once it has you, it hovers about here, keeping sight while it reports
 const M4_FLEE_SPEED = 3.4;
-const M4_SEARCH_TIME = 9;       // loses sight -> investigates your last-seen tile this long before giving up
-const FORTRESS_FORGET = 20;    // seconds since an M5/M6 last GLIMPSED you before it gives up the hunt
+// (No give-up timers for the M-classes: a fortress guard that has acquired you
+// stays on the hunt until it is destroyed or a terminal takes it off you. It
+// sweeps your last-seen tile indefinitely rather than going home. See updateGuard.)
 const M6_BODY = '#232833';      // gunmetal blue-black armour
 const M6_HEAD = '#141821';
 const M5_BODY = '#2c2430';      // violet-tinged sniper
@@ -531,6 +532,14 @@ function spawnGuardType(map, seed, mx, my, type, hp, fromFactory) {
   if (!spot) return null;
   const r = baseRobot(type, spot[0], spot[1], hp, rng);
   r.hardened = true; // cannot be reprogrammed — drain one and it's only scrap
+  // MAINS-POWERED. A fortress guard draws off the fortress, not a cell it has to
+  // go and refill: it never runs its battery down, never breaks off the hunt to
+  // trudge home and recharge, and never goes flat where it stands. Overworld
+  // scavengers keep the battery economy; these do not, because a guard that
+  // wanders off mid-raid to sit at its muster point reads as broken AI, not as
+  // logistics. They stop for exactly three things: being killed, being stunned
+  // or driven from a terminal (disabledT / driven), and the island's mind dying.
+  r.mains = true;
   if (fromFactory) r.spawnT = FACTORY_SPAWN_T;
   return r;
 }
@@ -767,6 +776,7 @@ function scrapQty(x, y) {
 // permanent until external code re-batteries it (battery = 100, drained =
 // false); a friendly stays friendly while flat.
 function drainBattery(r, rate, dt) {
+  if (r.mains) return; // fortress guards run off the fortress: no drain, never flat
   r.battery = Math.max(0, r.battery - rate * dt);
   if (r.battery <= 0) {
     r.battery = 0;
@@ -966,7 +976,10 @@ export function updateRobots(dt, robots, player, map) {
     // slowly (see updateRecharge/REPAIR_RATE), before rejoining the fight.
     // Zombies are excluded: an OB-corrupted machine has no self-preservation
     // left in it.
-    if (r.battery < BATTERY_LOW || (!r.zombie && r.hp < r.maxHp * HP_FLEE_FRAC)) {
+    // Mains-powered fortress guards never break off: no battery to run down, and
+    // no limping home to mend. A guard holds its post until it is destroyed —
+    // wounding one buys you nothing but a wounded guard still coming.
+    if (!r.mains && (r.battery < BATTERY_LOW || (!r.zombie && r.hp < r.maxHp * HP_FLEE_FRAC))) {
       r.recharging = true;
       r.aggro = false;
       r.stuck = false;
@@ -978,8 +991,8 @@ export function updateRobots(dt, robots, player, map) {
 
     // Losing line of sight for long enough breaks off the hunt regardless
     // of type or distance; see LOS_GIVEUP_AFTER above. Fortress M4/M5/M6 are
-    // exempt — they keep looking on their own longer timers (updateGuard): M5/M6
-    // on FORTRESS_FORGET, M4 by investigating your last-seen tile (M4_SEARCH_TIME).
+    // exempt — they never break off at all (updateGuard): they sweep your
+    // last-seen tile and keep hunting until destroyed or taken off you.
     if (r.aggro && r.type !== 'w3' && r.type !== 'm5' && r.type !== 'm6' && r.type !== 'm4') {
       const canSee = map.hasLineOfSight(r.x, r.y, player.x, player.y);
       r.losLostT = canSee ? 0 : (r.losLostT || 0) + dt;
@@ -1558,6 +1571,7 @@ function updateGuard(r, dt, player, map, robots) {
   const ease = player.threatEase ? player.threatEase() : 1;
   drainBattery(r, r.aggro ? DRAIN_CHASE : DRAIN_PATROL, dt);
   if (r.drained) return;
+  r.sees = false; // set true below only while actually hunting with eyes on you
 
   if (!r.aggro) {
     if (!(r.loseInterestT > 0) && guardSees(r, player, map)) {
@@ -1572,29 +1586,21 @@ function updateGuard(r, dt, player, map, robots) {
     }
   }
 
-  // Relentless-but-not-forever: an M5/M6 gives up only after FORTRESS_FORGET
-  // seconds without a single glimpse of you (so it threads the maze on the hunt,
-  // but a player who truly escapes/hides eventually shakes it → the alarm can
-  // stand down). Resets the moment it sees you again.
-  if (r.type === 'm5' || r.type === 'm6') {
-    const saw = !player.invisibleToRobots && map.hasLineOfSight(r.x, r.y, player.x, player.y);
-    r.seenT = saw ? 0 : (r.seenT || 0) + dt;
-    if (r.seenT > FORTRESS_FORGET) { r.aggro = false; r.returning = true; r.seenT = 0; return; }
-  }
-
-  // M4 keeps looking: while it can see you it stamps the last-seen tile; when it
-  // loses you it heads there and sweeps, giving up only after M4_SEARCH_TIME
-  // seconds of finding nothing. Its aggro (and so the fortress report clock)
-  // stays live through the search, so ducking behind cover no longer switches
-  // the hunt off — you have to actually relocate.
-  if (r.type === 'm4') {
-    const saw = !player.invisibleToRobots && map.hasLineOfSight(r.x, r.y, player.x, player.y);
-    if (saw) { r.seenX = player.x; r.seenY = player.y; r.m4SearchT = 0; }
-    else {
-      r.m4SearchT = (r.m4SearchT || 0) + dt;
-      if (r.m4SearchT > M4_SEARCH_TIME) { r.aggro = false; r.returning = true; r.m4SearchT = 0; return; }
-    }
-  }
+  // A guard that has acquired you STAYS on the hunt. It does not get bored, does
+  // not wander back to its post, and does not forget: a fortress guard is not a
+  // scavenger with somewhere else to be. The only things that take one off you
+  // are destroying it, stunning or driving it from a terminal (disabledT /
+  // driven), and the island's mind dying. It keeps sweeping your last-seen tile
+  // when it loses sight, and re-acquires the moment it sees you again.
+  //
+  // `r.sees` — whether it has eyes on you THIS frame — is tracked separately from
+  // `r.aggro` (whether it is hunting at all). The fortress's report clock and
+  // stand-down read `sees`, so hiding well still quiets the alarm and stops the
+  // reinforcement waves, even though the guards themselves stay hostile.
+  const saw = !player.invisibleToRobots && map.hasLineOfSight(r.x, r.y, player.x, player.y);
+  r.sees = saw;
+  if (saw) { r.seenX = player.x; r.seenY = player.y; r.seenT = 0; }
+  else r.seenT = (r.seenT || 0) + dt;
 
   const d = distTo(r, player);
   if (d > 1e-4) r.facing = { x: (player.x - r.x) / d, y: (player.y - r.y) / d }; // face you while engaged
@@ -1612,11 +1618,23 @@ function updateM4(r, dt, player, map, d) {
   // updateGuard; here it just walks the search.
   const canSee = !player.invisibleToRobots && map.hasLineOfSight(r.x, r.y, player.x, player.y);
   if (!canSee) {
-    if (r.seenX != null && Math.hypot(r.seenX - r.x, r.seenY - r.y) > 1) {
+    if (r.seenX == null) return;
+    if (Math.hypot(r.seenX - r.x, r.seenY - r.y) > 1) {
       moveToward(r, r.seenX, r.seenY, M4_FLEE_SPEED, dt, map);
+      return;
     }
+    // Arrived at the last-seen tile and you are not there. It used to simply
+    // STOP here — standing on the spot forever, which is what read as a guard
+    // losing its point. Now it sweeps: a widening spiral around the last
+    // contact, so it hunts outward instead of freezing. The spiral resets
+    // whenever it sees you again (updateGuard stamps seenX/seenY).
+    r.m4Sweep = (r.m4Sweep || 0) + dt * 1.1;                 // angle
+    const rad = 2 + Math.min(9, r.m4Sweep * 0.9);            // creeps outward, capped
+    moveToward(r, r.seenX + Math.cos(r.m4Sweep) * rad, r.seenY + Math.sin(r.m4Sweep) * rad,
+      M4_PATROL_SPEED, dt, map);
     return;
   }
+  r.m4Sweep = 0; // eyes on you again: the search spiral starts fresh next time
   // In sight: hold at a wary distance and orbit to keep the line open.
   if (d > M4_KEEP_RANGE + 1) {
     moveToward(r, player.x, player.y, M4_FLEE_SPEED, dt, map);

@@ -573,12 +573,18 @@ export function createFortress(map, seed, spawn, opts = {}) {
         player.say('The fortress map flares in your hand — its lines run out across the floor, lighting the way through.');
       }
 
-      // The breach mechanic. A guard that has acquired you (aggro) is reporting;
-      // survive its report window (REPORT_DELAY) and the alarm trips. Kill the
-      // watchers fast and the report clock cools back down. Once alarmed, a long
-      // quiet spell (no guard sees you) stands the fortress back down.
+      // The breach mechanic. A guard with EYES ON YOU is reporting; survive its
+      // report window (REPORT_DELAY) and the alarm trips. Kill the watchers fast
+      // and the report clock cools back down. Once alarmed, a long quiet spell
+      // (no guard sees you) stands the fortress back down.
+      //
+      // Reads `sees`, not `aggro`. Guards stay hostile once they've acquired you
+      // — they never get bored and wander off — so aggro is no longer a signal
+      // that you are currently being watched. Breaking line of sight still
+      // quiets the fortress and stops the reinforcement waves; it just doesn't
+      // make the guards themselves forget you.
       const guards = robots ? robots.filter((r) => (r.type === 'm6' || r.type === 'm5' || r.type === 'm4') && !r.dead) : [];
-      const watched = guards.some((g) => g.aggro);
+      const watched = guards.some((g) => g.sees && !g.drained && !(g.disabledT > 0) && !g.driven);
       if (!state.alarm) {
         if (watched) {
           state.reportT += dt;
