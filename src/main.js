@@ -3372,9 +3372,16 @@ function update(dt) {
   const mouse = input.mousePos();
   const mouseWorld = camera.toWorld(mouse.x, mouse.y, renderer.w, renderer.h);
 
-  // Mouse wheel zooms (the HUD is screen-space, so it stays the same size).
-  const wheel = input.consumeWheel();
-  if (wheel) camera.zoomBy(-wheel * 0.0015);
+  // Mouse wheel zooms (the HUD is screen-space, so it stays the same size) —
+  // UNLESS an open panel owns the wheel. This consume used to run
+  // unconditionally, and it sits a couple of hundred lines above the systems
+  // pass that ticks lore.update, so the Scrapbook's own consumeWheel() was
+  // always handed a zero and could never scroll. The zoom was eating it; it was
+  // never a focus problem.
+  if (!lore.archiveOpen) {
+    const wheel = input.consumeWheel();
+    if (wheel) camera.zoomBy(-wheel * 0.0015);
+  }
 
   // AI-defeated celebration: a level-up modal (fireworks + score). Freezes the
   // world behind it until dismissed; then the run carries on (you don't win the
