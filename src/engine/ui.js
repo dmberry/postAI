@@ -48,6 +48,13 @@ export function deathRank(score) {
 // The four island daemons, in the order their chips are drawn on the Record
 // panel. CALYPSO is in the roster even though she is left rather than killed:
 // her refunction is her fall, and it counts toward the same four.
+// AEGILIA -> Aegilia. The roster and the terminals speak in caps; the HUD
+// says the names the way a person would.
+function sentenceCase(s) {
+  return String(s || '').replace(/[A-Za-z\u00C0-\u024F']+/g,
+    (wd) => wd.charAt(0).toUpperCase() + wd.slice(1).toLowerCase());
+}
+
 const AI_ROSTER = ['CALYPSO', 'POLYPHEMUS', 'CIRCE', 'HELIOS'];
 const CHIPS_H = 58;   // the bottom band the chip row reserves in the panel
 
@@ -315,7 +322,27 @@ export const uiMethods = {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(6,8,5,0.8)';
     ctx.fillRect(0, 0, this.w, this.h);
-    const pw = Math.min(420, this.w - 60), ph = 486;
+    const pw = Math.min(420, this.w - 60);
+
+    // The panel is sized to its CONTENT rather than to a fixed height. It used
+    // to be a fixed 486 with the chip row pinned to the floor, which left a hole
+    // in the middle of an early run (no books, three obelisks) and clipped a late
+    // one. Measure first, then draw: every block reports its height, the OB list
+    // is wrapped against the real font, and the panel is whatever the sum comes
+    // to — clamped so it can never outgrow the viewport.
+    const bookLog = player.skillLog && player.skillLog.length ? player.skillLog
+      : [...(player.skills || [])].map((s) => ({ skill: s }));
+    ctx.font = '12px ui-monospace, monospace';
+    const obLines = (player.killLog && player.killLog.length)
+      ? this._wrapText(ctx, player.killLog.join('  '), pw - 50) : [];
+    const H_HEAD = 68;                                    // title + subtitle
+    const H_RECORD = 20 + 3 * 19 + 12;                    // heading + 3 rows
+    const H_PRACTICE = 20 + 26;                           // heading + one inline row
+    const H_BOOKS = 20 + (bookLog.length ? bookLog.length * 20 : 20) + 12;
+    const H_OBS = obLines.length ? 20 + obLines.length * 16 + 12 : 0;
+    const H_CHIPS = 18 + 34 + 14;                         // heading + chip + pad
+    const ph = Math.min(this.h - 40,
+      H_HEAD + H_RECORD + H_PRACTICE + H_BOOKS + H_OBS + H_CHIPS + 14);
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
     this._skillsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
     ctx.fillStyle = '#12160e';
@@ -366,37 +393,39 @@ export const uiMethods = {
     stat('Deadline',    deadline,                             colR, y, '#d88a6a');
     y += 26;
 
+    // PRACTICE, on ONE line. Three tracks at level 0 do not deserve three rows
+    // of a panel that was already running out of room.
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
     ctx.fillText('PRACTICE', px + 20, y); y += 20;
-    ctx.font = '13px system-ui, sans-serif';
-    const tracks = [['Swordarm (melee)', 'melee'], ['Aim (guns)', 'guns'], ['Mind (reading)', 'knowledge']];
-    for (const [label, key] of tracks) {
+    const tracks = [['Swordarm', 'melee'], ['Aim', 'guns'], ['Mind', 'knowledge']];
+    const tw3 = Math.floor((pw - 40) / 3);
+    tracks.forEach(([label, key], i) => {
+      const tx = px + 30 + i * tw3;
       const lvl = player.xpLevel ? player.xpLevel(key) : 0;
-      ctx.fillStyle = '#e8e0d0';
-      ctx.fillText(label, px + 30, y);
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(207,216,195,0.5)';
+      ctx.fillText(label, tx, y);
+      const lw = ctx.measureText(label).width;
+      ctx.font = 'bold 13px system-ui, sans-serif';
       ctx.fillStyle = '#e8d27a';
-      ctx.textAlign = 'right';
-      ctx.fillText(`level ${lvl}`, px + pw - 24, y);
-      ctx.textAlign = 'left';
-      y += 22;
-    }
-    y += 12;
+      ctx.fillText(String(lvl), tx + lw + 6, y);
+    });
+    y += 26;   // the values sit ON y, so this is the gap to the next heading
+
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
     ctx.fillText('BOOKS READ', px + 20, y); y += 20;
-    ctx.font = '13px system-ui, sans-serif';
-    const log = player.skillLog && player.skillLog.length ? player.skillLog
-      : [...(player.skills || [])].map((s) => ({ skill: s }));
-    if (!log.length) {
+    if (!bookLog.length) {
       ctx.fillStyle = 'rgba(207,216,195,0.5)';
-      ctx.font = 'italic 13px system-ui, sans-serif';
+      ctx.font = 'italic 12px system-ui, sans-serif';
       ctx.fillText('No books read yet. Find them in the ruins.', px + 30, y);
+      y += 20;
     } else {
       const NAMES = { woodcraft: 'Woodcraft', herbalism: 'Herbalism', tracking: 'Tracking', fleetfoot: 'Fleet foot' };
+      ctx.font = '12px system-ui, sans-serif';
       let n = 1;
-      for (const e of log) {
-        if (y > py + ph - 16) break;
+      for (const e of bookLog) {
         ctx.fillStyle = '#e8e0d0';
         ctx.fillText(`${n}. ${NAMES[e.skill] || e.skill}`, px + 30, y);
         if (e.day) {
@@ -405,62 +434,90 @@ export const uiMethods = {
           ctx.fillText(`day ${e.day}`, px + pw - 24, y);
           ctx.textAlign = 'left';
         }
-        y += 22; n += 1;
+        y += 20; n += 1;
       }
     }
+
     // Kill record: the obelisks you've brought down, by their hex code names.
-    if (player.killLog && player.killLog.length) {
-      y += 14;
+    if (obLines.length) {
+      y += 12;
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(207,216,195,0.6)';
       ctx.fillText(`OBs DOWNED (${player.killLog.length})`, px + 20, y); y += 18;
       ctx.font = '12px ui-monospace, monospace';
       ctx.fillStyle = '#e0503a';
-      const codes = player.killLog.join('  ');
-      for (const line of this._wrapText(ctx, codes, pw - 50)) {
-        if (y > py + ph - CHIPS_H - 12) break;   // never run into the chip row
-        ctx.fillText(line, px + 30, y); y += 16;
-      }
+      for (const line of obLines) { ctx.fillText(line, px + 30, y); y += 16; }
     }
 
-    // AIs DISABLED — the four daemons as a row of chips along the bottom, each
-    // struck through as it falls. The archipelago's progress as something you
-    // can see at a glance rather than a fraction to read. Anchored to the panel
-    // floor so it holds still while the lists above it grow.
-    const chipsTop = py + ph - CHIPS_H;
+    // AIs DEFEATED — the four daemons drawn as actual silicon, a row of DIP
+    // packages with their legs and their pin-1 notch, each one named on its
+    // back the way a real chip is. A defeated daemon's part is dead: struck
+    // through, its legs dulled, the body gone cold.
+    y += 16;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
-    ctx.fillText('AIs DISABLED', px + 20, chipsTop + 14);
+    ctx.fillText('AIs DEFEATED', px + 20, y);
+    y += 10;
 
     const down = new Set(player.aisDown || []);
-    const gap = 6;
+    const gap = 8;
     const cw = Math.floor((pw - 40 - gap * (AI_ROSTER.length - 1)) / AI_ROSTER.length);
-    const chY = chipsTop + 24, chH = 26;
     AI_ROSTER.forEach((name, i) => {
-      const cx0 = px + 20 + i * (cw + gap);
-      const isDown = down.has(name);
-      ctx.fillStyle = isDown ? 'rgba(80,110,70,0.35)' : 'rgba(255,255,255,0.04)';
-      this.roundRect(cx0, chY, cw, chH, 3); ctx.fill();
-      ctx.strokeStyle = isDown ? 'rgba(140,190,120,0.55)' : 'rgba(207,216,195,0.22)';
-      ctx.lineWidth = 1;
-      this.roundRect(cx0 + 0.5, chY + 0.5, cw - 1, chH - 1, 3); ctx.stroke();
-
-      ctx.font = 'bold 9px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = isDown ? 'rgba(155,205,135,0.95)' : 'rgba(207,216,195,0.65)';
-      ctx.fillText(name, cx0 + cw / 2, chY + chH / 2);
-      if (isDown) {
-        const tw = Math.min(ctx.measureText(name).width + 6, cw - 8);
-        ctx.strokeStyle = 'rgba(155,205,135,0.95)';
-        ctx.beginPath();
-        ctx.moveTo(cx0 + (cw - tw) / 2, chY + chH / 2 + 0.5);
-        ctx.lineTo(cx0 + (cw + tw) / 2, chY + chH / 2 + 0.5);
-        ctx.stroke();
-      }
+      this.drawSiliconChip(px + 20 + i * (cw + gap), y, cw, 30, name, down.has(name));
     });
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  },
+
+  // One AI as a DIP-package chip: a dark body with silver legs down both long
+  // edges, a pin-1 notch bitten out of the left end, and the daemon's name
+  // silkscreened across the back. `dead` kills it — the body goes cold and
+  // green-black, the legs dull, and the name is struck through.
+  drawSiliconChip(x, y, w, h, label, dead) {
+    const ctx = this.ctx;
+    const legH = 4;                       // the legs stick out top and bottom
+    const by = y + legH, bh = h - legH * 2;
+
+    // Legs first, so the body sits over their roots.
+    const nLegs = Math.max(3, Math.floor((w - 10) / 11));
+    const step = (w - 12) / nLegs;
+    ctx.fillStyle = dead ? 'rgba(120,132,116,0.45)' : 'rgba(198,206,190,0.75)';
+    for (let i = 0; i < nLegs; i++) {
+      const lx = x + 6 + i * step + step * 0.5 - 2.5;
+      ctx.fillRect(Math.round(lx), y, 5, legH + 1);                 // top row
+      ctx.fillRect(Math.round(lx), by + bh - 1, 5, legH + 1);       // bottom row
+    }
+
+    // Body.
+    ctx.fillStyle = dead ? '#141a12' : '#22261d';
+    this.roundRect(x, by, w, bh, 3); ctx.fill();
+    ctx.strokeStyle = dead ? 'rgba(140,190,120,0.5)' : 'rgba(207,216,195,0.28)';
+    ctx.lineWidth = 1;
+    this.roundRect(x + 0.5, by + 0.5, w - 1, bh - 1, 3); ctx.stroke();
+
+    // Pin-1 notch, bitten out of the left end — the tell that says "chip".
+    ctx.fillStyle = 'rgba(6,8,5,0.95)';
+    ctx.beginPath();
+    ctx.arc(x, by + bh / 2, 3.5, -Math.PI / 2, Math.PI / 2);
+    ctx.fill();
+
+    // The name, silkscreened.
+    ctx.font = 'bold 8px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = dead ? 'rgba(150,200,130,0.9)' : 'rgba(207,216,195,0.7)';
+    const midY = by + bh / 2;
+    ctx.fillText(label, x + w / 2 + 1, midY);
+    if (dead) {
+      const tw = Math.min(ctx.measureText(label).width + 6, w - 10);
+      ctx.strokeStyle = 'rgba(150,200,130,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(x + (w - tw) / 2 + 1, midY + 0.5);
+      ctx.lineTo(x + (w + tw) / 2 + 1, midY + 0.5);
+      ctx.stroke();
+    }
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
   },
@@ -745,10 +802,14 @@ export const uiMethods = {
     // the whole dashboard.
     const GREY = 'rgba(207,216,195,0.72)';
     const GREY_DIM = 'rgba(207,216,195,0.42)';
-    labelled('Island:', hud.place || '—', ry + 12, GREY);
+    // Labels shout, names are spoken: ISLAND/AI in caps, the names in Sentence
+    // case. The roster is stored in caps (AEGILIA, POLYPHEMUS) because that is
+    // how the terminals and the daemons address each other; on the dashboard
+    // they read better as places and people than as system identifiers.
+    labelled('ISLAND:', sentenceCase(hud.place || '—'), ry + 12, GREY);
     const d = hud.daemon;
-    if (d) labelled('AI:', d.name, ry + 27, d.fallen ? GREY_DIM : GREY, d.fallen);
-    else labelled('AI:', 'none', ry + 27, GREY_DIM);
+    if (d) labelled('AI:', sentenceCase(d.name), ry + 27, d.fallen ? GREY_DIM : GREY, d.fallen);
+    else labelled('AI:', 'None', ry + 27, GREY_DIM);
     ctx.textAlign = 'left';
   },
 
@@ -762,6 +823,11 @@ export const uiMethods = {
     const ctx = this.ctx;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
+    // A tiny SCORE over the figure — without it the number is just a number in
+    // a corner, and a new player has no idea what it counts.
+    ctx.font = 'bold 8px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(232,210,122,0.55)';
+    ctx.fillText('SCORE', rx, baselineY - 19);
     ctx.font = 'bold 20px system-ui, sans-serif';
     ctx.fillStyle = '#e8d27a';
     ctx.fillText(`${player.score ?? 0}`, rx, baselineY);

@@ -4376,6 +4376,54 @@ export class Renderer {
         ctx.beginPath(); ctx.arc(5.7, -3, 1.1, 0, Math.PI * 2); ctx.fill();
         break;
       }
+      // A sheet of paper folded once and carried in a pocket: the lower leaf, the
+      // upper leaf laid over it, a crease between them, and the ghost of
+      // handwriting. It was falling through to the default beige square.
+      case 'note_home': {
+        ctx.save();
+        ctx.rotate(-0.06);
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';                 // the leaf behind
+        ctx.fillRect(-6, -6, 12, 12);
+        ctx.fillStyle = '#e6dcc0';
+        ctx.fillRect(-7, -7, 13, 7);                        // upper leaf
+        ctx.fillStyle = '#d8ccab';
+        ctx.fillRect(-7, 0, 13, 6);                         // lower leaf, shaded
+        ctx.strokeStyle = 'rgba(120,105,70,0.75)';          // the crease
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(-7, -0.5); ctx.lineTo(6, -0.5); ctx.stroke();
+        ctx.strokeStyle = 'rgba(90,80,55,0.5)';             // handwriting
+        ctx.beginPath();
+        for (const ly of [-4.5, -2.5, 2.5, 4.5]) { ctx.moveTo(-5, ly); ctx.lineTo(ly > 0 ? 2 : 4, ly); }
+        ctx.stroke();
+        ctx.restore();
+        break;
+      }
+      // Moly: black root, milk-white flower (Od. X.304-306). The root is the
+      // half that matters — it is what Hermes digs up and what wards her magic.
+      case 'moly': {
+        ctx.strokeStyle = '#1a1712';                        // the black root
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(0, 7); ctx.lineTo(-3, 9);
+        ctx.moveTo(0, 7); ctx.lineTo(3, 9.5);
+        ctx.moveTo(0, 7); ctx.lineTo(0.5, 10);
+        ctx.stroke();
+        ctx.strokeStyle = '#5f8f3e';                        // stem
+        ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.moveTo(0, 7); ctx.lineTo(0, -1); ctx.stroke();
+        ctx.fillStyle = '#4e7a34';                          // one leaf
+        ctx.beginPath(); ctx.ellipse(-3, 3, 3, 1.5, -0.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#f2f6ea';                          // milk-white petals
+        for (let i = 0; i < 5; i++) {
+          const a = -Math.PI / 2 + i * (Math.PI * 2 / 5);
+          ctx.beginPath();
+          ctx.ellipse(Math.cos(a) * 3.4, -4 + Math.sin(a) * 3.4, 2.6, 1.9, a, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = '#e8d27a';                          // heart
+        ctx.beginPath(); ctx.arc(0, -4, 1.7, 0, Math.PI * 2); ctx.fill();
+        break;
+      }
       default:
         ctx.fillStyle = itemDef.color;
         ctx.fillRect(-6, -6, 12, 12);
