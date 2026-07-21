@@ -45,6 +45,12 @@ export function deathRank(score) {
   return { title, blurb, color: colors[title] || '#e8d27a' };
 }
 
+// The four island daemons, in the order their chips are drawn on the Record
+// panel. CALYPSO is in the roster even though she is left rather than killed:
+// her refunction is her fall, and it counts toward the same four.
+const AI_ROSTER = ['CALYPSO', 'POLYPHEMUS', 'CIRCE', 'HELIOS'];
+const CHIPS_H = 58;   // the bottom band the chip row reserves in the panel
+
 export const uiMethods = {
   // A soft dim over the play area while the player rests (the dashboard, and
   // so the spinning clock, stays bright so you can watch time pass).
@@ -309,7 +315,7 @@ export const uiMethods = {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(6,8,5,0.8)';
     ctx.fillRect(0, 0, this.w, this.h);
-    const pw = Math.min(420, this.w - 60), ph = 472;
+    const pw = Math.min(420, this.w - 60), ph = 486;
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
     this._skillsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
     ctx.fillStyle = '#12160e';
@@ -345,18 +351,19 @@ export const uiMethods = {
     };
     const kills = (player.killLog || []).length;
     stat('Score',       player.score ?? 0,                    colL, y, '#e8d27a');
-    stat('AI disabled', `${hud.daemonsDown ?? 0} / 4`,        colR, y);
-    y += 19;
-    stat('Rank',        rank.title,                           colL, y, rank.color);
     stat('Islands',     `${hud.islandsReached ?? 0} / 5`,     colR, y);
     y += 19;
-    stat('OBs',         kills,                                colL, y);
-    stat('Deaths',      player.deaths || 0,                   colR, y);
+    stat('Rank',        rank.title,                           colL, y, rank.color);
+    stat('OBs',         kills,                                colR, y);
     y += 19;
     // The POSEIDON deadline lives here now rather than on the dashboard, where a
     // ticking number became wallpaper. In play you feel it through his notices;
     // this is where you come to check the actual figure.
-    stat('Deadline', hud.timeLabel || '—',                   colL, y, '#d88a6a');
+    stat('Deaths',      player.deaths || 0,                   colL, y);
+    // Bare clock: the label already says what it is counting down to, and the
+    // full "to POSEIDON" ran off the panel edge.
+    const deadline = (hud.timeLabel || '').replace(/\s*to\s+POSEIDON\s*$/i, '') || '—';
+    stat('Deadline',    deadline,                             colR, y, '#d88a6a');
     y += 26;
 
     ctx.font = 'bold 12px system-ui, sans-serif';
@@ -411,10 +418,51 @@ export const uiMethods = {
       ctx.fillStyle = '#e0503a';
       const codes = player.killLog.join('  ');
       for (const line of this._wrapText(ctx, codes, pw - 50)) {
-        if (y > py + ph - 12) break;
+        if (y > py + ph - CHIPS_H - 12) break;   // never run into the chip row
         ctx.fillText(line, px + 30, y); y += 16;
       }
     }
+
+    // AIs DISABLED — the four daemons as a row of chips along the bottom, each
+    // struck through as it falls. The archipelago's progress as something you
+    // can see at a glance rather than a fraction to read. Anchored to the panel
+    // floor so it holds still while the lists above it grow.
+    const chipsTop = py + ph - CHIPS_H;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('AIs DISABLED', px + 20, chipsTop + 14);
+
+    const down = new Set(player.aisDown || []);
+    const gap = 6;
+    const cw = Math.floor((pw - 40 - gap * (AI_ROSTER.length - 1)) / AI_ROSTER.length);
+    const chY = chipsTop + 24, chH = 26;
+    AI_ROSTER.forEach((name, i) => {
+      const cx0 = px + 20 + i * (cw + gap);
+      const isDown = down.has(name);
+      ctx.fillStyle = isDown ? 'rgba(80,110,70,0.35)' : 'rgba(255,255,255,0.04)';
+      this.roundRect(cx0, chY, cw, chH, 3); ctx.fill();
+      ctx.strokeStyle = isDown ? 'rgba(140,190,120,0.55)' : 'rgba(207,216,195,0.22)';
+      ctx.lineWidth = 1;
+      this.roundRect(cx0 + 0.5, chY + 0.5, cw - 1, chH - 1, 3); ctx.stroke();
+
+      ctx.font = 'bold 9px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = isDown ? 'rgba(155,205,135,0.95)' : 'rgba(207,216,195,0.65)';
+      ctx.fillText(name, cx0 + cw / 2, chY + chH / 2);
+      if (isDown) {
+        const tw = Math.min(ctx.measureText(name).width + 6, cw - 8);
+        ctx.strokeStyle = 'rgba(155,205,135,0.95)';
+        ctx.beginPath();
+        ctx.moveTo(cx0 + (cw - tw) / 2, chY + chH / 2 + 0.5);
+        ctx.lineTo(cx0 + (cw + tw) / 2, chY + chH / 2 + 0.5);
+        ctx.stroke();
+      }
+    });
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
   },
 
   // A quiet now-playing toast, centred just above the dashboard: artist,
@@ -670,10 +718,10 @@ export const uiMethods = {
     const ctx = this.ctx;
     ctx.textBaseline = 'alphabetic';
 
-    // Where you are and who holds it, as a labelled pair. ONE font throughout —
-    // same family, size and weight for label and value alike; they differ only
-    // in tone, the label dimmer than the thing it names. Right-justified, so the
-    // values line up flush against the panel edge and the block reads as a
+    // Where you are and who holds it, as a labelled pair. ONE font and ONE tone
+    // throughout — same family, size, weight and colour for label and value
+    // alike, so the whole block sits at a single quiet level. Right-justified,
+    // so the values line up flush against the panel edge and the pair reads as a
     // column rather than two loose strings.
     const labelled = (label, value, ly, valueColor, strike) => {
       ctx.font = '11px system-ui, sans-serif';
@@ -681,7 +729,6 @@ export const uiMethods = {
       ctx.fillStyle = valueColor;
       ctx.fillText(value, rx, ly);
       const vw = ctx.measureText(value).width;
-      ctx.fillStyle = 'rgba(207,216,195,0.40)';
       ctx.fillText(label, rx - vw - 6, ly);
       if (strike) {
         ctx.strokeStyle = valueColor;

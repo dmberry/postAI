@@ -161,6 +161,7 @@ player.onCoreDefeated = (core) => {
   }
   player.addScore(500);
   daemonsDown += 1;
+  recordAiDown(ai);        // which one, for the Record panel's chips
   // The dead core throws its testament into the open — auto-recover it to the
   // Scrapbook (the eidolon/Coherence book seeds the archipelago). `quiet` so it
   // doesn't fight the modal for the message line; the modal announces it.
@@ -175,6 +176,17 @@ player.onCoreDefeated = (core) => {
   player.say(`${ai} is dead. Every machine on the island powers down where it stands.`);
 };
 let daemonsDown = 0; // how many island AIs felled this run (for the Archipelago tally)
+
+// WHICH daemons are down, not just how many — the Record panel draws the roster
+// as four chips and strikes each one through as it falls, so the archipelago's
+// progress is a thing you can see rather than a fraction. Each fall is already
+// worth +500 at both call sites (a core-kill, and Calypso's refunction, which is
+// her equivalent of dying). Idempotent: a daemon only records once.
+function recordAiDown(name) {
+  if (!name) return;
+  player.aisDown = player.aisDown || [];
+  if (!player.aisDown.includes(name)) player.aisDown.push(name);
+}
 
 // Character persona and learned skills persist across sessions and deaths.
 const SAVE_KEY = 'postai-character';
@@ -228,6 +240,7 @@ try {
       if (typeof st.calypsoHold === 'number') player.calypsoHold = st.calypsoHold; // Nokia gradient survives reload
       if (Array.isArray(st.nokiaSent)) player.nokiaSent = new Set(st.nokiaSent);   // don't re-tutorial on reload
       if (Array.isArray(st.poseidonSaid)) player._poseidonSaid = st.poseidonSaid;  // nor replay the deadline notices
+      if (Array.isArray(st.aisDown)) player.aisDown = st.aisDown;                 // the fallen daemons stay fallen
       if (typeof st.nokiaParts === 'number') player._nokiaParts = st.nokiaParts;
       if (Array.isArray(st.nokiaLog)) player.nokiaLog = st.nokiaLog; // the SMS threads survive reload
       if (typeof st.snakeHigh === 'number') player.snakeHigh = st.snakeHigh; // Snake's best game survives too
@@ -315,6 +328,7 @@ function buildSaveBlob() {
       calypsoHold: player.calypsoHold,   // the Nokia gradient: her hold on you (docs/calypso-nokia-plan.md)
       nokiaSent: [...player.nokiaSent],  // the one-shot texts already sent, so a reload does not re-tutorial
       poseidonSaid: [...(player._poseidonSaid || [])], // deadline notices already pushed, so a reload does not replay them
+      aisDown: [...(player.aisDown || [])],           // which daemons are down, for the Record chips
       nokiaParts: player._nokiaParts || 0,
       nokiaLog: (player.nokiaLog || []).slice(-40), // the SMS threads, so the correspondence survives reload
       snakeHigh: player.snakeHigh || 0,  // the handset remembers its best game
@@ -2210,6 +2224,7 @@ function refunctionCalypso() {
   // seeds the same way, quietly (the release beat carries the message line).
   if (firstRelease && currentWorld.winMode === 'depart') {
     daemonsDown += 1;
+    recordAiDown('CALYPSO');   // she is left rather than killed, but she is down
     player.addScore(500);
     if (lore && lore.findFrag) lore.findFrag(DAEMON_BOOK_ID, player, true);
   }
