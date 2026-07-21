@@ -59,6 +59,10 @@ export function createNokia() {
     get justShown() { return justShown; },
     get pending() { return queue.length; },
     clear() { queue.length = 0; current = null; gap = 0; },
+    // Tapped: let it go. Not an instant cut — the ttl is pulled down to the
+    // tail of its own fade-out, so it dims away in a beat instead of
+    // vanishing mid-sentence. A message already fading is left alone.
+    hurry(t = 0.22) { if (current && current.ttl > t) current.ttl = t; return !!current; },
   };
 }
 

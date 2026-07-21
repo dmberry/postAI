@@ -419,6 +419,10 @@ let crossFail = null;      // failed crossing (Poseidon turns you back)
 let departOut = null;      // rowing out to the heading chart (or back in)
 let pendingCrossing = null; // a chosen island, performed at the next frame top
 let strait = null;         // in the narrows: Scylla and Charybdis (game/strait.js)
+// The heading the current voyage put out on. The boat sprite has one bow and a
+// mirror, so the hull must at least be flipped to the side it is actually
+// sailing toward; the strait picks up the crossing here rather than guessing.
+let lastSailDir = null;
 
 const persist = () => {
   if (resettingGame) return;
@@ -832,6 +836,7 @@ player.onDepart = (p, boat) => {
     boatProps: boat ? { ...boat } : null,
   };
   if (boat) map.removeObject(boat);           // she rides on player.aboard for the voyage
+  lastSailDir = { x: dir.x, y: dir.y };   // the heading this voyage left on
   player.aboard = { type: departOut.type, mirror: boatMirror(dir.x, dir.y), wob: 0 };
   sfx.play('jump');
   p.say('You put out from the beach. The land slides away behind you, and ahead there is only the fog.');
@@ -908,7 +913,11 @@ function beginStrait(fromId, toId) {
   strait = { t: 0, from: fromId, to: toId, phase: 'in', choice: null, outcome: null };
   // You are still in the greek ship you left the island in — put it back under you
   // for the passage (the row-out cleared it when the heading was committed).
-  player.aboard = { type: 'greek_ship', mirror: true, wob: 0 };
+  // Face the way the voyage is actually going. This used to be a hardcoded
+  // `mirror: true`, so a ship that had sailed west through the narrows was
+  // drawn facing east — the hull pointing away from its own course.
+  const sd = lastSailDir || seawardFrom(map, player.x, player.y);
+  player.aboard = { type: 'greek_ship', mirror: boatMirror(sd.x, sd.y), wob: 0 };
   sfx.play('charge');
   player.say('The open water narrows. Cliffs stand up on either hand, and the channel between them is barely a ship wide. Somewhere ahead the sea is making a noise no sea should make.');
   circeStraitAdvice();
@@ -4091,6 +4100,17 @@ function update(dt) {
   // same-slot release, a click-equip); release drops onto the target slot.
   // Claimed here so a slot press never also swings the held tool.
   const press = input.clickPos();
+  // Tap the SMS handset to hurry it along. Checked BEFORE the slots and the
+  // world so a dismissing tap never also swings the held tool — the toast sits
+  // over open ground, and reading it should not cost you a swing.
+  if (press && renderer._nokiaToastRect && nokia.current) {
+    const r = renderer._nokiaToastRect;
+    if (press.x >= r.x && press.x <= r.x + r.w && press.y >= r.y && press.y <= r.y + r.h) {
+      input.consumeClick();
+      nokia.hurry();
+      sfx.play('keydrop');
+    }
+  }
   if (press && renderer.slotAt) {
     const slot = renderer.slotAt(press.x, press.y);
     if (slot) {

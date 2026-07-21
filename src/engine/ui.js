@@ -322,7 +322,15 @@ export const uiMethods = {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(6,8,5,0.8)';
     ctx.fillRect(0, 0, this.w, this.h);
-    const pw = Math.min(420, this.w - 60);
+    // RESPONSIVE. On a narrow phone the panel used to keep desktop metrics and
+    // simply overflow: 420 wide against a 330-wide viewport, 13px stats, 20px
+    // rows. Everything below scales off `k`, so the same panel shrinks to fit a
+    // handset and still reads.
+    const pw = Math.min(420, this.w - 28);
+    const k = Math.max(0.78, Math.min(1, pw / 420));      // 1 on desktop, ~0.8 on a phone
+    const fs = (n) => `${Math.round(n * k)}px system-ui, sans-serif`;
+    const fsb = (n) => `bold ${Math.round(n * k)}px system-ui, sans-serif`;
+    const row = Math.round(19 * k), pad = Math.round(20 * k);
 
     // The panel is sized to its CONTENT rather than to a fixed height. It used
     // to be a fixed 486 with the chip row pinned to the floor, which left a hole
@@ -332,15 +340,15 @@ export const uiMethods = {
     // to — clamped so it can never outgrow the viewport.
     const bookLog = player.skillLog && player.skillLog.length ? player.skillLog
       : [...(player.skills || [])].map((s) => ({ skill: s }));
-    ctx.font = '12px ui-monospace, monospace';
+    ctx.font = `${Math.round(12 * k)}px ui-monospace, monospace`;
     const obLines = (player.killLog && player.killLog.length)
       ? this._wrapText(ctx, player.killLog.join('  '), pw - 50) : [];
-    const H_HEAD = 68;                                    // title + subtitle
-    const H_RECORD = 20 + 3 * 19 + 12;                    // heading + 3 rows
-    const H_PRACTICE = 20 + 26;                           // heading + one inline row
-    const H_BOOKS = 20 + (bookLog.length ? bookLog.length * 20 : 20) + 12;
-    const H_OBS = obLines.length ? 20 + obLines.length * 16 + 12 : 0;
-    const H_CHIPS = 18 + 34 + 14;                         // heading + chip + pad
+    const H_HEAD = Math.round(68 * k);                                    // title + subtitle
+    const H_RECORD = pad + 3 * row + Math.round(12 * k);                    // heading + 3 rows
+    const H_PRACTICE = pad + Math.round(26 * k);                           // heading + one inline row
+    const H_BOOKS = pad + (bookLog.length ? bookLog.length * pad : pad) + Math.round(12 * k);
+    const H_OBS = obLines.length ? pad + obLines.length * Math.round(16 * k) + Math.round(12 * k) : 0;
+    const H_CHIPS = Math.round((18 + 34 + 14) * k);                         // heading + chip + pad
     const ph = Math.min(this.h - 40,
       H_HEAD + H_RECORD + H_PRACTICE + H_BOOKS + H_OBS + H_CHIPS + 14);
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
@@ -351,38 +359,39 @@ export const uiMethods = {
     ctx.strokeRect(px + 0.5, py + 0.5, pw - 1, ph - 1);
 
     ctx.fillStyle = '#cfd8c3';
-    ctx.font = 'bold 16px system-ui, sans-serif';
-    ctx.fillText('Skills & Knowledge', px + 20, py + 30);
-    ctx.font = '11px system-ui, sans-serif';
+    ctx.font = fsb(16);
+    ctx.fillText('Skills & Knowledge', px + pad, py + Math.round(30 * k));
+    ctx.font = fs(11);
     ctx.fillStyle = 'rgba(207,216,195,0.55)';
-    ctx.fillText('K to close · all of it survives death', px + 20, py + 48);
+    ctx.fillText('K to close · all of it survives death', px + pad, py + Math.round(48 * k));
 
     // THE RECORD — score, the rank it has earned, and the run's tallies. This
     // lives here rather than on the HUD: the dashboard should carry only what
     // you need mid-fight, and a rank is something you look up, not something you
     // steer by. Two columns so six figures cost three rows.
-    let y = py + 76;
-    ctx.font = 'bold 12px system-ui, sans-serif';
+    let y = py + Math.round(76 * k);
+    ctx.font = fsb(12);
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
-    ctx.fillText('RECORD', px + 20, y); y += 20;
+    ctx.fillText('RECORD', px + pad, y); y += pad;
 
     const rank = deathRank(player.score ?? 0);
-    const colL = px + 30, colR = px + Math.round(pw / 2) + 10;
+    const colL = px + Math.round(30 * k), colR = px + Math.round(pw / 2) + Math.round(10 * k);
+    const valDx = Math.round(84 * k);
     const stat = (label, value, cx, cy, valueColor) => {
-      ctx.font = '11px system-ui, sans-serif';
+      ctx.font = fs(11);
       ctx.fillStyle = 'rgba(207,216,195,0.5)';
       ctx.fillText(label, cx, cy);
-      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.font = fsb(13);
       ctx.fillStyle = valueColor || '#e8e0d0';
-      ctx.fillText(String(value), cx + 84, cy);
+      ctx.fillText(String(value), cx + valDx, cy);
     };
     const kills = (player.killLog || []).length;
     stat('Score',       player.score ?? 0,                    colL, y, '#e8d27a');
     stat('Islands',     `${hud.islandsReached ?? 0} / 5`,     colR, y);
-    y += 19;
+    y += row;
     stat('Rank',        rank.title,                           colL, y, rank.color);
     stat('OBs',         kills,                                colR, y);
-    y += 19;
+    y += row;
     // The POSEIDON deadline lives here now rather than on the dashboard, where a
     // ticking number became wallpaper. In play you feel it through his notices;
     // this is where you come to check the actual figure.
@@ -391,81 +400,81 @@ export const uiMethods = {
     // full "to POSEIDON" ran off the panel edge.
     const deadline = (hud.timeLabel || '').replace(/\s*to\s+POSEIDON\s*$/i, '') || '—';
     stat('Deadline',    deadline,                             colR, y, '#d88a6a');
-    y += 26;
+    y += Math.round(26 * k);
 
     // PRACTICE, on ONE line. Three tracks at level 0 do not deserve three rows
     // of a panel that was already running out of room.
-    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.font = fsb(12);
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
-    ctx.fillText('PRACTICE', px + 20, y); y += 20;
+    ctx.fillText('PRACTICE', px + pad, y); y += pad;
     const tracks = [['Swordarm', 'melee'], ['Aim', 'guns'], ['Mind', 'knowledge']];
-    const tw3 = Math.floor((pw - 40) / 3);
+    const tw3 = Math.floor((pw - pad * 2) / 3);
     tracks.forEach(([label, key], i) => {
-      const tx = px + 30 + i * tw3;
+      const tx = px + Math.round(30 * k) + i * tw3;
       const lvl = player.xpLevel ? player.xpLevel(key) : 0;
-      ctx.font = '11px system-ui, sans-serif';
+      ctx.font = fs(11);
       ctx.fillStyle = 'rgba(207,216,195,0.5)';
       ctx.fillText(label, tx, y);
       const lw = ctx.measureText(label).width;
-      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.font = fsb(13);
       ctx.fillStyle = '#e8d27a';
-      ctx.fillText(String(lvl), tx + lw + 6, y);
+      ctx.fillText(String(lvl), tx + lw + Math.round(6 * k), y);
     });
-    y += 26;   // the values sit ON y, so this is the gap to the next heading
+    y += Math.round(26 * k);   // the values sit ON y, so this is the gap to the next heading
 
-    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.font = fsb(12);
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
-    ctx.fillText('BOOKS READ', px + 20, y); y += 20;
+    ctx.fillText('BOOKS READ', px + pad, y); y += pad;
     if (!bookLog.length) {
       ctx.fillStyle = 'rgba(207,216,195,0.5)';
-      ctx.font = 'italic 12px system-ui, sans-serif';
-      ctx.fillText('No books read yet. Find them in the ruins.', px + 30, y);
-      y += 20;
+      ctx.font = `italic ${Math.round(12 * k)}px system-ui, sans-serif`;
+      ctx.fillText('No books read yet. Find them in the ruins.', px + Math.round(30 * k), y);
+      y += pad;
     } else {
       const NAMES = { woodcraft: 'Woodcraft', herbalism: 'Herbalism', tracking: 'Tracking', fleetfoot: 'Fleet foot' };
-      ctx.font = '12px system-ui, sans-serif';
+      ctx.font = fs(12);
       let n = 1;
       for (const e of bookLog) {
         ctx.fillStyle = '#e8e0d0';
-        ctx.fillText(`${n}. ${NAMES[e.skill] || e.skill}`, px + 30, y);
+        ctx.fillText(`${n}. ${NAMES[e.skill] || e.skill}`, px + Math.round(30 * k), y);
         if (e.day) {
           ctx.fillStyle = 'rgba(207,216,195,0.5)';
           ctx.textAlign = 'right';
-          ctx.fillText(`day ${e.day}`, px + pw - 24, y);
+          ctx.fillText(`day ${e.day}`, px + pw - pad, y);
           ctx.textAlign = 'left';
         }
-        y += 20; n += 1;
+        y += pad; n += 1;
       }
     }
 
     // Kill record: the obelisks you've brought down, by their hex code names.
     if (obLines.length) {
-      y += 12;
-      ctx.font = 'bold 12px system-ui, sans-serif';
+      y += Math.round(12 * k);
+      ctx.font = fsb(12);
       ctx.fillStyle = 'rgba(207,216,195,0.6)';
-      ctx.fillText(`OBs DOWNED (${player.killLog.length})`, px + 20, y); y += 18;
-      ctx.font = '12px ui-monospace, monospace';
+      ctx.fillText(`OBs DOWNED (${player.killLog.length})`, px + pad, y); y += Math.round(18 * k);
+      ctx.font = `${Math.round(12 * k)}px ui-monospace, monospace`;
       ctx.fillStyle = '#e0503a';
-      for (const line of obLines) { ctx.fillText(line, px + 30, y); y += 16; }
+      for (const line of obLines) { ctx.fillText(line, px + Math.round(30 * k), y); y += Math.round(16 * k); }
     }
 
     // AIs DEFEATED — the four daemons drawn as actual silicon, a row of DIP
     // packages with their legs and their pin-1 notch, each one named on its
     // back the way a real chip is. A defeated daemon's part is dead: struck
     // through, its legs dulled, the body gone cold.
-    y += 16;
+    y += Math.round(16 * k);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
-    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.font = fsb(12);
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
-    ctx.fillText('AIs DEFEATED', px + 20, y);
-    y += 10;
+    ctx.fillText('AIs DEFEATED', px + pad, y);
+    y += Math.round(10 * k);
 
     const down = new Set(player.aisDown || []);
-    const gap = 8;
-    const cw = Math.floor((pw - 40 - gap * (AI_ROSTER.length - 1)) / AI_ROSTER.length);
+    const gap = Math.round(8 * k);
+    const cw = Math.floor((pw - pad * 2 - gap * (AI_ROSTER.length - 1)) / AI_ROSTER.length);
     AI_ROSTER.forEach((name, i) => {
-      this.drawSiliconChip(px + 20 + i * (cw + gap), y, cw, 30, name, down.has(name));
+      this.drawSiliconChip(px + pad + i * (cw + gap), y, cw, Math.round(30 * k), name, down.has(name));
     });
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
@@ -550,7 +559,7 @@ export const uiMethods = {
   drawNokiaToast(t, bars = 4, touch = false) {
     const ctx = this.ctx;
     const a = Math.min(Math.min(1, (t.total - t.ttl) / 0.22), Math.min(1, t.ttl / 0.8));
-    if (a <= 0) return;
+    if (a <= 0) { this._nokiaToastRect = null; return; }
     const W = 214, padX = 12, headH = 20, lineH = 15;
     ctx.save();
     ctx.globalAlpha = a;
@@ -562,6 +571,8 @@ export const uiMethods = {
     // edge above the dashboard — step the toast left of it.
     const x = this.w - W - 14 - (touch ? 90 : 0);
     const y = (this.hudTop != null ? this.hudTop : this.h - 100) - H - 40;
+    // Remembered so a tap on the handset can hurry it along (main.js).
+    this._nokiaToastRect = { x: x - 6, y: y - 6, w: W + 12, h: H + 12 };
     // Dark plastic bezel.
     ctx.fillStyle = '#191c14';
     ctx.fillRect(x - 6, y - 6, W + 12, H + 12);
@@ -825,12 +836,17 @@ export const uiMethods = {
     ctx.textBaseline = 'alphabetic';
     // A tiny SCORE over the figure — without it the number is just a number in
     // a corner, and a new player has no idea what it counts.
-    ctx.font = 'bold 8px system-ui, sans-serif';
-    ctx.fillStyle = 'rgba(232,210,122,0.55)';
-    ctx.fillText('SCORE', rx, baselineY - 19);
-    ctx.font = 'bold 20px system-ui, sans-serif';
+    // Label and figure share ONE line, the label tucked in to the left of the
+    // number. Stacked, the pair was tall enough to sit on top of the PHONE slot
+    // on a narrow screen; side by side it fits the strip above the slot row.
+    const txt = `${player.score ?? 0}`;
+    ctx.font = 'bold 13px system-ui, sans-serif';
     ctx.fillStyle = '#e8d27a';
-    ctx.fillText(`${player.score ?? 0}`, rx, baselineY);
+    ctx.fillText(txt, rx, baselineY);
+    const numW = ctx.measureText(txt).width;
+    ctx.font = 'bold 7px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(232,210,122,0.55)';
+    ctx.fillText('SCORE', rx - numW - 5, baselineY);
     ctx.textAlign = 'left';
   },
 
@@ -1054,7 +1070,7 @@ export const uiMethods = {
     // floating over the terrain.
     this.drawStatusCard(player, hud, W - 10, top + 8);
     // Score hard into the bottom-right corner of the dashboard panel.
-    this.drawScoreCorner(player, W - 10, top + MDH - 13);
+    this.drawScoreCorner(player, W - 10, top + MDH - 63);   // in the clear band above the slot labels
 
     // --- Bottom row: the slot strip, full width — hands, pockets, backpack,
     // walkman, all visible and reachable. ---
