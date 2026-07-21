@@ -1318,16 +1318,14 @@ export const uiMethods = {
       }
     }
 
-    // Stats block: the same boxed status card the compact HUD uses, so both
-    // dashboards say the same things about where you are and who holds it. The
-    // card must sit inside DASH_H (78) — hence the tight top offset — and the
-    // name sits to its LEFT rather than above it, where there is no room.
-    const cardX = this.w - 12 - 150;   // where the name sits, left of the status lines
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(207,216,195,0.75)';
-    ctx.fillText(player.name || '', cardX - 12, top + 44);
-    ctx.textAlign = 'left';
+    // Stats block: the same status lines the compact HUD uses, so both
+    // dashboards say the same things about where you are and who holds it. They
+    // must sit inside DASH_H (78), hence the tight top offset.
+    //
+    // The player's name is NOT here. You know who you are; it never changed and
+    // never will, so it was costing a line of the dashboard to tell you
+    // something you cannot act on. It still appears where it earns its place —
+    // the title screen, the SMS threads, and the death certificate.
     this.drawStatusCard(player, hud, this.w - 12, top + 6);
     this.drawScoreCorner(player, this.w - 12, top + DASH_H - 10);
   },
