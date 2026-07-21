@@ -118,7 +118,7 @@ export function initMobileGate(mode = 'gate') {
         <p class="mg-about-tiny">Game designed in the UK · github.com/dmberry/nostos</p>
       </div>
     </div>`;
-  const footerHtml = `<div class="mg-madein">alpha · Game designed in the UK · <button class="mg-about-open" id="mg-about-open">About</button> <span class="mg-ver">v${VERSION}</span></div>`;
+  const footerHtml = `<div class="mg-madein">beta · Game designed in the UK · <button class="mg-about-open" id="mg-about-open">About</button> <span class="mg-ver">v${VERSION}</span></div>`;
   // A looping game-world clip drifting slowly behind everything, low opacity.
   // It plays at half speed (set in JS) and pans gently left→right (CSS).
   // H.264 MP4 — plays in every modern browser (transcoded from the source .mov).
@@ -131,8 +131,8 @@ export function initMobileGate(mode = 'gate') {
          ${hasSave ? '<button id="mg-continue" class="mg-btn primary">Continue</button>' : ''}
          <button id="mg-start" class="mg-btn ${hasSave ? '' : 'primary'}">${hasSave ? 'New game' : 'Start'}</button>
        </div>`
-    : `<p class="mg-sub">It's the end of the world.<span class="mg-sub2">This is an early alpha — you can play it right here with touch controls (hold to move, tap to act), or grab a laptop for the full keyboard-and-mouse game. Either way, here's the soundtrack.</span></p>
-       <div class="mg-actions"><button id="mg-tryanyway" class="mg-btn primary">▶ Play (alpha)</button></div>`;
+    : `<p class="mg-sub">It's the end of the world.<span class="mg-sub2">This is a beta — playable end to end, and still growing. You can play it right here with touch controls (hold to move, tap to act), or grab a laptop for the full keyboard-and-mouse game. Either way, here's the soundtrack.</span></p>
+       <div class="mg-actions"><button id="mg-tryanyway" class="mg-btn primary">▶ Play (beta)</button></div>`;
   const checkpointHtml = (isTitle && stageEntries.length)
     ? `<div class="mg-stages">
          <div class="mg-stages-h">Load a checkpoint</div>

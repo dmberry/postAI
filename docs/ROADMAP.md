@@ -31,6 +31,9 @@ long time and are now in the game:
   (R3) — she is left, not killed.
 - **Scylla and Charybdis** (v1.145) — the forced-choice strait on the
   AEAEA ↔ THRINACIA passage. The first of the sea's own monsters.
+- **Per-island save fidelity** (v1.147) — the run snapshot now stores each
+  island's own world state instead of reading Calypso's arrays whatever island
+  you were on. Found while preparing the v1.147 release.
 
 ---
 
@@ -109,10 +112,6 @@ long time and are now in the game:
 
 ## Phase 5 — infrastructure & tech debt
 
-- **Per-island save fidelity**: the run snapshot resumes you on the right island,
-  but parts of the world blob are still Ogygia-centric (`obDown` and
-  `boxesOpened` read Calypso's arrays regardless of where you are). Worth
-  straightening before more per-island state accumulates.
 - **Four boat sprites** (se/sw/ne/nw, the way `CAR_SPRITES` already are): one
   sprite plus its mirror covers only the two down-screen headings, so sailing
   away from the camera still shows the bow rather than the stern.

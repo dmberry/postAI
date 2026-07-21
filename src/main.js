@@ -28,7 +28,7 @@ import { stampCoast } from './engine/coast.js';
 import { placeRuins } from './game/ruins.js';
 import { createFortress, DAEMON_BOOK_ID, DAEMON_BOOK_TITLE } from './game/fortress.js';
 import { createUnderworldPocket, spawnUnderworldCreature, updateUnderworldCreatures } from './game/underworld.js';
-import { createWorld, registerWorld, switchWorld } from './game/world.js';
+import { createWorld, registerWorld, switchWorld, allWorlds } from './game/world.js';
 import { createIsland } from './islands/calypso.js';
 import { createIthaca } from './islands/ithaca.js';
 import { createPolyphemus } from './islands/polyphemus.js';
@@ -193,6 +193,13 @@ let hadExistingSave = false;
 // very end of boot (after all init + the world machinery), since resuming onto a
 // non-overworld island means a goToWorld() the rest of module-eval must not see.
 let _bootIsland = 'calypso', _bootPos = null;
+// The `world.islands` blob off the save, held until each island is built and can
+// consume its own entry (applyIslandState, far below). Declared HERE, above the
+// restore block that assigns it, and NOT beside its function: the restore runs
+// during module evaluation, so a `let` further down would leave this in the
+// temporal dead zone and throw at boot on every existing save. That is exactly
+// how v1.139 shipped a black screen; see the note by `crossFail` below.
+let _savedIslands = null;
 try {
   const saved = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (saved) {
@@ -251,21 +258,18 @@ try {
     // by persist() below. This is why a Continue now resumes the world, not just you.
     if (saved.world) {
       const wsv = saved.world;
-      if (Array.isArray(wsv.obDown)) {
-        const down = new Set(wsv.obDown);
-        for (const o of calypso.obeliskObjs) {
-          if (down.has(o.code)) { o.destroyed = true; map.objectGrid[o.y * map.w + o.x] = null; }
-        }
-      }
-      if (wsv.factoryDestroyed && wfactory) wfactory.destroyed = true;
-      if (Array.isArray(wsv.boxesOpened)) {
-        const open = new Set(wsv.boxesOpened.map((b) => `${b.x},${b.y}`));
-        for (const o of overworldMap.objects) {
-          if (o.type === 'box' && open.has(`${o.x},${o.y}`)) { o.opened = true; o.lore = []; }
-        }
-      }
+      // Per-island world state. A save written before the archipelago (or by any
+      // build up to v1.146) carries the four flat CALYPSO-only fields instead, so
+      // fold those into an islands blob keyed to her — old saves keep working and
+      // stop mis-restoring onto the wrong island.
+      _savedIslands = wsv.islands || {
+        calypso: {
+          obDown: wsv.obDown, factoryDestroyed: wsv.factoryDestroyed,
+          boxesOpened: wsv.boxesOpened, fortress: wsv.fortress,
+        },
+      };
+      applyIslandState(calypso);   // she is the only island built this early
       if (typeof wsv.daemonsDown === 'number') daemonsDown = wsv.daemonsDown;
-      if (wsv.fortress && fortress && fortress.restore) fortress.restore(wsv.fortress);
       if (wsv.currentIsland) _bootIsland = wsv.currentIsland; // Stage 1c: resume on the island you saved on
     }
   }
@@ -316,14 +320,78 @@ function buildSaveBlob() {
     },
     world: {
       currentIsland: currentWorld.id, // Stage 1c: which island you're on, so a voyage survives reload
-      obDown: calypso.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code),
-      factoryDestroyed: !!(wfactory && wfactory.destroyed),
-      // Looted caches, keyed by tile — the world regenerates them full otherwise.
-      boxesOpened: overworldMap.objects.filter((o) => o.type === 'box' && o.opened).map((o) => ({ x: o.x, y: o.y })),
       daemonsDown,
-      fortress: (fortress && fortress.serialize) ? fortress.serialize() : null,
+      // Per-island world state, keyed by island id. This USED to be four flat
+      // fields that only ever read CALYPSO — written when the game had one
+      // island, and quietly wrong once the archipelago landed: felling obelisks
+      // on Polyphemus saved nothing, and its fortress snapshot was restored onto
+      // Calypso's fortress (the restore runs at module eval, when the `fortress`
+      // alias still points at hers). Now every built island saves its own.
+      islands: serializeIslandState(),
     },
   };
+}
+
+// Snapshot the mutable world state of every island built so far. Islands are
+// built lazily — one you have never sailed to simply has no entry, and gets none
+// until you go there. The Backspace is a transient pocket that always regenerates,
+// so it is never saved.
+function serializeIslandState() {
+  const out = {};
+  // FIRST carry forward the saved state of islands not yet built this run. They
+  // are created lazily, so an island you have not sailed back to has no live
+  // object to read — and simply skipping it would erase that island's progress
+  // the moment anything autosaved. The boot score-wipe persist() does exactly
+  // that, before the resume has even switched you to the island you saved on, so
+  // without this the first save of every session wipes every far island.
+  if (_savedIslands) {
+    for (const id of Object.keys(_savedIslands)) {
+      if (id === 'backspace') continue;
+      const { _applied, ...rest } = _savedIslands[id];   // drop the internal marker
+      out[id] = rest;
+    }
+  }
+  // ...then let any island that IS built override with its live state.
+  for (const w of allWorlds()) {
+    if (w.id === 'backspace') continue;
+    const st = {};
+    if (w.obeliskObjs && w.obeliskObjs.length) {
+      st.obDown = w.obeliskObjs.filter((o) => o.destroyed).map((o) => o.code);
+    }
+    if (w.wfactory) st.factoryDestroyed = !!w.wfactory.destroyed;
+    // Looted caches, keyed by tile — the world regenerates them full otherwise.
+    if (w.map && w.map.objects) {
+      st.boxesOpened = w.map.objects.filter((o) => o.type === 'box' && o.opened).map((o) => ({ x: o.x, y: o.y }));
+    }
+    if (w.fortress && w.fortress.serialize) st.fortress = w.fortress.serialize();
+    out[w.id] = st;
+  }
+  return out;
+}
+
+// Re-apply an island's saved state to the world object, once, at the moment that
+// island is actually built. Called from each ensureX() (and for Calypso at boot),
+// so a far island restores when you first sail back to it rather than needing to
+// exist at load time.
+function applyIslandState(w) {
+  if (!w || !_savedIslands) return;
+  const st = _savedIslands[w.id];
+  if (!st || st._applied) return;
+  st._applied = true;       // idempotent: an island is only restored once per run
+  if (Array.isArray(st.obDown) && w.obeliskObjs) {
+    const down = new Set(st.obDown);
+    for (const o of w.obeliskObjs) {
+      if (down.has(o.code)) { o.destroyed = true; w.map.objectGrid[o.y * w.map.w + o.x] = null; }
+    }
+  }
+  if (st.factoryDestroyed && w.wfactory) w.wfactory.destroyed = true;
+  if (Array.isArray(st.boxesOpened) && w.map && w.map.objects) {
+    const open = new Set(st.boxesOpened.map((b) => `${b.x},${b.y}`));
+    for (const o of w.map.objects) {
+      if (o.type === 'box' && open.has(`${o.x},${o.y}`)) { o.opened = true; o.lore = []; }
+    }
+  }
+  if (st.fortress && w.fortress && w.fortress.restore) w.fortress.restore(st.fortress);
 }
 // Transient voyage state, forward-declared HERE (above persist) so persist's
 // guard can read them. persist() is called during module eval (the reload
@@ -622,6 +690,10 @@ function ensureIthaca() {
     }
     islandWelcome('ithaca');
   };
+  // Re-apply this island's own saved state now that it exists (felled
+  // obelisks, looted caches, its fortress). Lazy building is why this
+  // cannot happen at load: the island had not been made yet.
+  applyIslandState(ithaca);
 }
 let polyphemus = null;
 function ensurePolyphemus() {
@@ -631,6 +703,10 @@ function ensurePolyphemus() {
     player.say("The ship grounds on the Cyclopes' shore. Somewhere inland a single vast eye turns, and the land goes taut with knowing you are here. This is POLYPHEMUS.");
     islandWelcome('polyphemus');
   };
+  // Re-apply this island's own saved state now that it exists (felled
+  // obelisks, looted caches, its fortress). Lazy building is why this
+  // cannot happen at load: the island had not been made yet.
+  applyIslandState(polyphemus);
 }
 let circe = null;
 function ensureCirce() {
@@ -642,6 +718,10 @@ function ensureCirce() {
       : 'You step onto Aeaea. The air is sweet and wrong, and something begins, very gently, to rewrite you. Find moly — it grows where HERMES stands.');
     islandWelcome('circe');
   };
+  // Re-apply this island's own saved state now that it exists (felled
+  // obelisks, looted caches, its fortress). Lazy building is why this
+  // cannot happen at load: the island had not been made yet.
+  applyIslandState(circe);
 }
 let helios = null;
 function ensureHelios() {
@@ -651,6 +731,10 @@ function ensureHelios() {
     player.say('The keel grinds up onto Thrinacia in a great flat light. Cattle graze the headland, golden and unafraid. This is HELIOS — and the herd is not yours to take.');
     islandWelcome('helios');
   };
+  // Re-apply this island's own saved state now that it exists (felled
+  // obelisks, looted caches, its fortress). Lazy building is why this
+  // cannot happen at load: the island had not been made yet.
+  applyIslandState(helios);
 }
 // Resolve an island id to its (lazily-built) World.
 function worldById(id) {
