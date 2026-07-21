@@ -977,6 +977,7 @@ function narrowsBite() {
 // understands, so finishStrait needs no special case.
 function endNarrows(outcome) {
   const s = strait;
+  const hull = (s.run && s.run.rocks) || 0;   // read before the run is cleared
   s.run = null;
   s.t = 0;
   s.phase = 'out';
@@ -991,11 +992,13 @@ function endNarrows(outcome) {
   // Through. What it cost depends entirely on how well you steered.
   if (!s.taken.length) {
     sfx.play('narrowsWin');
-    player.say('The rock falls away astern and the water goes quiet. Six mouths, and not one of them touched you. Nobody gets through the narrows clean. You just did.');
+    player.say(hull
+      ? `Through, with nothing taken — though the rocks had ${hull === 1 ? 'a piece' : 'pieces'} of the hull on the way past.`
+      : 'The rock falls away astern and the water goes quiet. Six mouths, two of them hers, and not one of them touched you. Nobody gets through the narrows clean. You just did.');
   } else {
     player.health = Math.max(1, player.health - 2);
     sfx.play('termerr');
-    player.say(`You are through. She had ${listPhrase(s.taken)} off the deck on the way past, and the cliff is quiet again.`);
+    player.say(`You are through. She had ${listPhrase(s.taken)} off the deck on the way past${hull ? `, and the hull is stove in where the rocks caught you` : ''}, and the water goes quiet.`);
   }
 }
 
@@ -1042,7 +1045,12 @@ function updateNarrows(dt) {
     s.tickT -= NARROWS_TICK;
     steps += 1;
     const ev = narrowsTick(n);
-    if (ev === 'bite') narrowsBite();
+    if (ev === 'rock') {
+      // Hull, not cargo — a rock is neither of them. It costs you health and a
+      // jolt, and its real job is to move you off the safe column.
+      player.health = Math.max(1, player.health - 6);
+      sfx.play('clang');
+    } else if (ev === 'bite') narrowsBite();
     else if (ev === 'swallowed') { endNarrows('swallowed'); return; }
     else if (ev === 'through') { endNarrows('through'); return; }
   }
@@ -1470,7 +1478,26 @@ function devBuildButtons() {
     b.onclick = () => devRun('kit ' + i);
     kit.appendChild(b);
   });
+  // Scenes and toggles: the things you want to run again and again while tuning
+  // something, one press each rather than a typed command every time.
+  const scene = document.getElementById('dev-scene');
+  for (const [label, cmd] of DEV_SCENES) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => devRun(cmd);
+    scene.appendChild(b);
+  }
 }
+
+// One chip per thing worth replaying. `narrows` returns you where you were, so
+// it can be hammered; the rest are one-line world pokes.
+const DEV_SCENES = [
+  ['▶ NARROWS', 'narrows'],
+  ['BOAT', 'boat'],
+  ['RAFT', 'boat raft'],
+  ['DAY', 'time day'],
+  ['NIGHT', 'time night'],
+];
 
 function devRun(raw) {
   const cmd = (raw || '').trim();

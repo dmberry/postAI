@@ -35,6 +35,12 @@ export const CHARYBDIS_MAX = 4;
 export const SAFE_LANE = 3;
 
 const GAP_MIN = 3;                // never two of the same monster within this
+// ROCKS. Without them the seam between the two monsters is a permanently safe
+// column and the correct play is to park mid-channel and never touch the helm —
+// which is not a game, it is a screensaver. Rocks sit IN the seam, so dodging
+// one is what pushes you toward one monster or the other. That is the whole
+// point of them: they convert the safe lane into a decision.
+const ROCK_GAP = 2;
 // Rows of warning between a head breaking the surface and reaching your line.
 export const TELEGRAPH = VIEW_ROWS - SHIP_ROW;
 
@@ -48,15 +54,17 @@ export const MONSTERS = {
 export function newNarrowsRun() {
   return {
     x: 6,                          // the ship's column, mid-channel
-    // Each row is { l, r }: how far Scylla reaches in from the left, and how far
-    // Charybdis reaches in from the right. 0 = that side is clear.
-    rows: Array.from({ length: VIEW_ROWS }, () => ({ l: 0, r: 0 })),
+    // Each row is { l, r, rock }: how far Scylla reaches from the left, how far
+    // Charybdis reaches from the right, and a rock's column (-1 = none).
+    rows: Array.from({ length: VIEW_ROWS }, () => ({ l: 0, r: 0, rock: -1 })),
     rowsLeft: TOTAL_ROWS,
     warmup: WARMUP_ROWS,
     bites: 0,                      // Scylla's tally: one thing off the deck each
+    rocks: 0,                      // rocks struck: hull damage, not cargo
     grace: 0,                      // brief invulnerability after a bite
     sinceL: GAP_MIN,
     sinceR: GAP_MIN,
+    sinceK: ROCK_GAP,
     over: false,
     outcome: null,                 // 'through' | 'swallowed'
     attract: true,                 // the cabinet opens on its title card
@@ -89,7 +97,18 @@ function nextRow(s, rng) {
     s.sinceR = 0;
   }
   if (l + r > NARROWS_W - SAFE_LANE) r = Math.max(0, NARROWS_W - SAFE_LANE - l);
-  return { l, r };
+
+  // A rock in the open water between them. Placed only where the row is already
+  // clear, and never when that would leave no way through: SAFE_LANE is 3, so
+  // taking one column still leaves two.
+  let rock = -1;
+  s.sinceK += 1;
+  const lo = l, hi = NARROWS_W - 1 - r;          // inclusive span of clear water
+  if (s.sinceK >= ROCK_GAP && hi - lo >= 1 && rng() < 0.30 + 0.30 * p) {
+    rock = lo + Math.floor(rng() * (hi - lo + 1));
+    s.sinceK = 0;
+  }
+  return { l, r, rock };
 }
 
 // Coin in: leave the attract screen and start the passage.
@@ -112,7 +131,7 @@ export function narrowsTick(s, rng = Math.random) {
 
   const calm = s.warmup > 0;
   s.rows.pop();
-  s.rows.unshift(calm ? { l: 0, r: 0 } : nextRow(s, rng));
+  s.rows.unshift(calm ? { l: 0, r: 0, rock: -1 } : nextRow(s, rng));
   s.rowsLeft -= 1;
   if (s.warmup > 0) s.warmup -= 1;
   if (s.grace > 0) s.grace -= 1;
@@ -123,6 +142,14 @@ export function narrowsTick(s, rng = Math.random) {
   if (row.r > 0 && s.x >= NARROWS_W - row.r) {
     s.over = true; s.outcome = 'swallowed';
     return 'swallowed';
+  }
+  // A rock: it costs you, but it is neither of them — it is the thing that makes
+  // you move, and moving is what puts you in their reach.
+  if (row.rock >= 0 && s.x === row.rock && s.grace <= 0) {
+    s.rocks += 1;
+    s.grace = 3;
+    if (s.rowsLeft <= 0) { s.over = true; s.outcome = 'through'; }
+    return 'rock';
   }
   if (row.l > 0 && s.x < row.l && s.grace <= 0) {
     s.bites += 1;

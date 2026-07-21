@@ -863,6 +863,35 @@ export const uiMethods = {
         ctx.stroke();
         head(tip, y, cell * 0.42, '#a8304c', '#d9668a', '#6d1730', 1);
       }
+      if (row.rock >= 0) {
+        // A rock in the seam: wet granite with a lit crown and a wash of foam
+        // round its base. The thing that stops the middle of the channel being
+        // a free ride.
+        const rx = ox + row.rock * cell + cell * 0.5;
+        ctx.fillStyle = 'rgba(210,235,255,0.22)';
+        ctx.beginPath(); ctx.ellipse(rx, y + cell * 0.28, cell * 0.46, cell * 0.16, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#3b4048';
+        ctx.beginPath();
+        ctx.moveTo(rx - cell * 0.38, y + cell * 0.3);
+        ctx.lineTo(rx - cell * 0.16, y - cell * 0.34);
+        ctx.lineTo(rx + cell * 0.12, y - cell * 0.22);
+        ctx.lineTo(rx + cell * 0.38, y + cell * 0.3);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#5c636d';                          // lit face
+        ctx.beginPath();
+        ctx.moveTo(rx - cell * 0.16, y - cell * 0.34);
+        ctx.lineTo(rx + cell * 0.12, y - cell * 0.22);
+        ctx.lineTo(rx + cell * 0.02, y + cell * 0.3);
+        ctx.lineTo(rx - cell * 0.1, y + cell * 0.3);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = Math.max(1, cell * 0.07);
+        ctx.beginPath();
+        ctx.moveTo(rx - cell * 0.38, y + cell * 0.3);
+        ctx.lineTo(rx - cell * 0.16, y - cell * 0.34);
+        ctx.lineTo(rx + cell * 0.12, y - cell * 0.22);
+        ctx.lineTo(rx + cell * 0.38, y + cell * 0.3);
+        ctx.stroke();
+      }
       if (row.r > 0) {
         // CHARYBDIS: a churning maw out of the right, ringed by her own spiral.
         const tip = ox + gw - row.r * cell + cell * 0.5;
@@ -923,7 +952,10 @@ export const uiMethods = {
     ctx.fillText('THE NARROWS', ox, by);
     ctx.textAlign = 'right';
     ctx.fillStyle = calm ? 'rgba(106,208,160,0.9)' : n.bites ? '#e0864a' : 'rgba(232,224,208,0.5)';
-    ctx.fillText(calm ? 'OPEN WATER' : n.bites ? `TAKEN ${n.bites}` : 'CLEAN', ox + gw, by);
+    const tally = n.bites || n.rocks
+      ? `${n.bites ? `TAKEN ${n.bites}` : ''}${n.bites && n.rocks ? '  ' : ''}${n.rocks ? `HULL ${n.rocks}` : ''}`
+      : 'CLEAN';
+    ctx.fillText(calm ? 'OPEN WATER' : tally, ox + gw, by);
     const pw2 = Math.round(narrowsProgress(n) * gw);
     ctx.fillStyle = 'rgba(255,255,255,0.10)';
     ctx.fillRect(ox, by + 8, gw, 6);
@@ -995,6 +1027,7 @@ export const uiMethods = {
     };
     rule('#a8304c', MONSTERS.scylla.name, 'surfaces to port. takes one thing.');
     rule('#7b3fa8', MONSTERS.charybdis.name, 'surfaces to starboard. takes the ship.');
+    rule('#5c636d', 'ROCKS', 'mid-channel. there is no safe lane.');
 
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
     const c1 = 'hold A / D  or  ← →  ·  or drag';

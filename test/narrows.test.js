@@ -16,7 +16,7 @@ const always = () => 0.0;   // rng that surfaces both, as deep as they go
 // Most tests are about the DANGEROUS part of the passage, so they start a run
 // with the coin in and the open-water run-in already behind them.
 const started = (rng) => { const s = newNarrowsRun(rng); narrowsStart(s); s.warmup = 0; return s; };
-const clear = (s) => { s.rows.forEach((r) => { r.l = 0; r.r = 0; }); };
+const clear = (s) => { s.rows.forEach((r) => { r.l = 0; r.r = 0; r.rock = -1; }); };
 
 test('THE LANE INVARIANT: the two of them can never seal the channel', () => {
   // If Scylla at her deepest and Charybdis at hers could meet, a row would be a
@@ -32,6 +32,53 @@ test('THE LANE INVARIANT: the two of them can never seal the channel', () => {
     for (const row of s.rows) worstGap = Math.min(worstGap, NARROWS_W - row.l - row.r);
   }
   assert.ok(worstGap >= SAFE_LANE, `every row must leave ${SAFE_LANE} clear; worst was ${worstGap}`);
+});
+
+test('PARKING IS NOT A STRATEGY: sitting mid-channel must not survive the run', () => {
+  // The bug this exists to prevent: Scylla reaches at most SCYLLA_MAX and
+  // Charybdis at most CHARYBDIS_MAX, so the seam between them was permanently
+  // safe water. You could hold one column for two minutes, never touch the helm
+  // and win. Rocks sit IN that seam precisely so the safe lane has to be earned.
+  let survivedParked = 0;
+  for (let seed = 0; seed < 12; seed++) {
+    let k = seed * 977 + 13;
+    const rng = () => ((k = (k * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    const s = started(rng);
+    let hit = false;
+    for (let i = 0; i < 600 && !s.over; i++) {
+      // never steer: the whole point is that doing nothing must not be safe
+      if (narrowsTick(s, rng)) hit = true;
+    }
+    if (!hit) survivedParked += 1;
+  }
+  assert.equal(survivedParked, 0,
+    `a parked ship came through untouched in ${survivedParked}/12 runs — the seam is still free`);
+});
+
+test('a rock is always dodgeable: every row keeps a clear column', () => {
+  const s = started(always);
+  for (let i = 0; i < 400 && !s.over; i++) {
+    s.x = 6;
+    narrowsTick(s, always);
+    for (const row of s.rows) {
+      let free = 0;
+      for (let c = 0; c < NARROWS_W; c++) {
+        const blocked = c < row.l || c >= NARROWS_W - row.r || c === row.rock;
+        if (!blocked) free += 1;
+      }
+      assert.ok(free >= 1, `a row with no way through: l=${row.l} r=${row.r} rock=${row.rock}`);
+    }
+  }
+});
+
+test('striking a rock costs you but does not end the run', () => {
+  const s = started(never);
+  clear(s);
+  s.rows[SHIP_ROW - 1] = { l: 0, r: 0, rock: 6 };
+  s.x = 6;
+  assert.equal(narrowsTick(s, never), 'rock');
+  assert.equal(s.rocks, 1);
+  assert.equal(s.over, false);
 });
 
 test('both monsters are named', () => {
