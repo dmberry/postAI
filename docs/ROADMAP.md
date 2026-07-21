@@ -43,6 +43,15 @@ long time and are now in the game:
 
 ---
 
+## Ideas parked with a design doc
+
+- **The AI cabinets** — one arcade game per daemon, each mechanic saying
+  something true about that AI (Calypso's un-winnable Pong, Polyphemus's blind
+  Breakout, Circe's memory game against an opponent editing your memory, Helios's
+  cattle). Written up in [ai-cabinets-plan.md](ai-cabinets-plan.md) with the test
+  each one has to pass, the shared chassis the narrows already established, and
+  the open questions. Not committed to.
+
 ## Phase 1 — polish & small wins (low risk, mostly self-contained)
 
 - **Limping / WOUNDED tell**: the low-health slowdown exists; add the limp
