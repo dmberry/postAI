@@ -305,11 +305,11 @@ export const uiMethods = {
   // The skills screen (K): learned book-skills in the order gained, plus the
   // three practice tracks and their levels — the history the dashboard used
   // to cram into one line.
-  drawSkillModal(player) {
+  drawSkillModal(player, hud = {}) {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(6,8,5,0.8)';
     ctx.fillRect(0, 0, this.w, this.h);
-    const pw = Math.min(420, this.w - 60), ph = 380;
+    const pw = Math.min(420, this.w - 60), ph = 472;
     const px = Math.round((this.w - pw) / 2), py = Math.round((this.h - ph) / 2);
     this._skillsRect = { x: px, y: py, w: pw, h: ph }; // click-away-to-close hit test (main.js)
     ctx.fillStyle = '#12160e';
@@ -324,7 +324,41 @@ export const uiMethods = {
     ctx.fillStyle = 'rgba(207,216,195,0.55)';
     ctx.fillText('K to close · all of it survives death', px + 20, py + 48);
 
-    let y = py + 78;
+    // THE RECORD — score, the rank it has earned, and the run's tallies. This
+    // lives here rather than on the HUD: the dashboard should carry only what
+    // you need mid-fight, and a rank is something you look up, not something you
+    // steer by. Two columns so six figures cost three rows.
+    let y = py + 76;
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.fillStyle = 'rgba(207,216,195,0.6)';
+    ctx.fillText('RECORD', px + 20, y); y += 20;
+
+    const rank = deathRank(player.score ?? 0);
+    const colL = px + 30, colR = px + Math.round(pw / 2) + 10;
+    const stat = (label, value, cx, cy, valueColor) => {
+      ctx.font = '11px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(207,216,195,0.5)';
+      ctx.fillText(label, cx, cy);
+      ctx.font = 'bold 13px system-ui, sans-serif';
+      ctx.fillStyle = valueColor || '#e8e0d0';
+      ctx.fillText(String(value), cx + 84, cy);
+    };
+    const kills = (player.killLog || []).length;
+    stat('Score',       player.score ?? 0,                    colL, y, '#e8d27a');
+    stat('AI disabled', `${hud.daemonsDown ?? 0} / 4`,        colR, y);
+    y += 19;
+    stat('Rank',        rank.title,                           colL, y, rank.color);
+    stat('Islands',     `${hud.islandsReached ?? 0} / 5`,     colR, y);
+    y += 19;
+    stat('OBs',         kills,                                colL, y);
+    stat('Deaths',      player.deaths || 0,                   colR, y);
+    y += 19;
+    // The POSEIDON deadline lives here now rather than on the dashboard, where a
+    // ticking number became wallpaper. In play you feel it through his notices;
+    // this is where you come to check the actual figure.
+    stat('Deadline', hud.timeLabel || '—',                   colL, y, '#d88a6a');
+    y += 26;
+
     ctx.font = 'bold 12px system-ui, sans-serif';
     ctx.fillStyle = 'rgba(207,216,195,0.6)';
     ctx.fillText('PRACTICE', px + 20, y); y += 20;
@@ -372,7 +406,7 @@ export const uiMethods = {
       y += 14;
       ctx.font = 'bold 12px system-ui, sans-serif';
       ctx.fillStyle = 'rgba(207,216,195,0.6)';
-      ctx.fillText(`TOWERS DOWNED (${player.killLog.length})`, px + 20, y); y += 18;
+      ctx.fillText(`OBs DOWNED (${player.killLog.length})`, px + 20, y); y += 18;
       ctx.font = '12px ui-monospace, monospace';
       ctx.fillStyle = '#e0503a';
       const codes = player.killLog.join('  ');
@@ -625,6 +659,81 @@ export const uiMethods = {
     ctx.fillText('Copy', btnX + btnW / 2, btnY + 16);
     ctx.textAlign = 'left';
   },
+  // Where you are and who holds it — two plain labelled lines, no panel around
+  // them. (`rx, ry` is the block's top-RIGHT corner; `w` sets its left edge.)
+  //
+  // In a five-island game the HUD never said which island you were standing on
+  // or whose machines you were fighting, which is exactly what you need when you
+  // have just made landfall. It is drawn unboxed and grey because it is
+  // reference, not instrumentation: there to be glanced at, not watched.
+  drawStatusCard(player, hud, rx, ry, w) {
+    const ctx = this.ctx;
+    ctx.textBaseline = 'alphabetic';
+    const left = rx - w + 9;
+
+    // 1-2. Where you are and who holds it, as a labelled pair. Label and value
+    // are the SAME size — the value only differs by weight and brightness. All
+    // of this is supplementary; sizing the value up made it shout.
+    const labelled = (label, value, ly, valueColor, strike) => {
+      ctx.textAlign = 'left';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.fillStyle = 'rgba(207,216,195,0.45)';
+      ctx.fillText(label, left, ly);
+      const lw = ctx.measureText(label).width;
+      ctx.font = 'bold 10px system-ui, sans-serif';
+      ctx.fillStyle = valueColor;
+      ctx.fillText(value, left + lw + 5, ly);
+      if (strike) {
+        const vw = ctx.measureText(value).width;
+        ctx.strokeStyle = valueColor;
+        ctx.beginPath();
+        ctx.moveTo(left + lw + 5, ly - 3.5);
+        ctx.lineTo(left + lw + 5 + vw, ly - 3.5);
+        ctx.stroke();
+      }
+    };
+    // Grey on purpose so the eye is not pulled here. A felled daemon is told by
+    // the strikethrough rather than by going green, so the state still reads
+    // without spending colour on it — the score is the only coloured thing on
+    // the whole dashboard.
+    const GREY = 'rgba(207,216,195,0.72)';
+    const GREY_DIM = 'rgba(207,216,195,0.42)';
+    labelled('Island:', hud.place || '—', ry + 12, GREY);
+    const d = hud.daemon;
+    if (d) labelled('AI:', d.name, ry + 27, d.fallen ? GREY_DIM : GREY, d.fallen);
+    else labelled('AI:', 'none', ry + 27, GREY_DIM);
+    ctx.textAlign = 'left';
+  },
+
+  // The score, pinned hard to the bottom-right corner of the dashboard. It is
+  // the one live figure worth watching, so it gets a corner of its own and the
+  // only colour on the panel. (The POSEIDON countdown that used to sit up here
+  // is gone from the HUD on purpose — a number ticking down in the corner is
+  // wallpaper within a minute. It arrives as escalating texts instead, see
+  // poseidonWarnings in main.js, and can be looked up in the Record panel.)
+  drawScoreCorner(player, rx, baselineY) {
+    const ctx = this.ctx;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.fillStyle = '#e8d27a';
+    ctx.fillText(`${player.score ?? 0}`, rx, baselineY);
+    ctx.textAlign = 'left';
+  },
+
+  // A rounded rectangle path (canvas 2D has roundRect only in newer engines, and
+  // this keeps one code path for all of them).
+  roundRect(x, y, w, h, r) {
+    const ctx = this.ctx;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  },
+
   // RUN and JUMP buttons for touch play: two translucent circles above the
   // dashboard on the right, sized for thumbs. RUN is a hold (brightens while
   // held); JUMP fires on the tap. Registered in this.touchButtons each frame
@@ -647,13 +756,22 @@ export const uiMethods = {
       ctx.strokeStyle = b.held ? 'rgba(232,224,208,0.9)' : 'rgba(207,216,195,0.45)';
       ctx.lineWidth = 1.5;
       ctx.stroke();
-      ctx.fillStyle = b.held ? '#eef2e2' : 'rgba(222,214,192,0.85)';
-      ctx.font = 'bold 20px system-ui, sans-serif';
+      // Glyph and word are a STACKED PAIR, balanced about the centre — the glyph
+      // a little above it, the word a little below. Drawing the glyph dead-centre
+      // and hanging the word off the rim (as this used to) reads bottom-heavy and
+      // makes the label look like it is sliding out of the circle.
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(b.label, b.x, b.y + 1);
-      ctx.font = 'bold 8px system-ui, sans-serif';
-      ctx.fillText(b.id.toUpperCase(), b.x, b.y + R - 7);
+      // A soft dark halo so both stay readable over bright sand or wall graffiti.
+      ctx.shadowColor = 'rgba(0,0,0,0.55)';
+      ctx.shadowBlur = 3;
+      ctx.fillStyle = b.held ? '#eef2e2' : 'rgba(222,214,192,0.9)';
+      ctx.font = 'bold 21px system-ui, sans-serif';
+      ctx.fillText(b.label, b.x, b.y - 6);
+      ctx.font = 'bold 9px system-ui, sans-serif';
+      ctx.fillText(b.id.toUpperCase(), b.x, b.y + 13);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
       ctx.textBaseline = 'alphabetic';
       ctx.textAlign = 'left';
     }
@@ -818,22 +936,12 @@ export const uiMethods = {
     else if (player.invisibleToRobots) { ctx.fillStyle = '#4fd8c3'; ctx.fillText(`HID ${Math.ceil((player.wifiPower || 0) / 60)}m`, cx, top + 39); }
     if (player.food <= 0) { ctx.fillStyle = '#e05548'; ctx.fillText('STARVING', cx, top + 57); }
     else if (player.food < 25) { ctx.fillStyle = '#d8a04f'; ctx.fillText('HUNGRY', cx, top + 57); }
-    // score + countdown, right-aligned on the top row
-    ctx.textAlign = 'right';
-    ctx.font = 'bold 13px system-ui, sans-serif';
-    ctx.fillStyle = '#e8d27a';
-    ctx.fillText(`Score ${player.score ?? 0}`, W - 12, top + 22);
-    if (hud.timeLabel) {
-      ctx.font = '10px system-ui, sans-serif';
-      ctx.fillStyle = 'rgba(207,216,195,0.8)';
-      ctx.fillText(hud.timeLabel, W - 12, top + 40);
-    }
-    // rank, under the countdown — parity with the desktop status block
-    const rankC = deathRank(player.score ?? 0);
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.fillStyle = rankC.color;
-    ctx.fillText(rankC.title, W - 12, top + 56);
-    ctx.textAlign = 'left';
+    // The status card: where you are, who holds it, and how you are doing —
+    // boxed and tight so it reads as one panel rather than three loose lines
+    // floating over the terrain.
+    this.drawStatusCard(player, hud, W - 8, top + 8, 132);
+    // Score hard into the bottom-right corner of the dashboard panel.
+    this.drawScoreCorner(player, W - 10, top + MDH - 13);
 
     // --- Bottom row: the slot strip, full width — hands, pockets, backpack,
     // walkman, all visible and reachable. ---
@@ -1079,21 +1187,18 @@ export const uiMethods = {
       }
     }
 
-    // Stats block, right-aligned
+    // Stats block: the same boxed status card the compact HUD uses, so both
+    // dashboards say the same things about where you are and who holds it. The
+    // card must sit inside DASH_H (78) — hence the tight top offset — and the
+    // name sits to its LEFT rather than above it, where there is no room.
+    const cardW = 150, cardX = this.w - 12 - cardW;
     ctx.font = '11px system-ui, sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillStyle = 'rgba(207,216,195,0.85)';
-    let line = top + 18;
-    const nameLine = hud.timeLabel ? `${player.name || ''} · ${hud.timeLabel}` : (player.name || '');
-    ctx.fillText(nameLine, this.w - 16, line); line += 18;
-    ctx.font = 'bold 13px system-ui, sans-serif';
-    ctx.fillStyle = '#e8d27a';
-    ctx.fillText(`Score ${player.score ?? 0}`, this.w - 16, line); line += 18;
-    const rank = deathRank(player.score ?? 0);
-    ctx.font = 'bold 10px system-ui, sans-serif';
-    ctx.fillStyle = rank.color;
-    ctx.fillText(rank.title, this.w - 16, line); line += 16;
+    ctx.fillStyle = 'rgba(207,216,195,0.75)';
+    ctx.fillText(player.name || '', cardX - 12, top + 44);
     ctx.textAlign = 'left';
+    this.drawStatusCard(player, hud, this.w - 12, top + 6, cardW);
+    this.drawScoreCorner(player, this.w - 12, top + DASH_H - 10);
   },
 
   // Terse condition text tucked beside the vitals bars — the narrow-desktop

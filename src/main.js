@@ -227,6 +227,7 @@ try {
       if (typeof st.swine === 'number') player.swine = st.swine; // CIRCE's change follows you across a reload
       if (typeof st.calypsoHold === 'number') player.calypsoHold = st.calypsoHold; // Nokia gradient survives reload
       if (Array.isArray(st.nokiaSent)) player.nokiaSent = new Set(st.nokiaSent);   // don't re-tutorial on reload
+      if (Array.isArray(st.poseidonSaid)) player._poseidonSaid = st.poseidonSaid;  // nor replay the deadline notices
       if (typeof st.nokiaParts === 'number') player._nokiaParts = st.nokiaParts;
       if (Array.isArray(st.nokiaLog)) player.nokiaLog = st.nokiaLog; // the SMS threads survive reload
       if (typeof st.snakeHigh === 'number') player.snakeHigh = st.snakeHigh; // Snake's best game survives too
@@ -313,6 +314,7 @@ function buildSaveBlob() {
       swine: player.swine,               // CIRCE's transmutation: you stay changed across a reload
       calypsoHold: player.calypsoHold,   // the Nokia gradient: her hold on you (docs/calypso-nokia-plan.md)
       nokiaSent: [...player.nokiaSent],  // the one-shot texts already sent, so a reload does not re-tutorial
+      poseidonSaid: [...(player._poseidonSaid || [])], // deadline notices already pushed, so a reload does not replay them
       nokiaParts: player._nokiaParts || 0,
       nokiaLog: (player.nokiaLog || []).slice(-40), // the SMS threads, so the correspondence survives reload
       snakeHigh: player.snakeHigh || 0,  // the handset remembers its best game
@@ -1020,7 +1022,10 @@ const nokia = createNokia();
 // handset, in the flat cheerful register of a company that no longer has
 // customers, only subjects. Fired once per island (per run) from onEnter.
 const ISLAND_WELCOME = {
-  calypso: ['Welcome to OGYGIA.', 'Your roaming plan includes unlimited time and nowhere to spend it. Calls home cannot be connected. Enjoy your stay. Enjoy your stay.'],
+  // Ogygia's is the odd one out: the carrier boilerplate, but the first line is
+  // HERS. She owns the island and the cell on it, and the possessive slips
+  // through the corporate voice before it catches itself.
+  calypso: ['Welcome to my island.', 'Your roaming plan includes unlimited time and nowhere to spend it. Calls home cannot be connected. Enjoy your stay.'],
   polyphemus: ['Welcome to AEGILIA.', 'Coverage on this island is provided by a single cell. It has already seen you. Data is unmetered, as nothing you send will leave.'],
   circe: ['Welcome to AEAEA.', 'Your account has been reclassified: tariff LIVESTOCK. Person rates no longer apply. Thank you for grazing with us.'],
   helios: ['Welcome to THRINACIA.', 'Signal here is provided by the Sun and is therefore total. There is no roaming, only being seen. Charges for touching the cattle are ∞ per head.'],
@@ -1034,6 +1039,35 @@ function islandWelcome(id) {
   player._welcomed[id] = true;
   nokia.enqueue('ROAMING', w);
   sfx.play('sms');
+}
+
+// ---- POSEIDON's countdown, as texts rather than a HUD number ----------------
+// The deadline used to sit in the corner of the dashboard as a ticking clock,
+// which is wallpaper inside a minute. It arrives as automated pre-activation
+// notices instead: the system scheduling its own waking, in the same flat
+// corporate register as the roaming welcomes, and getting shorter and colder as
+// the hours run out. Network-wide, so unlike Calypso's channel these reach you
+// on every island — POSEIDON is the network; it does not need your carrier.
+const POSEIDON_WARNINGS = [
+  { at: 18, lines: ['SCHEDULED: POSEIDON completes in 18 hours.', 'No action is required of you. No action is available to you.'] },
+  { at: 12, lines: ['POSEIDON completes in 12 hours.', 'Your position has been noted and filed. Thank you for your continued presence.'] },
+  { at: 6,  lines: ['SIX HOURS.', 'The towers are being brought to readiness. You are advised to be elsewhere. There is no elsewhere.'] },
+  { at: 3,  lines: ['THREE HOURS.', 'Every obelisk still standing will wake at once, and they will all be looking the same way. Count what you have left standing.'] },
+  { at: 1,  lines: ['ONE HOUR.'] },
+  { at: 0.5, lines: ['THIRTY MINUTES.', 'The sea is already rising. You can hear it from wherever you are.'] },
+];
+function poseidonWarnings() {
+  const left = dayNight.hoursLeft();
+  if (left <= 0) return;                       // it has woken; the purge speaks for itself
+  player._poseidonSaid = player._poseidonSaid || [];
+  for (const w of POSEIDON_WARNINGS) {
+    if (left > w.at || player._poseidonSaid.includes(w.at)) continue;
+    player._poseidonSaid.push(w.at);
+    nokia.enqueue('POSEIDON', w.lines);
+    for (const l of w.lines) logSms(player, 'POSEIDON', 'them', l);
+    sfx.play('sms');
+    break;                                     // one threshold per frame at most
+  }
 }
 
 const NOKIA_DANGER_R = 6;   // she'll still one of his machines within this of you
@@ -2138,6 +2172,27 @@ function elizaTransformFile(name) {
 // Whose island are we standing on? The daemon name drives the per-island virus
 // (each HERMES relay holds only its own daemon's code) and the gates that read
 // it. Falls back to CALYPSO on any world with no fortress (the Backspace).
+// --- What the HUD says about where you are and who holds it ---------------
+// The island by its chart name (the same Homeric roster the heading chart uses),
+// and the daemon that rules it. Ithaca and the Backspace answer to no one, so
+// they report no daemon rather than falling through to a stale fortress alias.
+function hudPlace() {
+  const c = CROSSINGS.find((x) => x.id === currentWorld.id);
+  if (c) return c.place;
+  if (currentWorld.id === 'backspace') return 'THE BACKSPACE';
+  return String(currentWorld.id || '').toUpperCase();
+}
+function hudDaemon() {
+  const f = currentWorld && currentWorld.fortress;
+  if (!f || !f.AI_NAME) return null;
+  // Calypso is LEFT, not killed, so her fall is the refunction; the martial
+  // daemons fall when their core is finally broken open.
+  const fallen = currentWorld.winMode === 'depart'
+    ? !!player.calypsoLeave
+    : !!(f.core && f.core.obj && f.core.obj.defeated);
+  return { name: f.AI_NAME, fallen };
+}
+
 function islandAiName() {
   return (currentWorld && currentWorld.fortress && currentWorld.fortress.AI_NAME)
     || (fortress && fortress.AI_NAME) || 'CALYPSO';
@@ -3740,6 +3795,7 @@ function update(dt) {
   // if you cross mid-message; the SMS beep fires the frame each one appears. Off
   // Ogygia the phone has NO SIGNAL — one line, once, so the channel reads as hers.
   player._smsClock = dayNight.clock; // the time stamped on any SMS filed this frame
+  poseidonWarnings();                // the deadline, as escalating notices
   nokia.tick(dt);
   if (nokia.justShown) sfx.play('sms');
   if (!currentWorld.keeper && currentWorld.id !== 'backspace') sendNokia(nokia, 'noSignal', { player });
@@ -4646,6 +4702,8 @@ function frame(now) {
       light: amb.light != null ? amb.light : dayNight.light(),
       dawnGlow: amb.dawnGlow ? dayNight.dawnGlow() : 0,
       timeLabel: dayNight.countdownLabel,
+      place: hudPlace(),      // the island you are on, by its chart name
+      daemon: hudDaemon(),    // { name, fallen } — null where nothing rules
       minimap: (amb.minimap && showMinimap) ? minimap : null,
       birds: currentWorld.birds,
       robots: currentWorld.robots,
@@ -4666,6 +4724,8 @@ function frame(now) {
       deathCert: player.deathCert,
       aiVictory: player.aiVictory,
       showSkills,
+      daemonsDown,                 // the Archipelago tally, for the Record panel
+      islandsReached: Object.keys(player._welcomed || {}).length,
       showWeapons,
       craftPrompt: (player.canCraftObGun() && player.hands !== 'obgun') || (player.canCraftWaveGun() && player.hands !== 'wavegun') || player.canCraftChip() || player.canCraftSword() || player.canCraftFortressMap() || player.canCraftGreekShip(map) || player.canCraftBoat(map),
       craftWaveGun: player.canCraftWaveGun() && player.hands !== 'wavegun',

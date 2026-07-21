@@ -611,7 +611,7 @@ export class Renderer {
       ctx.fillText(msg, this.w / 2, y + 17);
       ctx.textAlign = 'left';
     }
-    if (hud.showSkills) this.drawSkillModal(player);
+    if (hud.showSkills) this.drawSkillModal(player, hud);
     if (hud.showWeapons) this.drawWeaponChart(player);
     // GHOST PASS: a wall, column, tower, or the factory standing just
     // south/east of the player paints clean over the sprite — the character
