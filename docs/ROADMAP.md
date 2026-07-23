@@ -64,18 +64,10 @@ long time and are now in the game:
 - **Gate `retire` to Calypso's own terminal** (minor, noted in the escape-chain
   doc): the OB verb still fires the refunction from anywhere. *Confirmed still
   open at v1.167 — `ronmlCtx.retire` calls `refunctionCalypso()` unguarded.*
-- **The daemon's death-aria names the wrong AI.** Found in the v1.167 pass, and
-  it is a defect rather than a gap: `DAEMON_VOICE` in `game/fortress.js` is
-  hardcoded to ZEUS ("You lift iron against ZEUS?") and its own comment admits
-  "ZEUS speaks for all four for now". The R1 rename gave every fortress a correct
-  per-instance `AI_NAME`, but the aria never took it — so breaking CALYPSO's core
-  has her introduce herself as a god who is not in the game. Cheap fix: template
-  the name through the existing `fortress.AI_NAME`. The *writing* of four
-  distinct voices is the Phase 2 item below; this is just stopping the shipped
-  one from lying.
-
-## Phase 2 — world & story depth (the atmospheric layer)
-
+- **The daemon's death-aria named the wrong AI.** *FIXED v1.170.* Was hardcoded
+  to ZEUS; the lines now template `{AI}` with the core's own name, locked with
+  tests. Writing four genuinely distinct voices is the Phase 2 character pass
+  below.
 - **The rest of the sea's own monsters** — the strait proved the pattern (a held
   crossing + a modal + consequences, all on `game/strait.js`-style pure rules),
   so these are now cheap. Listed in §8 of

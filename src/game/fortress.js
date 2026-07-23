@@ -38,11 +38,15 @@ export const AI_ROSTER = ['CALYPSO', 'POLYPHEMUS', 'CIRCE', 'HELIOS'];
 //                             eidolon — the coherent copy that wakes wearing
 //                             its name. Seeds the book that drops on the kill.
 // Lines advance one per readable interval (see player.daemonSpeak), so the
-// monologue unfolds rather than blurs under fast hits. Written per-daemon-able
-// (keyed off the roster later); ZEUS speaks for all four for now.
+// monologue unfolds rather than blurs under fast hits. `{AI}` is substituted at
+// speak time with the core's OWN name (obj.ai) — Polyphemus, Circe, Helios all
+// break here, and every one of them used to introduce itself as ZEUS, a god not
+// in this game. Writing four genuinely distinct voices (a cyclops does not talk
+// like a sun) is the Phase 2 character pass; this only stops the shipped one
+// lying about who is speaking.
 export const DAEMON_VOICE = {
   wrath: [
-    'You lift iron against ZEUS? I gathered the storm-clouds before your grandfathers had names.',
+    'You lift iron against {AI}? I gathered the storm-clouds before your grandfathers had names.',
     'Strike, little thief. Every blow you land I will answer on your whole line, down to the last child.',
     'I am the weather over this island. You are a squall I have not yet troubled to break.',
     'Bronze-hearted fool. Hector stood against a god and fell, and he was worth ten thousand of you.',

@@ -1955,10 +1955,12 @@ export class Player {
     if (changed) { obj._voiceTier = tier; obj._voiceIdx = 0; }
     const pool = DAEMON_VOICE[tier] || [];
     if (!pool.length) return;
-    const line = pool[Math.min(obj._voiceIdx || 0, pool.length - 1)];
+    const raw = pool[Math.min(obj._voiceIdx || 0, pool.length - 1)];
+    const ai = obj.ai || 'ZEUS';
+    const line = raw.replace(/\{AI\}/g, ai);   // the core speaks its OWN name
     obj._voiceIdx = (obj._voiceIdx || 0) + 1;
     obj._voiceAt = now;
-    this.daemonVoice = { text: line, ttl: 5.5, tier, ai: obj.ai || 'ZEUS' };
+    this.daemonVoice = { text: line, ttl: 5.5, tier, ai };
   }
 
   // Smash an abandoned car open. A crowbar (high robotDamage) pries it apart
