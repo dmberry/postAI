@@ -46,7 +46,7 @@ beside it.
 
 ---
 
-## CALYPSO — Pong you are not allowed to win
+## CALYPSO — Pong you are not allowed to win  ·  BUILT v1.171
 
 **The mechanic.** Pong, and she never misses. She returns everything, forever.
 The rally is *pleasant*: the longer it runs the warmer the palette, the softer

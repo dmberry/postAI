@@ -82,8 +82,10 @@ long time and are now in the game:
   Polyphemus's Breakout played blind inside his gaze, Circe's memory game against
   an opponent editing your memory, Helios's cattle. Sketches, the test each one
   has to pass, the shared chassis and the open questions are in
-  [ai-cabinets-plan.md](ai-cabinets-plan.md). Build Calypso's first; refactor the
-  cabinet shell out of `narrows.js` before the second.
+  [ai-cabinets-plan.md](ai-cabinets-plan.md). *Calypso's built v1.171 — the
+  un-winnable pong, playable via the lyre `▶ CALYPSO` chip; NOT yet wired into
+  her sanctum / the escape chain, which is the next step. Refactor the cabinet
+  shell out of `narrows.js`+`calypso-pong.js` before the third.*
 - **The dead-internet browser**: cached pages from before the collapse, as a
   reading surface alongside the notepad and Scrapbook. The phone shipped without
   it.

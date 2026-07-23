@@ -592,7 +592,7 @@ export class Renderer {
     // straight over whatever you are trying to read. (The lore archive draws
     // in runDrawScreen just below, so it counts as a panel too.)
     const modalOpen = !!(hud.showBackpack || hud.showSkills || hud.showWeapons
-      || hud.narrows                       // the arcade cabinet owns the screen
+      || hud.narrows || hud.pong           // an arcade cabinet owns the screen
       || (hud.lore && hud.lore.archiveOpen));
     if (hud.showBackpack) this.drawBackpackPanel(player);
     runDrawScreen(ctx, { w: this.w, h: this.h, map, player });
@@ -673,6 +673,12 @@ export class Renderer {
       // The GAME OVER card sits OVER the frozen field, arcade fashion, rather
       // than replacing it: you want to see the water that got you.
       if (hud.narrowsOver) this.drawNarrowsGameOver(hud.narrows, hud.narrowsOver);
+    }
+    // Calypso's pong — the same "cabinet owns the screen" treatment.
+    if (hud.pong) {
+      if (hud.pong.attract) this.drawCalypsoPongAttract(hud.pong, hud.touchControls);
+      else this.drawCalypsoPong(hud.pong, hud.touchControls);
+      if (hud.pongOver) this.drawCalypsoPongOver(hud.pong, hud.pongOver);
     }
     if (hud.paused) this.drawPausedOverlay();
   }

@@ -169,6 +169,11 @@ class Sound {
           [0.85, 0.96, 1.07].forEach((a) => beep(a, 0.05));   // S = · · ·
           break;
         }
+        case 'blip': { // a soft rally touch for Calypso's pong — gentle, warm, a
+          // sine not a square, so a long rally soothes rather than rattles.
+          this._tone({ when: t, dur: 0.09, type: 'sine', freq: 620 * v, gain: 0.06, attack: 0.004 });
+          break;
+        }
         case 'coin': { // the arcade coin: two rising square blips, unmistakable
           const B = (at, f, dur) => this._tone({ when: t + at, dur, type: 'square', freq: f * v, gain: 0.16, attack: 0.002 });
           B(0.00, 988, 0.06);    // B5

@@ -8,6 +8,7 @@ import { Player } from './game/player.js';
 import { seawardFrom, boatMirror, CF_MIN } from './game/crossing.js';
 import { isStraitCrossing, scyllaToll, STRAIT_COST } from './game/strait.js';
 import { newNarrowsRun, narrowsSteer, narrowsRow, narrowsTick, narrowsStart, narrowsAnimate } from './game/narrows.js';
+import { newCalypsoPong, calypsoStart, calypsoMove, calypsoTick } from './game/calypso-pong.js';
 import { makeRng } from './game/rng.js';
 import { DayNight } from './game/daynight.js';
 import { Minimap } from './game/minimap.js';
@@ -430,6 +431,7 @@ let crossFail = null;      // failed crossing (Poseidon turns you back)
 let departOut = null;      // rowing out to the heading chart (or back in)
 let pendingCrossing = null; // a chosen island, performed at the next frame top
 let strait = null;         // in the narrows: Scylla and Charybdis (game/strait.js)
+let pong = null;           // at Calypso's terminal: the un-winnable pong (game/calypso-pong.js)
 // The heading the current voyage put out on. The boat sprite has one bow and a
 // mirror, so the hull must at least be flipped to the side it is actually
 // sailing toward; the strait picks up the crossing here rather than guessing.
@@ -1180,6 +1182,64 @@ function updateNarrows(dt) {
   narrowsAnimate(n, dt, s.tickT / NARROWS_TICK);
 }
 
+// ---- CALYPSO's pong: the game you cannot win (game/calypso-pong.js) ---------
+const PONG_GAMEOVER_HOLD = 1.6;   // a beat to read the release before ENTER dismisses it
+function openPong() {
+  pong = { run: newCalypsoPong(), gameover: null, testOnly: false };
+  narrowsChrome(true);            // borrow the narrows' chrome-hide; the cabinet owns the screen
+  sfx.play('narrowsTune');
+  player.say('Her terminal does not ask for a password. It offers a game.');
+}
+function endPong(outcome) {
+  const p = pong;
+  p.gameover = { outcome, t: 0, ready: false };
+  sfx.play(outcome === 'left' ? 'narrowsWin' : 'termerr');
+}
+function closePong() {
+  const p = pong;
+  pong = null;
+  narrowsChrome(false);
+  // Outcome 'left' is the WIN: you were willing to leave, so her hold breaks and
+  // the message lands. For the lyre test loop this just drops you back where you
+  // were; the escape-chain wiring (refunctionCalypso / calypsoLeave) is the next
+  // step and is noted on the roadmap.
+  if (p.testOnly) { player.say('The cabinet goes dark. You are back where you were.'); return; }
+  player.say('The volley stops. Somewhere under the island a door you never saw swings open. You are free to go.');
+}
+function updatePong(dt) {
+  const s = pong, g = s.run;
+  g.t = (g.t || 0) + 1;
+  // GAME OVER card: hold, then ENTER (key or the drawn button) dismisses.
+  if (s.gameover) {
+    const go = s.gameover;
+    go.t += dt;
+    go.ready = go.t >= PONG_GAMEOVER_HOLD;
+    if (!go.ready) return;
+    const pressed = input.consumePress('Enter') || input.consumePress('NumpadEnter');
+    const at = input.clickPos();
+    const r = go.enterRect;
+    const hit = at && r && at.x >= r.x && at.x <= r.x + r.w && at.y >= r.y && at.y <= r.y + r.h;
+    if (pressed || hit) { if (hit) input.consumeClick(); closePong(); }
+    return;
+  }
+  // ATTRACT: any key or a tap is the coin.
+  if (g.attract) {
+    const coin = ['Space', 'Enter', 'KeyW', 'KeyS', 'ArrowUp', 'ArrowDown']
+      .some((k) => input.consumePress(k));
+    const tapped = !!input.clickPos();
+    if (coin || tapped) { if (tapped) input.consumeClick(); if (calypsoStart(g)) { sfx.play('coin'); } }
+    return;
+  }
+  // Steer the paddle up/down, held. The one moveIntent() path, so keyboard and a
+  // dragged finger both drive it — exactly like the narrows helm.
+  const mv = input.moveIntent();
+  const dir = mv && mv.dy < -0.35 ? -1 : mv && mv.dy > 0.35 ? 1 : 0;
+  if (dir) calypsoMove(g, dir);
+  const ev = calypsoTick(g, dt);
+  if (ev === 'return') sfx.play('blip');
+  else if (ev === 'left') endPong('left');
+}
+
 // The sea is done with you: land where the outcome says. 'swallowed' loses the
 // crossing and throws you back at the island you left — the unbounded end of the
 // bargain, and the reason the certain toll is worth taking.
@@ -1622,6 +1682,7 @@ function devBuildButtons() {
 // it can be hammered; the rest are one-line world pokes.
 const DEV_SCENES = [
   ['▶ NARROWS', 'narrows'],
+  ['▶ CALYPSO', 'pong'],
   ['BOAT', 'boat'],
   ['RAFT', 'boat raft'],
   ['DAY', 'time day'],
@@ -1729,6 +1790,16 @@ function devRun(raw) {
       strait.testOnly = true;         // finishStrait puts you back, whatever happens
       openNarrows();
       devPrint('-> the narrows (test loop; you return here either way)');
+      return;
+    }
+    case 'pong': {
+      // Play Calypso's cabinet on its own and come back here. Her terminal is
+      // not wired into the escape chain yet (roadmap), so this is how it is
+      // tested and seen.
+      if (pong) { devPrint('already at the cabinet'); return; }
+      openPong();
+      pong.testOnly = true;
+      devPrint('-> calypso\'s pong (test loop; the only way out is to leave)');
       return;
     }
     case 'boat': {
@@ -2092,6 +2163,7 @@ input.uiHitTest = (x, y) => {
   // hit-area, so the thumb you are steering with lands on a slot instead of the
   // helm — and can swap what is in your hands mid-passage.
   if (strait && strait.phase === 'choice' && strait.run) return false;
+  if (pong && pong.run) return false;   // the cabinet owns the screen; the HUD is inert
   if (renderer.slotAt && renderer.slotAt(x, y)) return true;
   if (renderer.hudTop != null && y >= renderer.hudTop) return true;
   const bp = renderer._backpackRect;
@@ -4142,6 +4214,9 @@ function update(dt) {
   // In the narrows between Scylla and Charybdis. The world holds still the same
   // way: you are on the water, and the only move left is the choice.
   if (strait) { updateStrait(dt); return; }
+  // At Calypso's terminal, playing the pong she will not let you win. The world
+  // holds still the same way the narrows do — nothing else to attend to.
+  if (pong) { updatePong(dt); return; }
   // Rowing out to the chart (or back in after thinking better of it). Like the
   // failed crossing, the world holds still while the sea has you.
   if (departOut) { updateDepartOut(dt); return; }
@@ -4990,6 +5065,8 @@ function frame(now) {
       // The Scylla/Charybdis arcade run, while it has the helm.
       narrows: (strait && strait.phase === 'choice') ? strait.run : null,
       narrowsOver: (strait && strait.phase === 'choice') ? strait.gameover : null,
+      pong: pong ? pong.run : null,
+      pongOver: pong ? pong.gameover : null,
       place: hudPlace(),      // the island you are on, by its chart name
       daemon: hudDaemon(),    // { name, fallen } — null where nothing rules
       minimap: (amb.minimap && showMinimap) ? minimap : null,

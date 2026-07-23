@@ -19,6 +19,7 @@ import {
   NARROWS_W, VIEW_ROWS, MONSTERS, HULL_MAX, RAM_MAX, CHARYBDIS_ROWS,
   narrowsProgress, narrowsCalm, narrowsRunOut, narrowsRunOutT,
 } from '../game/narrows.js'; // the Scylla/Charybdis arcade run
+import { PADDLE_H, calypsoVoice } from '../game/calypso-pong.js'; // Calypso's un-winnable pong
 
 export const DASH_H = 78; // dashboard panel height
 
@@ -1498,6 +1499,186 @@ export const uiMethods = {
       ctx.fillStyle = '#6ad0a0';
       fit('INSERT COINS TO PLAY', Math.round(cell * 0.8), 'bold ');
       ctx.fillText('INSERT COINS TO PLAY', cx, oy + gh * 0.88);
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
+  },
+
+  // CALYPSO's pong. The ball is the zeus-virus; she is the defence that never
+  // misses; the warmth (and the whole palette) rises with the rally. See
+  // game/calypso-pong.js for why you cannot win it.
+  drawCalypsoPong(g, touch = false) {
+    const ctx = this.ctx;
+    // Court: a wide rectangle, paddles left (you) and right (her).
+    const cw = Math.min(this.w - 80, 720);
+    const ch = Math.min(this.h - 220, cw * 0.62);
+    const ox = Math.round((this.w - cw) / 2);
+    const oy = Math.round((this.h - ch) / 2) - 6;
+    const w = g.warmth || 0;
+
+    // The palette warms with the rally: from a cool, lonely indigo dusk to a
+    // gold-and-rose hearth. That warming IS the seduction — the longer you stay,
+    // the nicer it gets to be here.
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    const bg1 = `rgb(${lerp(14, 46, w)},${lerp(13, 26, w)},${lerp(30, 24, w)})`;
+    const bg2 = `rgb(${lerp(8, 30, w)},${lerp(9, 14, w)},${lerp(22, 16, w)})`;
+    const glow = `rgba(${lerp(150, 240, w)},${lerp(157, 180, w)},${lerp(255, 150, w)},`;
+    const paddleC = `rgb(${lerp(160, 245, w)},${lerp(170, 200, w)},${lerp(255, 170, w)})`;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(3,4,9,0.92)';
+    ctx.fillRect(0, 0, this.w, this.h);
+
+    // the court
+    const sea = ctx.createLinearGradient(0, oy, 0, oy + ch);
+    sea.addColorStop(0, bg1); sea.addColorStop(1, bg2);
+    ctx.fillStyle = sea;
+    ctx.fillRect(ox, oy, cw, ch);
+    // a soft radial hearth-glow from the centre, stronger as it warms
+    const hearth = ctx.createRadialGradient(ox + cw / 2, oy + ch / 2, 10, ox + cw / 2, oy + ch / 2, cw * 0.6);
+    hearth.addColorStop(0, glow + (0.04 + 0.16 * w).toFixed(3) + ')');
+    hearth.addColorStop(1, glow + '0)');
+    ctx.fillStyle = hearth;
+    ctx.fillRect(ox, oy, cw, ch);
+
+    // centre net, dashed
+    ctx.strokeStyle = glow + '0.25)';
+    ctx.lineWidth = 2; ctx.setLineDash([6, 10]);
+    ctx.beginPath(); ctx.moveTo(ox + cw / 2, oy + 6); ctx.lineTo(ox + cw / 2, oy + ch - 6); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const px = ox + 22;                 // your paddle x
+    const hx = ox + cw - 22;            // her paddle x
+    const ph = PADDLE_H * ch;           // paddle half-height in px
+    const paddle = (x, cy, lit) => {
+      ctx.fillStyle = lit;
+      ctx.shadowColor = glow + '0.7)'; ctx.shadowBlur = 12 + 20 * w;
+      this.roundRect(x - 4, cy - ph, 8, ph * 2, 4); ctx.fill();
+      ctx.shadowBlur = 0;
+    };
+    paddle(px, oy + g.py * ch, paddleC);
+    paddle(hx, oy + (g.ay != null ? g.ay : 0.5) * ch, paddleC);
+
+    // the ball — the zeus-virus: a bright mote with a spark-tail.
+    if (g.served && !g.over) {
+      const bx = ox + g.ball.x * cw, by = oy + g.ball.y * ch;
+      ctx.strokeStyle = 'rgba(255,240,180,0.5)'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(bx - g.ball.vx * 22, by - g.ball.vy * 22); ctx.lineTo(bx, by); ctx.stroke();
+      ctx.fillStyle = '#fff6d8';
+      ctx.shadowColor = '#ffe89a'; ctx.shadowBlur = 16;
+      ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+
+    // frame + labels
+    ctx.strokeStyle = glow + '0.4)'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox - 1, oy - 1, cw + 2, ch + 2);
+    ctx.font = `bold ${Math.max(11, Math.round(ch * 0.05))}px ui-monospace, monospace`;
+    ctx.textAlign = 'left'; ctx.fillStyle = glow + '0.85)';
+    ctx.fillText('YOU', ox + 4, oy - 8);
+    ctx.textAlign = 'right';
+    ctx.fillText('CALYPSO', ox + cw - 4, oy - 8);
+
+    // her voice — the exit's only signpost. Fades in and sits under the court.
+    const v = calypsoVoice(g);
+    if (v && g.served && !g.over) {
+      ctx.textAlign = 'center';
+      ctx.font = `italic ${Math.max(12, Math.round(ch * 0.055))}px Georgia, serif`;
+      ctx.fillStyle = `rgba(${lerp(180,255,w)},${lerp(190,210,w)},${lerp(255,190,w)},0.9)`;
+      ctx.fillText(v.line, ox + cw / 2, oy + ch + 26);
+    }
+
+    // control hint / the quiet truth that you can leave
+    const by2 = oy + ch + 48;
+    ctx.textAlign = 'center';
+    ctx.font = `${Math.max(10, Math.round(ch * 0.045))}px system-ui, sans-serif`;
+    ctx.fillStyle = 'rgba(210,210,225,0.4)';
+    const hint = g.hintT > 8
+      ? (touch ? 'let it past — drag away and stop tending it — to leave' : 'let it past — stop tending it — to leave')
+      : (touch ? 'drag up / down to rally' : 'W / S  or  ↑ ↓  to rally');
+    ctx.fillText(hint, ox + cw / 2, by2);
+
+    ctx.textAlign = 'left';
+    ctx.restore();
+  },
+
+  // Her invitation — the attract screen. Warm from the first, because she has
+  // never once thought you might say no.
+  drawCalypsoPongAttract(g, touch = false) {
+    const ctx = this.ctx;
+    const cw = Math.min(this.w - 80, 720);
+    const ch = Math.min(this.h - 220, cw * 0.62);
+    const ox = Math.round((this.w - cw) / 2);
+    const oy = Math.round((this.h - ch) / 2) - 6;
+    const cx = ox + cw / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(3,4,9,0.94)'; ctx.fillRect(0, 0, this.w, this.h);
+    const gr = ctx.createLinearGradient(0, oy, 0, oy + ch);
+    gr.addColorStop(0, '#2a1a2e'); gr.addColorStop(1, '#160f1f');
+    ctx.fillStyle = gr; ctx.fillRect(ox, oy, cw, ch);
+    ctx.strokeStyle = 'rgba(240,180,150,0.4)'; ctx.lineWidth = 2;
+    ctx.strokeRect(ox - 1, oy - 1, cw + 2, ch + 2);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f0d0a0';
+    ctx.font = `bold ${Math.round(ch * 0.14)}px Georgia, serif`;
+    ctx.fillText('STAY A WHILE', cx, oy + ch * 0.34);
+    ctx.fillStyle = 'rgba(230,215,235,0.75)';
+    ctx.font = `italic ${Math.round(ch * 0.058)}px Georgia, serif`;
+    ctx.fillText('Rally with me. There is no clock on this island,', cx, oy + ch * 0.5);
+    ctx.fillText('and no war that cannot wait one more evening.', cx, oy + ch * 0.58);
+
+    ctx.fillStyle = 'rgba(210,210,225,0.5)';
+    ctx.font = `${Math.round(ch * 0.05)}px system-ui, sans-serif`;
+    ctx.fillText(touch ? 'the light is the message you carry. drag to play.'
+                       : 'the light is the message you carry. W / S or ↑ ↓ to play.', cx, oy + ch * 0.72);
+
+    if ((g.t >> 4) & 1) {
+      ctx.fillStyle = '#ffcf7a';
+      ctx.font = `bold ${Math.round(ch * 0.07)}px ui-monospace, monospace`;
+      ctx.fillText('PRESS TO BEGIN', cx, oy + ch * 0.88);
+    }
+    ctx.textAlign = 'left';
+    ctx.restore();
+  },
+
+  // The release. Not a GAME OVER — you did the one thing that frees you.
+  drawCalypsoPongOver(g, over) {
+    const ctx = this.ctx;
+    const cw = Math.min(this.w - 80, 720);
+    const ch = Math.min(this.h - 220, cw * 0.62);
+    const ox = Math.round((this.w - cw) / 2);
+    const oy = Math.round((this.h - ch) / 2) - 6;
+    const cx = ox + cw / 2;
+
+    ctx.save();
+    ctx.fillStyle = 'rgba(6,6,12,0.78)'; ctx.fillRect(ox, oy, cw, ch);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#9fd6ff';
+    ctx.font = `bold ${Math.round(ch * 0.13)}px Georgia, serif`;
+    ctx.fillText('YOU LEAVE', cx, oy + ch * 0.34);
+    ctx.fillStyle = 'rgba(220,225,235,0.82)';
+    ctx.font = `italic ${Math.round(ch * 0.05)}px Georgia, serif`;
+    ctx.fillText('You set the paddle down. The light drifts past,', cx, oy + ch * 0.5);
+    ctx.fillText('and she does not chase it. Her hold was only ever the game.', cx, oy + ch * 0.58);
+    ctx.fillText(`${g.rally} volleys, and the courage to end them.`, cx, oy + ch * 0.68);
+
+    if (over && over.ready) {
+      const bw = Math.max(cw * 0.28, 160), bh = Math.max(30, ch * 0.12);
+      const bx = cx - bw / 2, byy = oy + ch * 0.8;
+      ctx.fillStyle = 'rgba(40,46,64,0.9)';
+      this.roundRect(bx, byy, bw, bh, 5); ctx.fill();
+      ctx.strokeStyle = 'rgba(159,214,255,0.7)'; ctx.lineWidth = 2;
+      this.roundRect(bx, byy, bw, bh, 5); ctx.stroke();
+      ctx.fillStyle = '#cfe6ff';
+      ctx.font = `bold ${Math.round(ch * 0.06)}px ui-monospace, monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ENTER', cx, byy + bh / 2 + 1);
+      ctx.textBaseline = 'alphabetic';
+      over.enterRect = { x: bx, y: byy, w: bw, h: bh };
+    } else if (over) {
+      over.enterRect = null;
     }
     ctx.textAlign = 'left';
     ctx.restore();
